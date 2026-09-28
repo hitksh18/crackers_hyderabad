@@ -13,8 +13,6 @@ import {
   ClipboardList,
   Receipt,
   Phone,
-  Moon,
-  Sun,
   ChevronRight,
 } from 'lucide-react';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -45,8 +43,6 @@ const MobileMenu = ({
   canSeeBilling,
   cartCount,
   onSignOut,
-  isDark,
-  onToggleTheme,
   phoneHref,
 }) => {
   const reduced = useReducedMotion();
@@ -297,20 +293,6 @@ const MobileMenu = ({
               <Phone className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
               <span>Call Us</span>
             </a>
-
-            <button
-              type="button"
-              onClick={onToggleTheme}
-              className="btn-outline w-full"
-              aria-pressed={isDark}
-            >
-              {isDark ? (
-                <Sun className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
-              ) : (
-                <Moon className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
-              )}
-              <span>{isDark ? 'Switch to light mode' : 'Switch to dark mode'}</span>
-            </button>
           </motion.div>
         </motion.div>
       </div>

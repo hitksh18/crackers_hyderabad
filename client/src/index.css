@@ -43,39 +43,40 @@
   /* Period-over-period movement on the analytics dashboard. Separate tokens
      rather than reusing leaf/crimson directly, because these two need to stay
      legible on the dark surface and the brand scales are fixed hexes. */
-  --delta-up: #2C7A53;
-  --delta-down: #CB2A2A;
-  --delta-flat: #8B8377;
+  --delta-up: #4FB483;
+  --delta-down: #F2716B;
+  --delta-flat: #A79E92;
 
-  /* ---- Surfaces ---- */
-  --surface-page: #FDF9F0;
-  --surface-card: #FFFFFF;
-  --surface-raised: #FFFDF8;
-  --surface-sunken: #F9F1E3;
-  --surface-inverse: #1A1714;
-  --hairline: #EFE3CE;
-  --hairline-strong: #E2D2B7;
+  /* ---- Surfaces (dark only — the site has no light theme) ---- */
+  --surface-page: #14100E;
+  --surface-card: #1E1815;
+  --surface-raised: #251E1A;
+  --surface-sunken: #17120F;
+  --surface-inverse: #FDF9F0;
+  --hairline: rgba(237, 231, 223, 0.10);
+  --hairline-strong: rgba(237, 231, 223, 0.18);
 
-  /* ---- Glass surfaces. Layered translucent fills + top-light + hairline so
-     the effect reads "premium glass" even where backdrop-filter is unsupported
-     or disabled. Readability always wins over glassiness. ---- */
-  --glass-fill: linear-gradient(152deg, rgba(255, 253, 248, 0.82) 0%, rgba(249, 241, 227, 0.6) 100%);
-  --glass-fill-strong: linear-gradient(160deg, rgba(255, 253, 248, 0.94) 0%, rgba(253, 249, 240, 0.86) 100%);
-  --glass-fill-nav: linear-gradient(180deg, rgba(253, 249, 240, 0.9) 0%, rgba(255, 253, 248, 0.72) 100%);
-  --glass-fill-soft: linear-gradient(152deg, rgba(255, 253, 248, 0.66) 0%, rgba(249, 241, 227, 0.42) 100%);
+  /* ---- Glass surfaces (dark only). Layered translucent fills + top-light
+     + hairline so the effect reads "premium glass" even where
+     backdrop-filter is unsupported or disabled. Readability always wins
+     over glassiness. ---- */
+  --glass-fill: linear-gradient(152deg, rgba(37, 30, 26, 0.8) 0%, rgba(30, 24, 21, 0.55) 100%);
+  --glass-fill-strong: linear-gradient(160deg, rgba(37, 30, 26, 0.94) 0%, rgba(28, 22, 19, 0.88) 100%);
+  --glass-fill-nav: linear-gradient(180deg, rgba(20, 16, 14, 0.92) 0%, rgba(30, 24, 21, 0.72) 100%);
+  --glass-fill-soft: linear-gradient(152deg, rgba(37, 30, 26, 0.66) 0%, rgba(30, 24, 21, 0.4) 100%);
   --glass-blur: blur(20px) saturate(150%);
   --glass-blur-strong: blur(28px) saturate(165%);
   --glass-blur-soft: blur(14px) saturate(140%);
-  --glass-toplight: inset 0 1px 0 rgba(255, 255, 255, 0.85);
-  --glass-toplight-soft: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  --glass-toplight: inset 0 1px 0 rgba(237, 231, 223, 0.12);
+  --glass-toplight-soft: inset 0 1px 0 rgba(237, 231, 223, 0.08);
 
-  /* ---- Text ---- */
-  --text-strong: #1A1714;
-  --text-body: #433E37;
-  --text-muted: #6B6459;
+  /* ---- Text (dark only) ---- */
+  --text-strong: #F2ECE3;
+  --text-body: #D6CEC3;
+  --text-muted: #A79E92;
   --text-subtle: #8B8377;
   --text-on-dark: #EDE7DF;
-  --white-soft: #FFFFFF;
+  --white-soft: #F2ECE3;
 
   /* ---- Gradients ---- */
   --grad-ember: linear-gradient(122deg, #9E2C10 0%, #C33A14 52%, #DF4C21 100%);
@@ -117,14 +118,14 @@
   --ease-in-soft: cubic-bezier(0.55, 0.06, 0.68, 0.19);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-  /* ---- Legacy variable names still referenced by components ---- */
-  --maroon: #C33A14;
-  --cream: #FDF9F0;
-  --muted: #6B6459;
-  --avatar-bg: #F9F1E3;
-  --avatar-icon: #6B6459;
-  --avatar-border: #EFE3CE;
-  --card-bg: #FFFFFF;
+  /* ---- Legacy variable names still referenced by components (dark values) ---- */
+  --maroon: #EC7049;
+  --cream: rgba(237, 231, 223, 0.06);
+  --muted: #A79E92;
+  --avatar-bg: rgba(237, 231, 223, 0.09);
+  --avatar-icon: #D6CEC3;
+  --avatar-border: rgba(237, 231, 223, 0.16);
+  --card-bg: #1E1815;
 }
 
 .dark {
@@ -179,13 +180,10 @@
 html {
   scroll-behavior: smooth;
   background: var(--surface-page);
+  color-scheme: dark;
   -webkit-text-size-adjust: 100%;
   max-width: 100%;
   overflow-x: clip;
-}
-
-html.dark {
-  color-scheme: dark;
 }
 
 body {
@@ -265,12 +263,12 @@ body::after {
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: var(--surface-sunken); }
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #C4A882, #A8865C);
+  background: linear-gradient(180deg, rgba(148, 37, 31, 0.9), rgba(58, 11, 12, 0.95));
   border-radius: 8px;
   border: 2px solid var(--surface-sunken);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #A8865C, #8A6A44);
+  background: linear-gradient(180deg, rgba(195, 58, 20, 0.95), rgba(118, 23, 19, 1));
 }
 .dark ::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, rgba(148, 37, 31, 0.9), rgba(58, 11, 12, 0.95));
@@ -627,7 +625,7 @@ img {
   .btn-outline:hover:not(:disabled) {
     transform: translateY(-2px);
     border-color: var(--ember-600);
-    background: #FFF4EF;
+    background: #2E241C;
     box-shadow: 0 10px 24px rgba(195, 58, 20, 0.14);
   }
 
@@ -700,9 +698,9 @@ img {
   }
 
   .btn-quiet:hover:not(:disabled) {
-    background: #FFF4EF;
+    background: rgba(236, 112, 73, 0.14);
     border-color: rgba(195, 58, 20, 0.35);
-    color: var(--maroon-700);
+    color: var(--saffron-400);
   }
 
   /* ---- Eyebrow ---- */
@@ -1340,7 +1338,7 @@ img {
 .product-img-panel {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(165deg, #FFFDF8 0%, #F7EDD5 100%);
+  background: linear-gradient(165deg, #251E1A 0%, #2E241C 100%);
 }
 
 /* Glassy image panel — translucent warm fill + soft top-light; the product
@@ -1595,7 +1593,7 @@ img {
 .arrow-btn:hover {
   color: var(--ember-600);
   border-color: var(--ember-600);
-  background: #FFF4EF;
+  background: #2E241C;
   transform: scale(1.06);
 }
 
@@ -2205,8 +2203,8 @@ img {
 
 .admin-reorder:not(.active):hover {
   border-color: var(--ember-600);
-  color: var(--maroon-700);
-  background: #FFF4EF;
+  color: var(--ember-400);
+  background: rgba(195, 58, 20, 0.12);
 }
 
 .admin-reorder-hint {
@@ -3210,5 +3208,55 @@ img {
     inset: 0;
     background: rgba(210, 166, 79, 0.45);
     opacity: 0.5;
+  }
+}
+
+/* =========================================================================
+   FLOATING WHATSAPP BUTTON (home page only)
+   Fixed bottom-right, above page content and hero canvas, below modals and
+   full-screen overlays (the component uses z-overlay). Dark-native styling.
+   ========================================================================= */
+.wa-float {
+  right: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  border-radius: 16px;
+  background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+  box-shadow: 0 8px 25px rgba(37, 211, 102, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+@media (min-width: 640px) {
+  .wa-float {
+    right: 20px;
+    bottom: max(20px, env(safe-area-inset-bottom));
+  }
+}
+@media (max-width: 639px) {
+  .wa-float {
+    width: 52px;
+    height: 52px;
+    border-radius: 15px;
+  }
+}
+.wa-float:hover {
+  box-shadow: 0 10px 32px rgba(37, 211, 102, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+/* Gentle attention pulse on the halo every few seconds. Pauses on hover /
+   focus and is fully disabled for reduced motion. */
+@keyframes wa-halo-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.1); opacity: 0.4; }
+}
+.wa-halo {
+  border-radius: inherit;
+  animation: wa-halo-pulse 4.5s ease-in-out infinite;
+}
+.wa-float:hover .wa-halo,
+.wa-float:focus-visible .wa-halo {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wa-halo {
+    animation: none;
   }
 }

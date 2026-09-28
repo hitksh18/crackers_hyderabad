@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
-import { Search, ShoppingCart, Bell, Moon, Sun, Receipt } from 'lucide-react';
+import { Search, ShoppingCart, Bell, Receipt } from 'lucide-react';
 import { useNotifications } from '../../contexts/NotificationContext';
-import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import UserAvatar from '../UserAvatar';
 import { useState } from 'react';
@@ -9,7 +8,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const AdminTopBar = ({ searchValue = '', onSearchChange, showSearch = true, onNotificationClick }) => {
   const { unreadCount, liveOrderCount, serverStatus } = useNotifications();
-  const { isDark, toggleTheme } = useTheme();
   const { user, isAdmin, isSales } = useAuth();
   const [internalOpen, setInternalOpen] = useState(false);
   const isOnline = serverStatus === 'online';
@@ -70,10 +68,6 @@ const AdminTopBar = ({ searchValue = '', onSearchChange, showSearch = true, onNo
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
-          </button>
-
-          <button onClick={toggleTheme} className="grid h-9 w-9 place-items-center rounded-full border bg-[var(--surface-sunken)] transition-colors duration-200" style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}>
-            {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
 
           <div className="h-9 w-9 overflow-hidden rounded-full" style={{ border: '1px solid var(--hairline-strong)' }}>

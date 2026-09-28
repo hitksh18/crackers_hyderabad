@@ -13,13 +13,10 @@ import {
   LogIn,
   Search,
   Phone,
-  Moon,
-  Sun,
   Menu,
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { readSiteSettings } from '../lib/siteSettings';
 import { popoverVariants, SPRING } from '../lib/motion';
@@ -61,7 +58,6 @@ const CartCountBadge = ({ count, reduced }) => {
 const Navbar = () => {
   const { getCartCount } = useCart();
   const { user, isAdmin, isSales, isBilling, isPacker, isMod, signOut, loading: authLoading } = useAuth();
-  const { isDark, toggleTheme } = useTheme();
   const reduced = useReducedMotion();
   const isStaffMember = isAdmin || isSales || isBilling || isPacker || isMod;
   const canSeeBilling = isAdmin || isSales;
@@ -427,21 +423,6 @@ const Navbar = () => {
                   <span>Login</span>
                 </Link>
               )}
-
-              <button
-                type="button"
-                onClick={toggleTheme}
-                aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-                title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-                aria-pressed={isDark}
-                className="arrow-btn shrink-0"
-              >
-                {isDark ? (
-                  <Sun className="h-5 w-5" strokeWidth={2.2} aria-hidden="true" />
-                ) : (
-                  <Moon className="h-5 w-5" strokeWidth={2.2} aria-hidden="true" />
-                )}
-              </button>
             </div>
           </div>
 
@@ -532,8 +513,6 @@ const Navbar = () => {
             canSeeBilling={canSeeBilling}
             cartCount={cartCount}
             onSignOut={signOut}
-            isDark={isDark}
-            onToggleTheme={toggleTheme}
             phoneHref={PHONE_HREF}
           />
         )}

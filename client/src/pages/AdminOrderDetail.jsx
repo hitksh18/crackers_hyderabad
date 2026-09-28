@@ -9,7 +9,6 @@ import { sendOrderSMS } from '../utils/sms';
 import CustomModal from '../components/CustomModal';
 import { useModal } from '../hooks/useModal';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
 import { downloadInvoicePDF, printInvoicePDF } from '../utils/pdfGenerator';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { pageVariants, revealVariants } from '../lib/motion';
@@ -31,7 +30,6 @@ const AdminOrderDetail = () => {
   const reduced = useReducedMotion();
   const { isOpen, modalConfig, openModal, closeModal, handleConfirm } = useModal();
   const { isAdmin, isMod } = useAuth();
-  const { isDark } = useTheme();
   const canEditOrder = isAdmin || isMod;
   const canDeleteOrder = isAdmin;
 
@@ -390,7 +388,7 @@ const AdminOrderDetail = () => {
                     borderColor: 'var(--hairline-strong)',
                     background: 'var(--surface-card)',
                     color: 'var(--text-strong)',
-                    colorScheme: isDark ? 'dark' : 'light',
+                    colorScheme: 'dark',
                   }}
                 >
                   {statusOptions.map(status => (

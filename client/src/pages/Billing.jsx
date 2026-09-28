@@ -10,17 +10,14 @@ import {
   CreditCard,
   FilePlus2,
   MessageCircle,
-  Moon,
   PauseCircle,
   Printer,
   Receipt,
   Search,
   ShoppingBag,
   Smartphone,
-  Sun,
 } from 'lucide-react';
 import toast from '../utils/toast';
-import { useTheme } from '../contexts/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { pageVariants } from '../lib/motion';
 import BillPrintSheet from '../components/billing/BillPrintSheet';
@@ -86,7 +83,6 @@ const Billing = () => {
   const [saving, setSaving] = useState(false);
   const printRef = useRef();
   const searchRef = useRef();
-  const { isDark, toggleTheme } = useTheme();
   const reduced = useReducedMotion();
 
   /* The register owns the viewport: no page scrollbars while it is mounted.
@@ -576,16 +572,6 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
             <button type="button" onClick={handleNewBill} className="pos-tool-btn" aria-label="Start a new bill">
               <FilePlus2 className="h-4 w-4" aria-hidden="true" />
               <span className="hidden lg:inline">New Bill</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-              className="pos-tool-btn"
-              style={{ paddingInline: '0.5rem' }}
-            >
-              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
 
             <dl

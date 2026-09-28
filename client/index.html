@@ -10,33 +10,24 @@
     <meta name="description" content="Premium fireworks and wholesale crackers in Hyderabad. Gift boxes, sparklers, rockets, flower pots and festival collections at wholesale pricing, with order tracking and doorstep delivery." />
     <meta name="keywords" content="crackers hyderabad, wholesale crackers, fireworks hyderabad, diwali crackers, sparklers, gift boxes, bulk crackers, festival fireworks" />
     <meta name="author" content="Crackers Hyderabad" />
-    <!-- Kept media-free so the theme script below owns it; a media-scoped pair
-         would follow the OS and contradict an explicit user choice. -->
-    <meta name="theme-color" content="#761713" />
-    <meta name="color-scheme" content="light dark" />
+    <!-- Dark theme only: pinned before first paint so there is no flash of
+         any other palette. Legacy stored preferences are ignored and cleared
+         by the theme module on boot. -->
+    <meta name="theme-color" content="#14100E" />
+    <meta name="color-scheme" content="dark" />
     <meta name="robots" content="index, follow" />
 
-    <!-- Resolve the theme before first paint so dark-mode visitors never see a
-         flash of the light palette. Must stay in step with src/contexts/ThemeContext.jsx. -->
     <script>
       (function () {
         try {
-          var stored = localStorage.getItem('theme');
-          var dark =
-            stored === 'dark' ||
-            stored === 'light'
-              ? stored === 'dark'
-              : window.matchMedia &&
-                window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-          if (dark) {
-            document.documentElement.classList.add('dark');
-            document.documentElement.style.colorScheme = 'dark';
-            var meta = document.querySelector('meta[name="theme-color"]');
-            if (meta) meta.setAttribute('content', '#14100E');
-          }
+          document.documentElement.classList.add('dark');
+          document.documentElement.style.colorScheme = 'dark';
+          localStorage.removeItem('theme');
+          localStorage.removeItem('themeMode');
+          localStorage.removeItem('darkMode');
+          localStorage.removeItem('colorMode');
         } catch (e) {
-          /* Storage blocked — fall through to the light default. */
+          /* Storage blocked — dark classes are already applied above. */
         }
       })();
     </script>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FaWhatsapp } from 'react-icons/fa';
 import { doc, getDoc } from 'firebase/firestore';
@@ -7,7 +8,17 @@ import { useAuth } from '../context/AuthContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { SPRING, DURATION } from '../lib/motion';
 
+/**
+ * Floating WhatsApp contact button — HOME PAGE ONLY.
+ *
+ * The number comes from the canvas "business information" section in the
+ * admin page (HomepageBuilder → footer settings), stored in Firestore at
+ * `footerSettings/main`. The dedicated `whatsapp` field wins; the general
+ * `phone` field is the fallback. Every mount re-reads the document, so an
+ * admin change is picked up on the next homepage visit — nothing is cached.
+ */
 const WhatsAppButton = () => {
+  const { pathname } = useLocation();
   const { isAdmin, isSales } = useAuth();
   const reduced = useReducedMotion();
   const [whatsappNumber, setWhatsappNumber] = useState('+91 1234567890');
@@ -15,9 +26,11 @@ const WhatsAppButton = () => {
 
   const fetchWhatsAppSettings = useCallback(async () => {
     try {
-      const adminDoc = await getDoc(doc(db, 'adminSettings', 'main'));
-      if (adminDoc.exists() && adminDoc.data().whatsappNumber) {
-        setWhatsappNumber(adminDoc.data().whatsappNumber);
+      const snap = await getDoc(doc(db, 'footerSettings', 'main'));
+      if (snap.exists()) {
+        const data = snap.data();
+        const raw = (data.whatsapp || data.phone || '').trim();
+        if (raw) setWhatsappNumber(raw);
       }
     } catch (error) {
       console.error('Error fetching WhatsApp settings:', error);
@@ -30,11 +43,11 @@ const WhatsAppButton = () => {
     fetchWhatsAppSettings();
   }, [fetchWhatsAppSettings]);
 
-  if (!settingsLoaded || isAdmin || isSales) {
+  if (pathname !== '/' || !settingsLoaded || isAdmin || isSales) {
     return null;
   }
 
-  const message = 'Hi! I have a question about your products.';
+  const message = 'Hi, I would like to know more about your crackers.';
   const whatsappURL = `https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
 
   return (
@@ -43,24 +56,18 @@ const WhatsAppButton = () => {
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Chat with us on WhatsApp"
-      className="group fixed right-4 z-overlay flex h-14 w-14 items-center justify-center rounded-full text-white sm:right-6"
-      style={{
-        bottom: 'max(1rem, env(safe-area-inset-bottom))',
-        background: 'linear-gradient(140deg, #3E9A6B 0%, #2C7A53 54%, #245F42 100%)',
-        border: '1px solid rgba(210, 166, 79, 0.42)',
-        boxShadow: '0 14px 34px rgba(36, 95, 66, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.22)'
-      }}
+      className="wa-float group fixed z-overlay flex h-14 w-14 items-center justify-center text-white"
       initial={{ opacity: 0, scale: reduced ? 1 : 0.6 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={reduced ? { duration: DURATION.instant } : { delay: 0.5, ...SPRING.soft }}
       whileHover={reduced ? undefined : { scale: 1.06 }}
       whileTap={reduced ? undefined : { scale: 0.94 }}
     >
-      {/* Soft halo. Static — no attention-seeking pulse. */}
+      {/* Soft halo with a gentle attention pulse (disabled for reduced motion). */}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 rounded-full"
-        style={{ boxShadow: '0 0 0 7px rgba(44, 122, 83, 0.14)' }}
+        className="wa-halo pointer-events-none absolute inset-0"
+        style={{ boxShadow: '0 0 0 7px rgba(37, 211, 102, 0.16)' }}
       />
 
       {/* Label reveals on hover or keyboard focus. The link itself never depends on it. */}
@@ -75,10 +82,10 @@ const WhatsAppButton = () => {
           boxShadow: '0 10px 26px rgba(26, 23, 20, 0.4)'
         }}
       >
-        Chat on WhatsApp
+        Chat with us on WhatsApp
       </span>
 
-      <FaWhatsapp className="relative h-7 w-7" aria-hidden="true" />
+      <FaWhatsapp className="relative h-[30px] w-[30px]" aria-hidden="true" style={{ filter: 'drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45))' }} />
     </motion.a>
   );
 };
