@@ -91,5 +91,18 @@ client/font-proof.html
 # client/.env (public Firebase web config, committed on purpose).
 /.env*
 !/.env.example
+# Local frontend/API env files holding real values. Only *.example templates
+# are committed - never the real files (they have held pasted credentials).
+admin/.env*
+billing/.env*
+api/.env*
+# Exception: admin/.env and billing/.env hold ONLY the public Firebase web
+# config + VITE_BACKEND_API_URL (same class of data as the committed
+# client/.env), so they are committed for deterministic CI builds of the
+# three subdomain apps. Every other admin/billing env file stays ignored.
+!admin/.env
+!billing/.env
+!admin/.env.example
+!billing/.env.example
 # Local production overlay used by CI deploys — never commit.
 client/.env.production.local

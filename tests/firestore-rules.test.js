@@ -217,7 +217,7 @@ describe('trackingCodes — the map must not be readable at all', () => {
   });
 
   /* Codes are sequential now, so a readable code -> orderId map is an oracle:
-     walk CH1001, CH1002, ... collect the unguessable order auto-IDs, and read
+     walk CH01, CH02, ... collect the unguessable order auto-IDs, and read
      the orders through the public `orders.get`, skipping the phone-digit check
      in POST /api/orders/track. Guest tracking goes through that endpoint, which
      reads with the Admin SDK and is not governed by these rules. */

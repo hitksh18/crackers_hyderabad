@@ -12,6 +12,8 @@ set -euo pipefail
 
 DOMAIN="${DOMAIN:-your-domain.com}"
 APP_DIR="${APP_DIR:-/var/www/crackershyderabad}"
+ADMIN_APP_DIR="${ADMIN_APP_DIR:-/var/www/crackershyderabad-admin}"
+BILLING_APP_DIR="${BILLING_APP_DIR:-/var/www/crackershyderabad-billing}"
 MEDIA_DIR="${MEDIA_DIR:-/var/www/crackershyderabad-media}"
 DEPLOY_DIR="${DEPLOY_DIR:-/root/crackers-deploy}"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -43,8 +45,8 @@ fi
 pm2 -v
 
 echo "==> 6/16 Prepare application directories"
-mkdir -p "$APP_DIR" "$MEDIA_DIR" "$DEPLOY_DIR" ./logs
-chmod 755 "$APP_DIR" "$MEDIA_DIR" || true
+mkdir -p "$APP_DIR" "$ADMIN_APP_DIR" "$BILLING_APP_DIR" "$MEDIA_DIR" "$DEPLOY_DIR" ./logs
+chmod 755 "$APP_DIR" "$ADMIN_APP_DIR" "$BILLING_APP_DIR" "$MEDIA_DIR" || true
 
 echo "==> 7/16 Install API dependencies"
 cd "$REPO_DIR/api"
@@ -55,11 +57,19 @@ mkdir -p "$MEDIA_DIR"/products "$MEDIA_DIR"/general "$MEDIA_DIR"/categories "$ME
   "$MEDIA_DIR"/canvas/hero "$MEDIA_DIR"/canvas/side-promos "$MEDIA_DIR"/canvas/banners "$MEDIA_DIR"/canvas/product-banners
 chmod -R 755 "$MEDIA_DIR" || true
 
-echo "==> 9/16 Build frontend"
+echo "==> 9/16 Build frontends (customer + admin + billing)"
 cd "$REPO_DIR/client"
 npm ci --no-audit --no-fund
 npm run build
 test -f dist/index.html || { echo "ERROR: client/dist/index.html missing after build"; exit 1; }
+cd "$REPO_DIR/admin"
+npm ci --no-audit --no-fund
+npm run build
+test -f dist/index.html || { echo "ERROR: admin/dist/index.html missing after build"; exit 1; }
+cd "$REPO_DIR/billing"
+npm ci --no-audit --no-fund
+npm run build
+test -f dist/index.html || { echo "ERROR: billing/dist/index.html missing after build"; exit 1; }
 
 echo "==> 10/16 Configure environment (never overwrite existing .env)"
 mkdir -p "$DEPLOY_DIR"
@@ -76,13 +86,24 @@ if [ -z "${FIREBASE_SERVICE_ACCOUNT_KEY:-}" ] && ! grep -q '^FIREBASE_SERVICE_AC
   echo "         The API will start (GET /api/health = ok) but auth/orders/users return 503 until you set it."
 fi
 
-echo "==> 11/16 Publish frontend build + backend to deploy dir"
-rm -rf "${APP_DIR}.new" && mkdir -p "${APP_DIR}.new"
-cp -a "$REPO_DIR/client/dist/." "${APP_DIR}.new/"
-rm -rf "${APP_DIR}.old" || true
-if [ -d "$APP_DIR" ] && [ -n "$(ls -A "$APP_DIR" 2>/dev/null)" ]; then mv "$APP_DIR" "${APP_DIR}.old"; fi
-mv "${APP_DIR}.new" "$APP_DIR"
-chown -R www-data:www-data "$APP_DIR" || true
+echo "==> 11/16 Publish frontend builds + backend to deploy dir"
+# Copy into <dest>.new, rotate the old copy to <dest>.old, then swap — one
+# broken copy can never leave a subdomain with no files on disk.
+publish_app() {
+  src="$1"
+  dest="$2"
+  rm -rf "${dest}.new" && mkdir -p "${dest}.new"
+  cp -a "$src/." "${dest}.new/"
+  rm -rf "${dest}.old" || true
+  if [ -d "$dest" ]; then
+    if [ -n "$(ls -A "$dest" 2>/dev/null)" ]; then mv "$dest" "${dest}.old"; else rm -rf "$dest"; fi
+  fi
+  mv "${dest}.new" "$dest"
+  chown -R www-data:www-data "$dest" || true
+}
+publish_app "$REPO_DIR/client/dist"  "$APP_DIR"
+publish_app "$REPO_DIR/admin/dist"   "$ADMIN_APP_DIR"
+publish_app "$REPO_DIR/billing/dist" "$BILLING_APP_DIR"
 rm -rf "$DEPLOY_DIR/api" && cp -a "$REPO_DIR/api" "$DEPLOY_DIR/api"
 cp -a "$REPO_DIR/ecosystem.config.cjs" "$DEPLOY_DIR/ecosystem.config.cjs" 2>/dev/null || true
 ln -sfn "$DEPLOY_DIR/.env" "$DEPLOY_DIR/api/.env" 2>/dev/null || cp "$DEPLOY_DIR/.env" "$DEPLOY_DIR/api/.env"
@@ -122,11 +143,12 @@ for i in 1 2 3 4 5 6; do
   if [ "$i" = 6 ]; then echo "ERROR: API health check failed"; pm2 logs crackers-api --lines 30 --nostream || true; exit 1; fi
   sleep 3
 done
-curl -fsS -o /dev/null -w "    Site / -> %{http_code}\n" "http://127.0.0.1/"
-curl -fsS -o /dev/null -w "    SPA /admin/dashboard -> %{http_code}\n" "http://127.0.0.1/admin/dashboard" || true
+curl -fsS -o /dev/null -w "    Storefront / -> %{http_code}\n" "http://127.0.0.1/"
+curl -fsS -o /dev/null -w "    Admin /      -> %{http_code}\n" -H "Host: admin.$DOMAIN" "http://127.0.0.1/" || true
+curl -fsS -o /dev/null -w "    Billing /    -> %{http_code}\n" -H "Host: billing.$DOMAIN" "http://127.0.0.1/" || true
 
 echo ""
 echo "DEPLOY DONE. Next steps:"
-echo "  1. Point DNS: $DOMAIN and www.$DOMAIN -> this server IP."
-echo "  2. SSL: certbot --nginx -d $DOMAIN -d www.$DOMAIN"
-echo "  3. Verify: https://$DOMAIN/api/health  +  https://$DOMAIN/admin/dashboard"
+echo "  1. Point DNS: $DOMAIN, www.$DOMAIN, admin.$DOMAIN and billing.$DOMAIN -> this server IP."
+echo "  2. SSL: certbot --nginx -d $DOMAIN -d www.$DOMAIN -d admin.$DOMAIN -d billing.$DOMAIN"
+echo "  3. Verify: https://$DOMAIN/  +  https://admin.$DOMAIN/dashboard  +  https://billing.$DOMAIN/"

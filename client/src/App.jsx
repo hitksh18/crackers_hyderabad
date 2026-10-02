@@ -1,55 +1,43 @@
-import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { Suspense, lazy, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import ScrollToTop from './components/ScrollToTop';
 import Navbar from './components/Navbar';
+import CheckoutNavbar from './components/CheckoutNavbar';
 import TopBanner from './components/TopBanner';
-import SimpleCopyright from './components/SimpleCopyright';
-import WhatsAppButton from './components/WhatsAppButton';
 import CustomToast from './components/CustomToast';
 import ProtectedRoute from './components/ProtectedRoute';
+// Below-the-fold / deferred chrome: the copyright strip never renders on the
+// home page and the WhatsApp float renders null until its Firestore settings
+// arrive, so both load after the first paint without changing any behaviour.
+const SimpleCopyright = lazy(() => import('./components/SimpleCopyright'));
+const WhatsAppButton = lazy(() => import('./components/WhatsAppButton'));
 import { ThemeProvider } from './contexts/ThemeContext';
-import { NotificationProvider } from './contexts/NotificationContext';
 import { useReducedMotion } from './hooks/useReducedMotion';
 import { pageVariants } from './lib/motion';
 import { trackPageview as trackGaPageview } from './lib/analytics';
 import { ProductGridSkeleton } from './components/ui/Skeleton';
 import { trackPageview } from './utils/siteTracker';
 
-// Storefront routes stay eager — these are the pages visitors land on.
+// Home is the landing route — it stays eager so the hero paints immediately.
+// Every other storefront route splits into its own chunk: visitors only
+// download the page they navigate to, never on the first load.
 import Home from './pages/Home';
-import Products from './pages/Products';
-import ProductDetail from './pages/ProductDetail';
-import Cart from './pages/Cart';
-import Checkout from './pages/Checkout';
-import OrderSuccess from './pages/OrderSuccess';
-import TrackOrder from './pages/TrackOrder';
-import Login from './pages/Login';
-import Profile from './pages/Profile';
-import MyOrders from './pages/MyOrders';
+const Products = lazy(() => import('./pages/Products'));
+const ProductDetail = lazy(() => import('./pages/ProductDetail'));
+const Cart = lazy(() => import('./pages/Cart'));
+const Checkout = lazy(() => import('./pages/Checkout'));
+const OrderSuccess = lazy(() => import('./pages/OrderSuccess'));
+const TrackOrder = lazy(() => import('./pages/TrackOrder'));
+const OrderTracking = lazy(() => import('./pages/OrderTracking'));
+const Login = lazy(() => import('./pages/Login'));
+const Profile = lazy(() => import('./pages/Profile'));
+const MyOrders = lazy(() => import('./pages/MyOrders'));
 
-// Staff and admin surfaces load on demand. They are large, they are reached by
-// a handful of users, and keeping them out of the entry chunk is the single
-// biggest win available to the shopper's first paint.
-const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
-const AdminAnalytics = lazy(() => import('./pages/AdminAnalytics'));
-const AddProduct = lazy(() => import('./pages/AddProduct'));
-const EditProduct = lazy(() => import('./pages/EditProduct'));
-const AllProducts = lazy(() => import('./pages/AllProducts'));
-const Orders = lazy(() => import('./pages/Orders'));
-const AdminOrderDetail = lazy(() => import('./pages/AdminOrderDetail'));
-const Billing = lazy(() => import('./pages/Billing'));
-const PriceList = lazy(() => import('./pages/PriceList'));
-const UserManagement = lazy(() => import('./pages/UserManagement'));
-const AdminCategories = lazy(() => import('./pages/AdminCategories'));
-const HomepageBuilder = lazy(() => import('./pages/HomepageBuilder'));
-
-/* Roles permitted on the two shared staff surfaces. These deliberately mirror
-   the navigation predicates in Navbar/MobileMenu — if you change one, change
-   the other, or staff get menu links that bounce them home. Firestore rules
-   already grant these roles the underlying reads and writes. */
-const ORDERS_ROLES = ['admin', 'packer', 'mod'];
-const PRICE_LIST_ROLES = ['admin', 'sales', 'billing', 'mod'];
+// Staff and admin surfaces live in the separate admin frontend
+// (admin.crackershyderabad.com); the counter register lives at
+// billing.crackershyderabad.com. They are intentionally not imported here,
+// so the public store never downloads staff code.
 
 const RouteFallback = () => (
   <div className="shell section-pad-sm">
@@ -62,13 +50,9 @@ function AppContent() {
   const reduced = useReducedMotion();
   const isHomePage = location.pathname === '/';
   const isProductsPage = location.pathname === '/products';
+  const isCheckoutPage = location.pathname === '/checkout';
+  const isCartPage = location.pathname === '/cart';
   const showTopBanner = ['/', '/products', '/cart', '/profile'].includes(location.pathname);
-  // The billing register is a dedicated POS terminal: it owns the whole
-  // viewport and must not carry the storefront chrome (banner, navbar,
-  // copyright, floating WhatsApp button).
-  const isBillingPath = location.pathname === '/admin/billing';
-  const isDashboardPath = location.pathname === '/admin/dashboard';
-  const isAdminPath = location.pathname.startsWith('/admin');
 
   /* Two independent pageview channels, deliberately not merged.
 
@@ -119,13 +103,13 @@ function AppContent() {
       </a>
 
       <ScrollToTop />
-      {!isBillingPath && !isAdminPath && showTopBanner && <TopBanner />}
-      {!isBillingPath && !isAdminPath && <Navbar />}
+      {showTopBanner && <TopBanner />}
+      {isCheckoutPage ? <CheckoutNavbar /> : isCartPage ? <CheckoutNavbar title="Shopping Cart" /> : <Navbar />}
 
       <main
         id="main-content"
         tabIndex={-1}
-        className={`focus:outline-none ${isBillingPath || isDashboardPath ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'flex-grow'}`}
+        className="focus:outline-none flex-grow"
       >
         {/* Enter-only transition: the incoming page never waits on an exit
             animation, so navigation stays as fast as it was. The Products
@@ -147,6 +131,7 @@ function AppContent() {
               <Route path="/checkout" element={<Checkout />} />
               <Route path="/order-success" element={<OrderSuccess />} />
               <Route path="/track-order" element={<TrackOrder />} />
+              <Route path="/track/:orderCode" element={<OrderTracking />} />
               <Route path="/login" element={<Login />} />
               <Route
                 path="/profile"
@@ -164,117 +149,24 @@ function AppContent() {
                   </ProtectedRoute>
                 }
               />
-              <Route
-                path="/admin"
-                element={
-                  <ProtectedRoute>
-                    <Navigate to="/admin/dashboard" replace />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/dashboard"
-                element={
-                  <ProtectedRoute adminOnly>
-                    <AdminDashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/analytics"
-                element={
-                  <ProtectedRoute adminOnly>
-                    <AdminAnalytics />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/billing"
-                element={
-                  <ProtectedRoute adminOrSales staffOnly>
-                    <Billing />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/price-list"
-                element={
-                  <ProtectedRoute allowRoles={PRICE_LIST_ROLES}>
-                    <PriceList />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/add-product"
-                element={
-                  <ProtectedRoute adminOnly>
-                    <AddProduct />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/edit-product/:id"
-                element={
-                  <ProtectedRoute adminOnly>
-                    <EditProduct />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/all-products"
-                element={
-                  <ProtectedRoute adminOnly>
-                    <AllProducts />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/orders"
-                element={
-                  <ProtectedRoute allowRoles={ORDERS_ROLES}>
-                    <Orders />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/orders/:orderId"
-                element={
-                  <ProtectedRoute allowRoles={ORDERS_ROLES}>
-                    <AdminOrderDetail />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/users"
-                element={
-                  <ProtectedRoute adminOnly>
-                    <UserManagement />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/categories"
-                element={
-                  <ProtectedRoute adminOnly>
-                    <AdminCategories />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/homepage"
-                element={
-                  <ProtectedRoute adminOnly>
-                    <HomepageBuilder />
-                  </ProtectedRoute>
-                }
-              />
             </Routes>
           </Suspense>
         </motion.div>
       </main>
 
-      {!isHomePage && !isBillingPath && !isAdminPath && <SimpleCopyright />}
-      {!isBillingPath && !isAdminPath && <WhatsAppButton />}
+      {/* The desktop cart is a fixed-viewport workspace — the footer strip
+          stays out of its way on lg so it can never push the page into a
+          document scroll. Mobile keeps the footer with its natural scroll. */}
+      {!isHomePage && (
+        <div className={isCartPage ? 'lg:hidden' : undefined}>
+          <Suspense fallback={null}>
+            <SimpleCopyright />
+          </Suspense>
+        </div>
+      )}
+      <Suspense fallback={null}>
+        <WhatsAppButton />
+      </Suspense>
       <CustomToast />
     </>
   );
@@ -284,30 +176,18 @@ function App() {
   return (
     <Router>
       <ThemeProvider>
-        <NotificationProvider>
-          <AppShell />
-        </NotificationProvider>
+        <AppShell />
       </ThemeProvider>
     </Router>
   );
 }
 
 /* Sits below BrowserRouter so it can read the location, and above the page
-   content so it can shape the shell (the billing register owns the whole
-   viewport and drops the storefront chrome). */
+   content so it can shape the shell. The storefront is a single scrolling
+   column: banner, navbar, page, footer chrome. */
 function AppShell() {
-  const location = useLocation();
-  const isBillingPath = location.pathname === '/admin/billing';
-  const isDashboardPath = location.pathname === '/admin/dashboard';
-  const isAdminPath = location.pathname.startsWith('/admin');
-  // Dashboard overview is a desktop app viewport (no page scroll), other admin pages scroll normally
-  const shellClass = isBillingPath || isDashboardPath
-    ? 'flex h-screen flex-col overflow-hidden'
-    : isAdminPath
-      ? 'flex min-h-screen flex-col'
-      : 'flex min-h-screen flex-col';
   return (
-    <div className={shellClass}>
+    <div className="flex min-h-screen flex-col">
       <AppContent />
     </div>
   );

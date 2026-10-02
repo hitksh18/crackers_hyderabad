@@ -4,6 +4,20 @@
   "buildCommand": "npm run build --prefix client",
   "outputDirectory": "client/dist",
   "framework": "vite",
+  "redirects": [
+    {
+      "source": "/admin/:path*",
+      "destination": "https://admin.crackershyderabad.com/:path*"
+    },
+    {
+      "source": "/billing/:path*",
+      "destination": "https://billing.crackershyderabad.com/:path*"
+    },
+    {
+      "source": "/price-list",
+      "destination": "https://admin.crackershyderabad.com/price-list"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",

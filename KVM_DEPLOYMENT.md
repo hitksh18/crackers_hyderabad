@@ -30,6 +30,8 @@ In your registrar/DNS panel:
 |---|---|---|
 | `YOUR_DOMAIN` (e.g. `crackershyderabad.com`) | A | `<server public IP>` |
 | `www.YOUR_DOMAIN` | A | `<server public IP>` |
+| `admin.YOUR_DOMAIN` (staff console) | A | `<server public IP>` |
+| `billing.YOUR_DOMAIN` (counter register) | A | `<server public IP>` |
 
 Verify: `dig +short YOUR_DOMAIN` returns the server IP before continuing to SSL.
 
@@ -51,6 +53,8 @@ Handled by the script (steps 7 + 9), or manually:
 ```bash
 cd /root/crackers-deploy/repo/api && npm ci --omit=dev --no-audit --no-fund
 cd /root/crackers-deploy/repo/client && npm ci --no-audit --no-fund
+cd /root/crackers-deploy/repo/admin && npm ci --no-audit --no-fund
+cd /root/crackers-deploy/repo/billing && npm ci --no-audit --no-fund
 ```
 
 ## 5. Configure .env
@@ -73,8 +77,11 @@ Required values:
 | `MEDIA_ROOT` / `MEDIA_PUBLIC_BASE` | Leave empty — defaults (`/var/www/crackershyderabad-media`, `https://crackershyderabad.com/uploads`) are correct. |
 | `GOOGLE_GEOCODING_API_KEY` | Optional — empty = OpenStreetMap Nominatim for the checkout picker. |
 
-Browser build vars (`VITE_FIREBASE_*`) are baked into `client/dist` at build
-time from `client/.env.production` (committed fallback) — no server config needed.
+Browser build vars (`VITE_FIREBASE_*`) are baked in at build time from the
+committed public web config (`client/.env.production`, `admin/.env`,
+`billing/.env`) — no server config needed. The three builds are served on
+three subdomains: `crackershyderabad.com`, `admin.crackershyderabad.com`
+and `billing.crackershyderabad.com`.
 
 ## 6. Configure database (Firestore)
 
@@ -93,26 +100,40 @@ cd /root/crackers-deploy/repo
 sudo DOMAIN=crackershyderabad.com bash deploy/kvm/setup-and-deploy.sh
 ```
 
-What it does: installs Node 22/Nginx/PM2 → `npm ci` → `vite build` →
-writes `/root/crackers-deploy/.env` from template **only if absent** →
-atomically swaps `/var/www/crackershyderabad` →
+What it does: installs Node 22/Nginx/PM2 → `npm ci` ×4 → `vite build` ×3
+(customer, admin, billing) → writes `/root/crackers-deploy/.env` from
+template **only if absent** → atomically swaps
+`/var/www/crackershyderabad{,-admin,-billing}` →
 `pm2 startOrRestart ecosystem.config.cjs --env production` →
-installs Nginx site (with your `DOMAIN`) → `nginx -t` → reload →
-`pm2 startup` → health check.
+installs Nginx site (with your `DOMAIN`, all three hostnames) → `nginx -t` →
+reload → `pm2 startup` → health check.
 
 The script never deletes `/var/www/crackershyderabad-media` or Firestore data.
 
 ## 8. Configure Nginx
 
-Done by the script from `deploy/nginx/crackershyderabad.conf`. Key behaviors:
+Done by the script from `deploy/nginx/crackershyderabad.conf`. One config,
+three `server` blocks keyed by hostname (host-based routing):
 
-- `root /var/www/crackershyderabad;` + `try_files $uri $uri/ /index.html;`
+| Hostname | `root` | App |
+|---|---|---|
+| `YOUR_DOMAIN`, `www.YOUR_DOMAIN` | `/var/www/crackershyderabad` | customer storefront |
+| `admin.YOUR_DOMAIN` | `/var/www/crackershyderabad-admin` | staff console |
+| `billing.YOUR_DOMAIN` | `/var/www/crackershyderabad-billing` | counter register |
+
+Key behaviors, on **each** block:
+
+- `try_files $uri $uri/ /index.html;`
   → SPA refresh works on every route (see §12).
 - `location /api/` → `proxy_pass http://127.0.0.1:3001;` with
-  `X-Forwarded-Proto` so Express (`trust proxy`) sees HTTPS correctly.
+  `X-Forwarded-Proto` so Express (`trust proxy`) sees HTTPS correctly —
+  one API behind all three domains (same-origin `/api` on each).
 - `location /uploads/` → `alias /var/www/crackershyderabad-media/;`
   (30-day cache, never executes code).
 - `/assets/` cached 1 year (hashed), `index.html` never cached.
+- On the storefront block only: the single-domain era paths `/admin`,
+  `/billing` and `/price-list` 301-redirect to their subdomain homes so
+  old bookmarks keep working (frontend paths, never API paths).
 
 Manual check: `sudo nginx -t && sudo systemctl reload nginx`.
 
@@ -120,11 +141,16 @@ Manual check: `sudo nginx -t && sudo systemctl reload nginx`.
 
 ```bash
 sudo apt-get install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d crackershyderabad.com -d www.crackershyderabad.com
+sudo certbot --nginx -d crackershyderabad.com -d www.crackershyderabad.com \
+  -d admin.crackershyderabad.com -d billing.crackershyderabad.com
 ```
 
-Certbot adds the `:443` block; the app needs no code change
+Certbot adds the `:443` block for every name; the app needs no code change
 (`X-Forwarded-Proto` is already honored). Renewal is automatic via systemd timer.
+
+Firebase Authentication → Settings → Authorized domains must list
+`crackershyderabad.com`, `admin.crackershyderabad.com` and
+`billing.crackershyderabad.com` so sign-in works on all three hosts.
 
 ## 10. Start PM2
 
@@ -157,22 +183,32 @@ Auth + Firestore + media writes.
 
 Open and hard-refresh each (all must survive refresh — Nginx serves `index.html`):
 
-Customer: `/`, `/products`, `/product/:slug`, `/cart`, `/checkout`,
-`/order-success`, `/track-order`, `/login`, `/profile`, `/my-orders`,
-`/price-list`, `/billing`.
+Customer (`https://YOUR_DOMAIN/`): `/`, `/products`, `/product/:slug`, `/cart`,
+`/checkout`, `/order-success`, `/track-order`, `/login`, `/profile`,
+`/my-orders`.
 
-Admin: `/admin` (→ redirect `/admin/dashboard`), `/admin/dashboard`,
-`/admin/analytics`, `/admin/billing`, `/admin/add-product`,
-`/admin/edit-product/:id`, `/admin/all-products`, `/admin/orders`,
-`/admin/orders/:orderId`, `/admin/users`, `/admin/categories`, `/admin/homepage`.
+Admin (`https://admin.YOUR_DOMAIN/`): `/` (→ role landing), `/dashboard`,
+`/analytics`, `/orders`, `/orders/:orderId`, `/products`, `/products/add`,
+`/products/edit/:id`, `/categories`, `/users`, `/price-list`, `/canvas`,
+`/login`.
+
+Billing (`https://billing.YOUR_DOMAIN/`): `/` (counter register), `/login`.
+
+Legacy single-domain paths on the storefront (`/admin/...`, `/billing`,
+`/price-list`) must 301 to the matching subdomain.
 
 Check DevTools Network: JS/CSS/fonts load from `/assets/` (200, long cache),
 `index.html` returns `no-store`.
 
 ## 13. Verify admin
 
-Sign in as the admin user → `/admin/dashboard` loads KPIs/orders.
-Negative test: sign in as a normal customer → direct-GET an admin API, e.g.
+Sign in as the admin user → `https://admin.YOUR_DOMAIN/dashboard` loads
+KPIs/orders. Landing per role after login: admin → `/dashboard`,
+packer/mod → `/orders`, sales/billing → forwarded to
+`billing.YOUR_DOMAIN`; on the storefront customers stay on `/` and staff
+are handed to their console subdomain (sign in again there — Firebase
+sessions are per-origin). Negative test: sign in as a normal customer →
+direct-GET an admin API, e.g.
 
 ```bash
 curl -s -H "Authorization: Bearer <CUSTOMER_ID_TOKEN>" \
@@ -192,7 +228,7 @@ staff). Guests can place orders + `POST /api/orders/track` (phone-last-4 check);
 everything else needs a token.
 
 Test: place a test order as guest → track it → sign in → order appears in
-`/my-orders` → admin sees it in `/admin/orders`.
+`/my-orders` → admin sees it in `admin.YOUR_DOMAIN/orders`.
 
 ## 15. Verify uploads
 
@@ -234,9 +270,9 @@ Recommended: weekly Firestore export + daily uploads tar via cron, copied off-bo
 sudo bash /root/crackers-deploy/update.sh   # from deploy/kvm/update.sh
 ```
 
-Pull → install → rebuild → atomic frontend swap → PM2 restart → health check.
-Preserves `.env`, uploads, Firestore. Nginx config is never auto-overwritten
-(the script diffs and tells you to review).
+Pull → install → rebuild all three frontends → atomic swap of all three doc
+roots → PM2 restart → health check. Preserves `.env`, uploads, Firestore.
+Nginx config is never auto-overwritten (the script diffs and tells you to review).
 
 ## 18. Troubleshooting
 
@@ -255,7 +291,7 @@ Preserves `.env`, uploads, Firestore. Nginx config is never auto-overwritten
 
 1. `FIREBASE_SERVICE_ACCOUNT_KEY` in `/root/crackers-deploy/.env` (secret).
 2. `EMAIL_*` + `MSG91_*` in the same file (secrets).
-3. DNS A records + `certbot --nginx`.
+3. DNS A records for all four hostnames (`apex`, `www`, `admin`, `billing`) + `certbot --nginx`.
 4. Firestore rules deploy + first admin `roles/{uid}` document.
 5. `DOMAIN=` value when running the setup script (no domain is hardcoded in deploy scripts; `crackershyderabad.com` defaults inside code comments/CORS allow-list are safe).
 

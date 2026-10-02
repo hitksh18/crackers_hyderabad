@@ -1,0 +1,418 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { doc, getDoc, updateDoc, collection, getDocs, addDoc } from 'firebase/firestore';
+import { db } from '../firebase';
+import { uploadImage } from '../utils/uploadImage';
+import { useNavigate, useParams } from 'react-router-dom';
+import toast from '../utils/toast';
+import BrandDialog from '../components/admin/BrandDialog';
+import ProductForm from '../components/admin/ProductForm';
+import {
+  fetchTradePricing,
+  saveTradePricing,
+  stripTradeFields,
+  TRADE_FIELD_DELETIONS,
+} from '../lib/tradePricing';
+import { slugify, ensureUniqueSlug } from '../lib/productLinks';
+
+const EditProduct = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [imageURL, setImageURL] = useState('');
+  const [useURL, setUseURL] = useState(false);
+  const [imageProgress, setImageProgress] = useState(null);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [touched, setTouched] = useState({});
+  const [brands, setBrands] = useState([]);
+  const [showAddBrand, setShowAddBrand] = useState(false);
+  const [newBrandName, setNewBrandName] = useState('');
+  const [newBrandLogo, setNewBrandLogo] = useState('');
+  const [newBrandDescription, setNewBrandDescription] = useState('');
+  const [brandLogoFile, setBrandLogoFile] = useState(null);
+  const [uploadingBrandLogo, setUploadingBrandLogo] = useState(false);
+  const pricingLoadFailed = useRef(false);
+  const currentSlugRef = useRef(null);
+  const currentOldSlugsRef = useRef([]);
+  const [formData, setFormData] = useState({
+    name: '',
+    categories: [],
+    onlinePrice: '',
+    discountPrice: '',
+    offlineMRP: '',
+    offlineDiscountPrice: '',
+    offlinePrice: '',
+    outOfStock: false,
+    description: '',
+    isFeatured: false,
+    sortOrder: '',
+    brand: '',
+  });
+  const [seoData, setSeoData] = useState({
+    title: '',
+    description: '',
+    keywords: '',
+    slug: '',
+    tags: '',
+  });
+
+  const fetchProduct = useCallback(async () => {
+    try {
+      const docRef = doc(db, 'products', id);
+      const [docSnap, pricing] = await Promise.all([
+        getDoc(docRef),
+        fetchTradePricing(id).catch((pricingError) => {
+          console.error('Error fetching trade pricing:', pricingError);
+          toast.error('Could not load the store prices for this product');
+          pricingLoadFailed.current = true;
+          return null;
+        }),
+      ]);
+      if (docSnap.exists()) {
+        const data = { ...docSnap.data(), ...(pricing || {}) };
+        currentSlugRef.current = data.slug || null;
+        currentOldSlugsRef.current = Array.isArray(data.oldSlugs)
+          ? data.oldSlugs.filter((s) => typeof s === 'string')
+          : [];
+        setFormData({
+          name: data.name || '',
+          categories: data.categories || (data.category ? [data.category] : []),
+          onlinePrice: data.onlinePrice || data.price || '',
+          discountPrice: data.discountPrice || '',
+          offlineMRP: data.offlineMRP || data.offlinePrice || data.price || '',
+          offlineDiscountPrice: data.offlineDiscountPrice || '',
+          offlinePrice: data.offlinePrice || '',
+          outOfStock: data.outOfStock || false,
+          description: data.description || '',
+          isFeatured: data.isFeatured || false,
+          sortOrder: data.sortOrder != null ? String(data.sortOrder) : '',
+          brand: typeof data.brand === 'string' ? data.brand : (data.brand?.name || ''),
+        });
+        setImagePreview(data.imageURL || '');
+        setImageURL(data.imageURL || '');
+
+        if (data.seo) {
+          setSeoData({
+            title: data.seo.title || '',
+            description: data.seo.description || '',
+            keywords: Array.isArray(data.seo.keywords) ? data.seo.keywords.join(', ') : '',
+            slug: data.seo.slug || '',
+            tags: Array.isArray(data.seo.tags) ? data.seo.tags.join(', ') : '',
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching product:', error);
+      toast.error('Failed to load product');
+    }
+  }, [id]);
+
+  const fetchBrands = useCallback(async () => {
+    try {
+      const snapshot = await getDocs(collection(db, 'brands'));
+      const brandsList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setBrands(brandsList);
+    } catch (error) {
+      console.error('Error fetching brands:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchProduct();
+    fetchBrands();
+  }, [fetchProduct, fetchBrands]);
+
+  const handleBrandLogoFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setBrandLogoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewBrandLogo(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleAddBrand = async () => {
+    if (!newBrandName.trim()) {
+      toast.error('Please enter a brand name');
+      return;
+    }
+
+    try {
+      setUploadingBrandLogo(true);
+      let logoURL = newBrandLogo.trim();
+
+      if (brandLogoFile) {
+        try {
+          toast.loading('Removing background from logo...', { id: 'brand-logo-upload' });
+          logoURL = await uploadImage(brandLogoFile, {
+            dir: 'brands',
+            removeBackground: true,
+            watermark: false,
+            onProgress: (key, current, total) => {
+              if (total > 0) {
+                const pct = Math.min(100, Math.round((current / total) * 100));
+                toast.loading(`Processing logo... ${pct}%`, { id: 'brand-logo-upload' });
+              }
+            }
+          });
+          toast.dismiss('brand-logo-upload');
+        } catch (uploadError) {
+          toast.dismiss('brand-logo-upload');
+          console.error('Logo upload failed:', uploadError);
+          toast.error('Logo upload failed. Using URL instead if provided.');
+          logoURL = newBrandLogo.startsWith('data:') ? '' : newBrandLogo.trim();
+        }
+      }
+
+      const brandData = {
+        name: newBrandName.trim(),
+        logo: logoURL,
+        description: newBrandDescription.trim() || '',
+        createdAt: new Date()
+      };
+
+      const docRef = await addDoc(collection(db, 'brands'), brandData);
+
+      setBrands([...brands, { id: docRef.id, ...brandData }]);
+      setFormData({ ...formData, brand: newBrandName.trim() });
+      setNewBrandName('');
+      setNewBrandLogo('');
+      setNewBrandDescription('');
+      setBrandLogoFile(null);
+      setShowAddBrand(false);
+      toast.success('Brand added successfully!');
+    } catch (error) {
+      console.error('Error adding brand:', error);
+      toast.error('Failed to add brand. Please check Firebase permissions.');
+    } finally {
+      setUploadingBrandLogo(false);
+    }
+  };
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSeoChange = (e) => {
+    setSeoData({ ...seoData, [e.target.name]: e.target.value });
+  };
+
+  const handleCategoryToggle = (category) => {
+    setFormData(prev => ({
+      ...prev,
+      categories: prev.categories.includes(category)
+        ? prev.categories.filter(c => c !== category)
+        : [...prev.categories, category]
+    }));
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      setImagePreview((prev) => {
+        if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(file);
+      });
+      setImageURL('');
+      setUseURL(false);
+    }
+  };
+
+  const handleImageURLChange = (e) => {
+    setImageURL(e.target.value);
+    setImagePreview(e.target.value);
+    if (e.target.value) setImageFile(null);
+  };
+
+  const handleToggleUseURL = (val) => {
+    if (typeof val === 'boolean') setUseURL(val);
+    else setUseURL(v => !v);
+  };
+
+  const markTouched = (e) => {
+    const key = e.target.name;
+    if (!key) return;
+    setTouched(prev => (prev[key] ? prev : { ...prev, [key]: true }));
+  };
+
+  const handleSubmit = async (e) => {
+    if (e) e.preventDefault();
+    setSubmitAttempted(true);
+    setLoading(true);
+
+    try {
+      let imageURLFinal = imagePreview;
+
+      if (imageFile) {
+        toast.loading('Removing background from image...', { id: 'product-img-upload' });
+        setImageProgress(0);
+        try {
+          imageURLFinal = await uploadImage(imageFile, {
+            dir: 'products',
+            removeBackground: true,
+            onProgress: (key, current, total) => {
+              if (total > 0) {
+                const pct = Math.min(100, Math.round((current / total) * 100));
+                setImageProgress(pct);
+                toast.loading(`Processing image... ${pct}%`, { id: 'product-img-upload' });
+              }
+            }
+          });
+        } catch (uploadError) {
+          toast.error(uploadError.message || 'Image upload failed', { id: 'product-img-upload' });
+          setImageProgress(null);
+          setLoading(false);
+          return;
+        }
+        toast.success('Image uploaded', { id: 'product-img-upload' });
+        setImageProgress(100);
+      } else if (imageURL) {
+        imageURLFinal = imageURL;
+      }
+
+      const seoObject = {
+        title: seoData.title || formData.name,
+        description: seoData.description || formData.description,
+        keywords: seoData.keywords ? seoData.keywords.split(',').map(k => k.trim()).filter(k => k) : [],
+        slug: seoData.slug || slugify(formData.name),
+        tags: seoData.tags ? seoData.tags.split(',').map(t => t.trim()).filter(t => t) : []
+      };
+
+      let slug;
+      try {
+        slug = await ensureUniqueSlug(seoObject.slug || formData.name, id);
+      } catch {
+        slug = slugify(seoObject.slug || formData.name);
+      }
+      seoObject.slug = slug;
+
+      const retiredSlug = currentSlugRef.current;
+      const oldSlugs = [
+        ...currentOldSlugsRef.current.filter((s) => s && s !== slug),
+        ...(retiredSlug && retiredSlug !== slug ? [retiredSlug] : []),
+      ].slice(-25);
+
+      const productData = {
+        name: formData.name,
+        categories: formData.categories,
+        category: formData.categories[0] || '',
+        onlinePrice: parseFloat(formData.onlinePrice),
+        discountPrice: formData.discountPrice ? parseFloat(formData.discountPrice) : null,
+        outOfStock: formData.outOfStock,
+        description: formData.description,
+        imageURL: imageURLFinal,
+        isFeatured: formData.isFeatured,
+        ...(formData.sortOrder !== '' ? { sortOrder: parseInt(formData.sortOrder, 10) } : {}),
+        brand: formData.brand || null,
+        seo: seoObject,
+        slug,
+        oldSlugs,
+        updatedAt: new Date(),
+      };
+
+      await updateDoc(doc(db, 'products', id), {
+        ...stripTradeFields(productData),
+        ...TRADE_FIELD_DELETIONS,
+      });
+
+      if (pricingLoadFailed.current) {
+        toast.error(
+          'Product updated. Store prices were NOT saved because they could not be loaded — reload the page before editing them.',
+          { duration: 8000 }
+        );
+        navigate('/products');
+        return;
+      }
+
+      try {
+        await saveTradePricing(id, formData);
+      } catch (pricingError) {
+        console.error('Error saving trade pricing:', pricingError);
+        toast.error('Product updated, but the store prices did not save — try saving again.');
+        return;
+      }
+
+      toast.success('Product updated successfully!');
+      navigate('/products');
+    } catch (error) {
+      console.error('Error updating product:', error);
+      toast.error('Failed to update product');
+    } finally {
+      setLoading(false);
+      setImageProgress(null);
+    }
+  };
+
+  const revealed = (field) => submitAttempted || !!touched[field];
+  const errors = {
+    name: revealed('name') && !formData.name ? 'Product name is required.' : '',
+    onlinePrice: revealed('onlinePrice') && !formData.onlinePrice ? 'Online price is required.' : '',
+    offlineMRP: revealed('offlineMRP') && !formData.offlineMRP ? 'Offline MRP is required.' : '',
+    categories: submitAttempted && formData.categories.length === 0 ? 'Select at least one category.' : '',
+  };
+
+  return (
+    <>
+      <ProductForm
+        mode="edit"
+        productName={formData.name}
+        formData={formData}
+        seoData={seoData}
+        errors={errors}
+        touched={touched}
+        submitAttempted={submitAttempted}
+        brands={brands}
+        imagePreview={imagePreview}
+        imageURL={imageURL}
+        useURL={useURL}
+        imageProgress={imageProgress}
+        showAddBrand={showAddBrand}
+        onFieldChange={handleChange}
+        onSeoChange={handleSeoChange}
+        onCategoryToggle={handleCategoryToggle}
+        onImageChange={handleImageChange}
+        onImageURLChange={handleImageURLChange}
+        onToggleUseURL={handleToggleUseURL}
+        onBrandChange={handleChange}
+        onShowAddBrand={() => setShowAddBrand(true)}
+        onMarkTouched={markTouched}
+        onSubmit={handleSubmit}
+        loading={loading}
+      />
+      <BrandDialog
+        open={showAddBrand}
+        name={newBrandName}
+        onNameChange={(e) => setNewBrandName(e.target.value)}
+        logo={newBrandLogo}
+        onLogoChange={(e) => {
+          setNewBrandLogo(e.target.value);
+          setBrandLogoFile(null);
+        }}
+        logoFile={brandLogoFile}
+        onLogoFileChange={handleBrandLogoFileChange}
+        description={newBrandDescription}
+        onDescriptionChange={(e) => setNewBrandDescription(e.target.value)}
+        submitting={uploadingBrandLogo}
+        onSubmit={handleAddBrand}
+        onClose={() => setShowAddBrand(false)}
+        onCancel={() => {
+          setShowAddBrand(false);
+          setNewBrandName('');
+          setNewBrandLogo('');
+          setNewBrandDescription('');
+          setBrandLogoFile(null);
+        }}
+      />
+    </>
+  );
+};
+
+export default EditProduct;

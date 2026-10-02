@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Trash2, Minus, Plus, ShoppingBag, Truck, ArrowRight, PackageSearch } from 'lucide-react';
@@ -6,11 +7,10 @@ import QuantityInput from '../components/QuantityInput';
 import ImagePlaceholder from '../components/ImagePlaceholder';
 import { displayNameForCategory } from '../lib/categoryIcons';
 import EmptyState from '../components/ui/EmptyState';
-import { CornerFiligree } from '../components/ui/Ornaments';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { inr } from '../lib/currency';
+import { MINIMUM_ORDER_VALUE } from '../lib/orderThresholds';
 import {
-  revealVariants,
   staggerParent,
   DURATION,
   EASE_OUT_EXPO,
@@ -18,7 +18,9 @@ import {
 } from '../lib/motion';
 import Seo from '../components/Seo';
 
-const FREE_SHIPPING_THRESHOLD = 2500;
+/* Single source of truth lives in lib/orderThresholds — same floor the
+   checkout gate and the backend fallback enforce. */
+const FREE_SHIPPING_THRESHOLD = MINIMUM_ORDER_VALUE;
 
 const unitPriceOf = (item) => item.discountPrice || item.onlinePrice || item.price || 0;
 
@@ -37,25 +39,23 @@ const rowVariants = (reduced) => ({
   },
 });
 
-/** The amount ticks over whenever the quantity changes. */
-const amountVariants = (reduced) => ({
-  hidden: { opacity: 0, y: reduced ? 0 : 7 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: reduced ? 0.001 : DURATION.fast, ease: EASE_OUT_EXPO },
-  },
-  exit: {
-    opacity: 0,
-    y: reduced ? 0 : -7,
-    transition: { duration: reduced ? 0.001 : DURATION.instant, ease: EASE_IN_SOFT },
-  },
-});
-
 const Cart = () => {
   const reduced = useReducedMotion();
   const { cart, hydrated, removeFromCart, updateQuantity, getCartTotal } = useCart();
   const total = getCartTotal();
+
+  /* Table scrollbar visibility: hidden at rest, thin gold while the user is
+     actively scrolling the rows, then fades out after a short idle beat. */
+  const [tableScrolling, setTableScrolling] = useState(false);
+  const scrollIdleRef = useRef(null);
+  const handleTableScroll = () => {
+    setTableScrolling(true);
+    if (scrollIdleRef.current) window.clearTimeout(scrollIdleRef.current);
+    scrollIdleRef.current = window.setTimeout(() => setTableScrolling(false), 900);
+  };
+  useEffect(() => () => {
+    if (scrollIdleRef.current) window.clearTimeout(scrollIdleRef.current);
+  }, []);
 
   /* Before the cart is read from storage it is indistinguishable from an empty
      one, and "Your cart is empty" flashed on every refresh of a full cart. */
@@ -104,272 +104,313 @@ const Cart = () => {
   const remaining = FREE_SHIPPING_THRESHOLD - total;
   const progress = Math.min(100, (total / FREE_SHIPPING_THRESHOLD) * 100);
 
+  /* Shared quantity pill (desktop table + mobile rows render the same
+     control — one definition, one behaviour). */
+  const qtyControl = (item) => (
+    <div
+      className="inline-flex items-center"
+      style={{
+        border: '1px solid var(--hairline-strong)',
+        borderRadius: 'var(--r-pill)',
+        background: 'var(--surface-card)',
+      }}
+    >
+      <motion.button
+        type="button"
+        whileTap={reduced ? undefined : { scale: 0.9 }}
+        onClick={() => updateQuantity(item.id, item.quantity - 1)}
+        aria-label={`Decrease quantity of ${item.name}`}
+        className="inline-flex h-10 w-9 items-center justify-center rounded-full transition-colors duration-150 hover:bg-black/5 dark:hover:bg-white/10"
+      >
+        <Minus className="h-4 w-4" strokeWidth={2.6} style={{ color: 'var(--maroon-700)' }} />
+      </motion.button>
+
+      <QuantityInput
+        value={item.quantity}
+        onChange={(quantity) => updateQuantity(item.id, quantity)}
+        ariaLabel={`Quantity for ${item.name}`}
+        className="tabular h-11 w-10 border-0 bg-transparent text-center text-base font-bold focus:outline-none"
+        style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}
+      />
+
+      <motion.button
+        type="button"
+        whileTap={reduced ? undefined : { scale: 0.9 }}
+        onClick={() => updateQuantity(item.id, item.quantity + 1)}
+        aria-label={`Increase quantity of ${item.name}`}
+        className="inline-flex h-10 w-9 items-center justify-center rounded-full transition-colors duration-150 hover:bg-black/5 dark:hover:bg-white/10"
+      >
+        <Plus className="h-4 w-4" strokeWidth={2.6} style={{ color: 'var(--maroon-700)' }} />
+      </motion.button>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen section-pad-sm pb-28 lg:pb-0">
+    <div className="section-pad-sm cart-fit pb-24 lg:h-[calc(100dvh-88px-52px)] lg:min-h-[540px] lg:overflow-hidden lg:pb-0">
       <Seo title="Your Cart | Crackers Hyderabad" noindex />
-      <div className="shell">
-        <motion.header
-          initial="hidden"
-          animate="visible"
-          variants={revealVariants(reduced, 14)}
-          className="mb-8 md:mb-10"
-        >
-          <span className="section-eyebrow">Your selection</span>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <h1 className="section-title">Shopping Cart</h1>
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-              <span className="tabular font-semibold" style={{ color: 'var(--text-strong)' }}>
-                {cart.length}
-              </span>{' '}
-              {cart.length === 1 ? 'item' : 'items'} · Total{' '}
-              <span className="price font-semibold" style={{ color: 'var(--text-strong)' }}>
-                {inr(total)}
-              </span>
-            </p>
+      <div className="shell shell-checkout lg:flex lg:h-full lg:min-h-0 lg:flex-col">
+        {/* Compact shipping status — the single banner, same logic. */}
+        <div className="panel-editorial glass-card mb-2 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2 sm:px-4">
+          <span
+            aria-hidden="true"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+            style={{ background: 'rgba(210, 166, 79, 0.14)', border: '1px solid rgba(190, 140, 54, 0.32)' }}
+          >
+            <Truck className="h-3.5 w-3.5" strokeWidth={2.2} style={{ color: 'var(--gold-600)' }} />
+          </span>
+          <p className="min-w-[200px] flex-1 text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
+            {total >= FREE_SHIPPING_THRESHOLD
+              ? "✓ You've unlocked FREE SHIPPING & COD!"
+              : `Add ₹${remaining.toLocaleString('en-IN')} more for FREE SHIPPING & COD`}
+          </p>
+          <div
+            aria-hidden="true"
+            className="h-1.5 min-w-[120px] flex-1 overflow-hidden rounded-full"
+            style={{ background: 'var(--surface-sunken)' }}
+          >
+            <motion.div
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: progress / 100 }}
+              transition={{ duration: reduced ? 0.001 : DURATION.slow, ease: EASE_OUT_EXPO }}
+              className="h-full w-full origin-left rounded-full"
+              style={{ background: 'var(--grad-gold)' }}
+            />
           </div>
-        </motion.header>
+        </div>
 
-        <div className="grid items-start gap-6 lg:grid-cols-12 lg:gap-8">
-          {/* ---- Line items ---- */}
-          <section className="min-w-0 lg:col-span-7 xl:col-span-8" aria-label="Cart line items">
-            <div className="panel-editorial glass-card">
-              <div
-                className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6"
-                style={{ borderBottom: '1px solid var(--hairline)' }}
-              >
-                <span className="label-caps">Item</span>
-                <span className="label-caps">Amount</span>
-              </div>
+        {/* Workspace: one full-width table card. The rows scroll inside on
+            desktop; everything below stays put. Natural page scroll below lg. */}
+        <div className="min-w-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+          {/* ---- Single cart table card ---- */}
+          <section className="panel-editorial glass-card min-w-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden" aria-label="Cart items">
+            <div
+              className="flex shrink-0 items-center justify-between gap-3 px-3.5 py-2 sm:px-4"
+              style={{ borderBottom: '1px solid var(--hairline)' }}
+            >
+              <span className="label-caps">Cart Items</span>
+              <span className="badge badge-gold tabular" aria-label={`${cart.length} items`}>
+                {cart.length}
+              </span>
+            </div>
 
-              <motion.ul
+            {/* Desktop: real table in its own scroll viewport with a sticky
+                head — only the rows move, the card never grows the page. */}
+            <div
+              className={`cart-table-scroll hidden min-h-0 md:block lg:flex-1 lg:overflow-y-auto${tableScrolling ? ' is-scrolling' : ''}`}
+              onScroll={handleTableScroll}
+            >
+            <table className="w-full">
+              <colgroup>
+                <col style={{ width: '6%' }} />
+                <col style={{ width: '50%' }} />
+                <col style={{ width: '15%' }} />
+                <col style={{ width: '10%' }} />
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '7%' }} />
+              </colgroup>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--hairline)' }}>
+                  <th scope="col" className="label-caps px-4 py-2 text-left font-semibold">No.</th>
+                  <th scope="col" className="label-caps px-2 py-2 text-left font-semibold">Product</th>
+                  <th scope="col" className="label-caps px-2 py-2 text-center font-semibold">Quantity</th>
+                  <th scope="col" className="label-caps px-2 py-2 text-right font-semibold">Price</th>
+                  <th scope="col" className="label-caps px-2 py-2 text-right font-semibold">Total</th>
+                  <th scope="col" className="px-4 py-2"><span className="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <motion.tbody
                 initial="hidden"
                 animate="visible"
                 variants={staggerParent(reduced, 0.05)}
-                className="list-none"
               >
                 <AnimatePresence>
                   {cart.map((item, index) => {
                     const unit = unitPriceOf(item);
 
                     return (
-                      <motion.li
+                      <motion.tr
                         key={item.id}
                         layout={!reduced}
                         variants={rowVariants(reduced)}
                         exit="exit"
-                        className="px-4 py-4 sm:px-6 sm:py-5"
+                        className="transition-colors duration-150 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
                         style={{ borderTop: index === 0 ? 'none' : '1px solid var(--hairline)' }}
                       >
-                        <div className="flex gap-3 sm:gap-5">
-                          <div
-                            className="product-img-panel h-20 w-20 shrink-0 overflow-hidden sm:h-24 sm:w-24"
-                            style={{ borderRadius: 'var(--r-md)', border: '1px solid var(--hairline)' }}
-                          >
-                            {item.imageURL ? (
-                              <img
-                                src={item.imageURL}
-                                alt={item.name}
-                                loading="lazy"
-                                className="h-full w-full object-contain p-1.5"
-                              />
-                            ) : (
-                              <ImagePlaceholder compact />
-                            )}
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <h2 className="card-title product-name line-clamp-2" style={{ color: 'var(--text-strong)' }}>
-                                  {item.name}
-                                </h2>
-                                {item.category && <p className="label-caps mt-1">{displayNameForCategory(item.category)}</p>}
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() => removeFromCart(item.id)}
-                                aria-label={`Remove ${item.name} from cart`}
-                                className="-mr-2 -mt-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-vermilion-50 dark:hover:bg-white/5"
-                                style={{ color: 'var(--crimson-600)' }}
-                              >
-                                <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.2} />
-                              </button>
-                            </div>
-
-                            <p className="price mt-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                              {inr(unit)} <span style={{ color: 'var(--text-subtle)' }}>each</span>
-                            </p>
-
-                            <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-                              <div
-                                className="inline-flex items-center"
-                                style={{
-                                  border: '1px solid var(--hairline-strong)',
-                                  borderRadius: 'var(--r-pill)',
-                                  background: 'var(--surface-card)',
-                                }}
-                              >
-                                <motion.button
-                                  type="button"
-                                  whileTap={reduced ? undefined : { scale: 0.9 }}
-                                  onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                  aria-label={`Decrease quantity of ${item.name}`}
-                                  className="inline-flex h-11 w-11 items-center justify-center rounded-full"
-                                >
-                                  <Minus className="h-4 w-4" strokeWidth={2.6} style={{ color: 'var(--maroon-700)' }} />
-                                </motion.button>
-
-                                <QuantityInput
-                                  value={item.quantity}
-                                  onChange={(quantity) => updateQuantity(item.id, quantity)}
-                                  ariaLabel={`Quantity for ${item.name}`}
-                                  className="tabular h-11 w-12 border-0 bg-transparent text-center text-base font-bold focus:outline-none"
-                                  style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}
+                        <td className="tabular whitespace-nowrap px-4 py-2 align-middle text-sm font-semibold" style={{ color: 'var(--text-subtle)' }}>
+                          {String(index + 1).padStart(2, '0')}
+                        </td>
+                        <td className="min-w-0 px-2 py-2 align-middle">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div
+                              className="product-img-panel h-12 w-12 shrink-0 overflow-hidden"
+                              style={{ borderRadius: 'var(--r-md)', border: '1px solid var(--hairline)', background: 'var(--surface-sunken)' }}
+                            >
+                              {item.imageURL ? (
+                                <img
+                                  src={item.imageURL}
+                                  alt={item.name}
+                                  loading="lazy"
+                                  className="h-full w-full object-contain p-1"
                                 />
-
-                                <motion.button
-                                  type="button"
-                                  whileTap={reduced ? undefined : { scale: 0.9 }}
-                                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                  aria-label={`Increase quantity of ${item.name}`}
-                                  className="inline-flex h-11 w-11 items-center justify-center rounded-full"
-                                >
-                                  <Plus className="h-4 w-4" strokeWidth={2.6} style={{ color: 'var(--maroon-700)' }} />
-                                </motion.button>
-                              </div>
-
-                              <AnimatePresence mode="wait" initial={false}>
-                                <motion.p
-                                  key={item.quantity}
-                                  variants={amountVariants(reduced)}
-                                  initial="hidden"
-                                  animate="visible"
-                                  exit="exit"
-                                  className="price ml-auto text-base font-bold sm:text-lg"
-                                  style={{ color: 'var(--ember-600)' }}
-                                >
-                                  {inr(unit * item.quantity)}
-                                </motion.p>
-                              </AnimatePresence>
+                              ) : (
+                                <ImagePlaceholder compact />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="line-clamp-2 text-sm font-semibold leading-snug" style={{ color: 'var(--text-strong)' }}>
+                                {item.name}
+                              </p>
+                              {item.category && <p className="label-caps mt-0.5">{displayNameForCategory(item.category)}</p>}
                             </div>
                           </div>
-                        </div>
-                      </motion.li>
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-2 text-center align-middle">
+                          {qtyControl(item)}
+                        </td>
+                        <td className="price tabular whitespace-nowrap px-2 py-2 text-right align-middle text-sm" style={{ color: 'var(--text-muted)' }}>
+                          {inr(unit)}
+                        </td>
+                        <td className="price tabular whitespace-nowrap px-2 py-2 text-right align-middle text-sm font-bold" style={{ color: 'var(--ember-600)' }}>
+                          {inr(unit * item.quantity)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2 text-right align-middle">
+                          <button
+                            type="button"
+                            onClick={() => removeFromCart(item.id)}
+                            aria-label={`Remove ${item.name} from cart`}
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-full opacity-60 transition-all duration-150 hover:bg-vermilion-50 hover:opacity-100 dark:hover:bg-white/5"
+                            style={{ color: 'var(--crimson-600)' }}
+                          >
+                            <Trash2 className="h-4 w-4" strokeWidth={2.2} />
+                          </button>
+                        </td>
+                      </motion.tr>
                     );
                   })}
                 </AnimatePresence>
-              </motion.ul>
+              </motion.tbody>
+            </table>
             </div>
-          </section>
 
-          {/* ---- Sticky summary (desktop only; mobile gets the bottom bar) ---- */}
-          <aside className="hidden min-w-0 space-y-4 lg:sticky lg:top-24 lg:col-span-5 lg:block xl:col-span-4" aria-label="Order summary">
-            <motion.div
+            {/* Mobile: compact structured rows — same data, same controls. */}
+            <motion.ul
               initial="hidden"
               animate="visible"
-              variants={revealVariants(reduced, 12)}
-              className="panel-editorial glass-card p-4 sm:p-5"
+              variants={staggerParent(reduced, 0.05)}
+              className="list-none md:hidden"
             >
-              <div className="flex items-start gap-3">
-                <span
-                  aria-hidden="true"
-                  className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-                  style={{ background: 'rgba(210, 166, 79, 0.14)', border: '1px solid rgba(190, 140, 54, 0.32)' }}
-                >
-                  <Truck className="h-4 w-4" strokeWidth={2.2} style={{ color: 'var(--gold-600)' }} />
-                </span>
-                <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
-                  {total >= FREE_SHIPPING_THRESHOLD
-                    ? "You've unlocked FREE SHIPPING & COD!"
-                    : `Add ₹${remaining.toLocaleString('en-IN')} more for FREE SHIPPING & COD`}
-                </p>
-              </div>
+              <AnimatePresence>
+                {cart.map((item, index) => {
+                  const unit = unitPriceOf(item);
 
-              <div
-                aria-hidden="true"
-                className="mt-4 h-2 overflow-hidden rounded-full"
-                style={{ background: 'var(--surface-sunken)' }}
-              >
-                <motion.div
-                  initial={{ scaleX: 0 }}
-                  animate={{ scaleX: progress / 100 }}
-                  transition={{ duration: reduced ? 0.001 : DURATION.slow, ease: EASE_OUT_EXPO }}
-                  className="h-full w-full origin-left rounded-full"
-                  style={{ background: 'var(--grad-gold)' }}
-                />
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial="hidden"
-              animate="visible"
-              variants={revealVariants(reduced, 12)}
-              className="panel-editorial glass-card relative p-5 sm:p-6"
-            >
-              <CornerFiligree position="top-right" />
-
-              <h2 className="subsection-title" style={{ color: 'var(--text-strong)' }}>
-                Order Summary
-              </h2>
-              <hr className="rule-gold my-4" />
-
-              <ul className="space-y-2.5">
-                <AnimatePresence>
-                  {cart.map((item) => (
+                  return (
                     <motion.li
                       key={item.id}
                       layout={!reduced}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: reduced ? 0.001 : DURATION.fast }}
-                      className="flex items-baseline justify-between gap-3 text-sm"
+                      variants={rowVariants(reduced)}
+                      exit="exit"
+                      className="px-3.5 py-3"
+                      style={{ borderTop: index === 0 ? 'none' : '1px solid var(--hairline)' }}
                     >
-                      <span className="min-w-0 truncate" style={{ color: 'var(--text-muted)' }}>
-                        {item.name} <span className="tabular">x {item.quantity}</span>
-                      </span>
-                      <span className="price shrink-0 font-semibold" style={{ color: 'var(--text-body)' }}>
-                        {inr(unitPriceOf(item) * item.quantity)}
-                      </span>
-                    </motion.li>
-                  ))}
-                </AnimatePresence>
-              </ul>
+                      <div className="flex gap-3">
+                        <div
+                          className="product-img-panel h-16 w-16 shrink-0 overflow-hidden"
+                          style={{ borderRadius: 'var(--r-md)', border: '1px solid var(--hairline)' }}
+                        >
+                          {item.imageURL ? (
+                            <img
+                              src={item.imageURL}
+                              alt={item.name}
+                              loading="lazy"
+                              className="h-full w-full object-contain p-1.5"
+                            />
+                          ) : (
+                            <ImagePlaceholder compact />
+                          )}
+                        </div>
 
-              <div className="mt-5 pt-4" style={{ borderTop: '1px solid var(--hairline)' }}>
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="label-caps">Total</span>
-                  <span
-                    className="price text-2xl font-bold"
-                    style={{ color: 'var(--text-strong)' }}
-                  >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="line-clamp-2 text-sm font-semibold leading-snug" style={{ color: 'var(--text-strong)' }}>
+                                {item.name}
+                              </p>
+                              {item.category && <p className="label-caps mt-0.5">{displayNameForCategory(item.category)}</p>}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => removeFromCart(item.id)}
+                              aria-label={`Remove ${item.name} from cart`}
+                              className="-mr-2 -mt-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full opacity-70 transition-all duration-150 hover:bg-vermilion-50 hover:opacity-100 dark:hover:bg-white/5"
+                              style={{ color: 'var(--crimson-600)' }}
+                            >
+                              <Trash2 className="h-4 w-4" strokeWidth={2.2} />
+                            </button>
+                          </div>
+
+                          <p className="price tabular mt-1 text-xs" style={{ color: 'var(--text-subtle)' }}>
+                            {inr(unit)} each
+                          </p>
+
+                          <div className="mt-2 flex items-center justify-between gap-3">
+                            {qtyControl(item)}
+                            <p className="price tabular shrink-0 text-base font-bold" style={{ color: 'var(--ember-600)' }}>
+                              {inr(unit * item.quantity)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.li>
+                  );
+                })}
+              </AnimatePresence>
+            </motion.ul>
+
+            {/* Totals + actions footer — pinned to the card bottom. */}
+            <div
+              className="flex shrink-0 flex-col gap-3 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4"
+              style={{ borderTop: '1px solid var(--hairline)' }}
+            >
+              <Link to="/products" className="btn-outline w-full shrink-0 sm:w-auto">
+                Add More Products
+              </Link>
+
+              <div className="min-w-0 sm:text-right">
+                <p className="flex items-center gap-1.5 text-xs font-bold tracking-wide sm:justify-end" style={{ color: 'var(--text-muted)' }} aria-live="polite">
+                  <ShoppingBag className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden="true" />
+                  <span className="tabular">{cart.length} {cart.length === 1 ? 'ITEM' : 'ITEMS'}</span>
+                </p>
+                <div className="mt-1.5 flex items-baseline justify-between gap-6 text-sm sm:justify-end">
+                  <span style={{ color: 'var(--text-muted)' }}>Subtotal</span>
+                  <span className="price tabular font-semibold" style={{ color: 'var(--text-body)' }}>
                     {inr(getCartTotal())}
                   </span>
                 </div>
-
-                <div className="mt-5 space-y-3">
-                  <Link to="/checkout" className="btn-primary btn-shine w-full">
-                    Proceed to Checkout
-                    <ArrowRight className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
-                  </Link>
-                  <Link to="/products" className="btn-outline w-full">
-                    Add More Products
-                  </Link>
+                <div className="mt-1 flex items-baseline justify-between gap-6 sm:justify-end">
+                  <span className="label-caps">Total</span>
+                  <span className="price tabular text-2xl font-bold" style={{ color: 'var(--text-strong)' }}>
+                    {inr(getCartTotal())}
+                  </span>
                 </div>
+                <Link to="/checkout" className="btn-primary btn-shine mt-3 w-full text-base sm:w-auto sm:min-w-[260px]" style={{ minHeight: 50 }}>
+                  Proceed to Checkout
+                  <ArrowRight className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
+                </Link>
               </div>
-            </motion.div>
-          </aside>
+            </div>
+          </section>
+
         </div>
       </div>
 
       {/* ---- Mobile sticky checkout bar ----
           Always visible while scrolling so checkout never requires scrolling
-          to the bottom of the line-item list. Desktop uses the sticky aside. */}
+          to the bottom of the line-item list. Desktop uses the fixed rail. */}
       <div className="fixed inset-x-0 bottom-0 z-sticky lg:hidden">
         <div
           className="glass-nav border-t"
-          style={{ borderColor: 'var(--hairline)' }}
+          style={{ borderColor: 'var(--hairline)', paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
           <div
             aria-hidden="true"

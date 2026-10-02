@@ -18,7 +18,7 @@ export const DEFAULT_SITE_SETTINGS = {
     enabled: true,
     speed: 30,
     messages: [
-      'Free Shipping & COD for orders above ₹2,500 in Hyderabad',
+      'Free Shipping & COD for orders above ₹2,000 in Hyderabad',
       'Special Festive Offers!',
       'Premium Fireworks Collection',
     ],

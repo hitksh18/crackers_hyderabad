@@ -1,0 +1,36 @@
+import {
+  Truck,
+  Gift,
+  BadgeCheck,
+  Flame,
+  Star,
+  Sparkles,
+  Rocket,
+  Boxes,
+  Tags,
+  IndianRupee,
+  ShieldCheck,
+  CreditCard,
+  Zap,
+  Headphones,
+  Package,
+} from 'lucide-react';
+
+/* Icons the admin may pick for a deal card, keyed by the stored name. */
+export const DEAL_ICON_OPTIONS = {
+  Truck,
+  Gift,
+  BadgeCheck,
+  Flame,
+  Star,
+  Sparkles,
+  Rocket,
+  Boxes,
+  Tags,
+  IndianRupee,
+  ShieldCheck,
+  CreditCard,
+  Zap,
+  Headphones,
+  Package,
+};

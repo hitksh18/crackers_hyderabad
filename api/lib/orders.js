@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { normaliseCoords } = require('./geocode');
 const { STAFF_ROLES } = require('./security');
+const { maybeSendOrderConfirmationEmail, maybeSendInternalNewOrderEmail, orderPaymentNote } = require('./email');
 
 /**
  * Server-side order creation.
@@ -43,19 +44,227 @@ const normalisePhone = (value) => {
   return digits.slice(-10);
 };
 
-/** Reserve the next human-facing order number. */
-async function nextOrderNumber(db) {
-  const ref = db.collection('counters').doc('orders');
-  return db.runTransaction(async (tx) => {
+/**
+ * Sequential order ID system: CH01, CH02, ... CH99, CH100, CH101, ...
+ *
+ * - The human-facing order id (`shortCode`) is derived from a single
+ *   Firestore counter (`counters/orders`) advanced inside a transaction, so
+ *   concurrent checkouts can never receive the same number: the transaction
+ *   serialises reservations and each retry observes the next value.
+ * - The sequence starts at 1 (CH01) and never restarts. A legacy counter that
+ *   predates this system (no `version` marker, e.g. the old CH1001 range) is
+ *   migrated once: the old value is preserved as `legacyValue` and the new
+ *   sequence starts at 1.
+ * - Counter advance and order creation happen in ONE transaction
+ *   (`commitSequencedOrder`): the counter, the order document, the tracking
+ *   code (`create`, never overwrite) and the product sales increments all
+ *   commit together or not at all. A failed attempt therefore consumes no
+ *   number and leaves no partial order behind. If the freshly minted code ever
+ *   collides with an existing `trackingCodes` document (legacy CH1001+ range
+ *   reached, or a manually created code), the transaction aborts and the next
+ *   number is tried — existing codes are detected and skipped, never
+ *   duplicated or overwritten.
+ * - `orderNumber` (integer) is stored alongside `shortCode` on both the order
+ *   and its trackingCodes entry so the sequence can be sorted and recovered
+ *   numerically (`shortCode` itself does not sort numerically as a string:
+ *   "CH100" < "CH02" lexicographically).
+ */
+const ORDER_COUNTER_DOC = 'orders';
+const ORDER_SEQUENCE_VERSION = 2;
+const ORDER_SEQUENCE_START = 1;
+const MAX_ORDER_CREATE_ATTEMPTS = 5;
+
+/** Format a sequence number as CH01 ... CH99, CH100, CH101, ... */
+function formatShortCode(n) {
+  return `CH${String(n).padStart(2, '0')}`;
+}
+
+/** Parse the numeric part of a CH code, or null when not a sequence code. */
+function parseShortCodeNumber(code) {
+  const m = /^CH(\d+)$/i.exec(String(code || '').trim());
+  if (!m) return null;
+  const n = Number.parseInt(m[1], 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Reserve the next human-facing order number (transaction-safe). */
+async function reserveNextOrderNumber(db) {
+  const ref = db.collection('counters').doc(ORDER_COUNTER_DOC);
+  const orderNumber = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) {
-      tx.set(ref, { value: 1001 });
-      return 1001;
+      tx.set(ref, {
+        value: ORDER_SEQUENCE_START,
+        version: ORDER_SEQUENCE_VERSION,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return ORDER_SEQUENCE_START;
     }
-    const next = (snap.data().value || 1000) + 1;
-    tx.update(ref, { value: next });
-    return next;
+    const data = snap.data() || {};
+    if (data.version !== ORDER_SEQUENCE_VERSION) {
+      const legacyValue = Number(data.value);
+      tx.set(ref, {
+        value: ORDER_SEQUENCE_START,
+        version: ORDER_SEQUENCE_VERSION,
+        legacyValue: Number.isFinite(legacyValue) ? legacyValue : null,
+        migratedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return ORDER_SEQUENCE_START;
+    }
+    const next = (Number(data.value) || 0) + 1;
+    const safeNext = next < 1 ? 1 : next;
+    tx.update(ref, { value: safeNext, updatedAt: FieldValue.serverTimestamp() });
+    return safeNext;
   });
+  return { orderNumber, shortCode: formatShortCode(orderNumber) };
+}
+
+/** Backwards-compatible alias: returns just the reserved number. */
+async function nextOrderNumber(db) {
+  const { orderNumber } = await reserveNextOrderNumber(db);
+  return orderNumber;
+}
+
+/** True when a commit failed because the tracking code already exists. */
+function isTrackingCollision(error) {
+  if (!error) return false;
+  if (error.code === 6) return true; // ALREADY_EXISTS
+  return /already.?exists/i.test(String((error && error.message) || ''));
+}
+
+/** True when a commit failed because a referenced document is gone. */
+function isNotFound(error) {
+  if (!error) return false;
+  if (error.code === 5) return true; // NOT_FOUND
+  return /not.?found/i.test(String((error && error.message) || ''));
+}
+
+/**
+ * Structured, customer-safe order failure. Thrown for known failure modes so
+ * the handler can answer with a precise status instead of the generic 500.
+ */
+function orderFailure(status, code, message) {
+  const error = new Error(message);
+  error.orderStatus = status;
+  error.orderCode = code;
+  return error;
+}
+
+/**
+ * Atomically advance the sequence and create the order.
+ *
+ * `buildDocs(orderNumber, shortCode)` returns `{ order, tracking }`.
+ * `productIncrements` is a Map of productId -> quantity for the sales ledger.
+ *
+ * Everything lands in a single transaction, so the CH id only ever exists
+ * alongside its order: no gaps consumed by failures, no partial orders.
+ */
+async function commitSequencedOrder(db, { orderRef, buildDocs, productIncrements }) {
+  // The code the aborted attempt minted. The transaction rolled back, so the
+  // counter did NOT advance past it — captured here so the retry can step
+  // over it instead of minting the same taken code again.
+  let attemptedCode = null;
+  for (let attempt = 1; attempt <= MAX_ORDER_CREATE_ATTEMPTS; attempt += 1) {
+    try {
+      return await db.runTransaction(async (tx) => {
+        const counterRef = db.collection('counters').doc(ORDER_COUNTER_DOC);
+        const snap = await tx.get(counterRef);
+        let orderNumber;
+        if (!snap.exists) {
+          orderNumber = ORDER_SEQUENCE_START;
+          tx.set(counterRef, {
+            value: orderNumber,
+            version: ORDER_SEQUENCE_VERSION,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        } else {
+          const data = snap.data() || {};
+          if (data.version !== ORDER_SEQUENCE_VERSION) {
+            const legacyValue = Number(data.value);
+            orderNumber = ORDER_SEQUENCE_START;
+            tx.set(counterRef, {
+              value: orderNumber,
+              version: ORDER_SEQUENCE_VERSION,
+              legacyValue: Number.isFinite(legacyValue) ? legacyValue : null,
+              migratedAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+          } else {
+            orderNumber = (Number(data.value) || 0) + 1;
+            if (orderNumber < 1) orderNumber = 1;
+            tx.update(counterRef, { value: orderNumber, updatedAt: FieldValue.serverTimestamp() });
+          }
+        }
+
+        const shortCode = formatShortCode(orderNumber);
+        attemptedCode = shortCode;
+        const { order, tracking } = buildDocs(orderNumber, shortCode);
+        tx.set(orderRef, order);
+        tx.create(db.collection('trackingCodes').doc(shortCode), tracking);
+        if (productIncrements) {
+          for (const [productId, quantity] of productIncrements) {
+            tx.update(db.collection('products').doc(productId), {
+              salesCount: FieldValue.increment(quantity),
+            });
+          }
+        }
+        return { orderNumber, shortCode };
+      });
+    } catch (error) {
+      if (error && error.orderStatus) throw error;
+      if (isTrackingCollision(error)) {
+        if (attempt < MAX_ORDER_CREATE_ATTEMPTS) {
+          console.warn(`[orders] tracking collision on ${attemptedCode}, stepping over it (attempt ${attempt})`);
+          // The aborted transaction rolled back its own counter advance, so
+          // without this the retry would mint the same taken code forever.
+          // Step the shared counter up to the taken number; the retry then
+          // mints the next one. Monotonic (max) so concurrent orders are safe.
+          const taken = parseShortCodeNumber(attemptedCode);
+          if (taken !== null) {
+            await db.runTransaction(async (stepTx) => {
+              const stepRef = db.collection('counters').doc(ORDER_COUNTER_DOC);
+              const stepSnap = await stepTx.get(stepRef);
+              if (!stepSnap.exists) {
+                stepTx.set(stepRef, {
+                  value: taken,
+                  version: ORDER_SEQUENCE_VERSION,
+                  updatedAt: FieldValue.serverTimestamp(),
+                });
+                return;
+              }
+              const stepData = stepSnap.data() || {};
+              const current = Number(stepData.value) || 0;
+              if (taken > current) {
+                if (stepData.version !== ORDER_SEQUENCE_VERSION) {
+                  stepTx.set(stepRef, {
+                    value: taken,
+                    version: ORDER_SEQUENCE_VERSION,
+                    legacyValue: Number.isFinite(current) ? current : null,
+                    migratedAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                  });
+                } else {
+                  stepTx.update(stepRef, { value: taken, updatedAt: FieldValue.serverTimestamp() });
+                }
+              }
+            }).catch((stepError) => {
+              console.warn('[orders] sequence step-over failed:', stepError.message);
+            });
+          }
+          continue;
+        }
+        throw orderFailure(503, 'SEQUENCE_EXHAUSTED', 'Could not reserve an order number. Please try again.');
+      }
+      // A product deleted between pricing and commit: nothing was written
+      // (the transaction aborted), so report it as unavailable, not as a 500.
+      if (isNotFound(error)) {
+        throw orderFailure(400, 'PRODUCT_UNAVAILABLE', 'One of the products is no longer available');
+      }
+      throw error;
+    }
+  }
+  throw orderFailure(503, 'SEQUENCE_EXHAUSTED', 'Could not reserve an order number. Please try again.');
 }
 
 function readCustomer(input) {
@@ -211,7 +420,7 @@ async function readCheckoutSettings(db) {
   /* Fail closed on the default floor rather than letting a read error waive it.
      The pin defaults on, because the failure mode there is a map nobody asked
      for — not money left on the table. */
-  const fallback = { minimum: { enabled: true, value: 500 }, deliveryPinEnabled: true };
+  const fallback = { minimum: { enabled: true, value: 2000 }, deliveryPinEnabled: true };
 
   try {
     const snap = await db.collection('adminSettings').doc('main').get();
@@ -224,7 +433,7 @@ async function readCheckoutSettings(db) {
         : data.minimumOrderValueLocked !== false;
 
     return {
-      minimum: { enabled, value: Number(data.minimumOrderValue) || 500 },
+      minimum: { enabled, value: Number(data.minimumOrderValue) || 2000 },
       deliveryPinEnabled: data.deliveryPinEnabled !== false,
     };
   } catch {
@@ -270,64 +479,101 @@ async function createOrder(req, res) {
     const signedInUid = req.caller?.uid || null;
     const signedInEmail = req.caller?.email || null;
 
-    const shortCode = `CH${await nextOrderNumber(db)}`;
-    const orderRef = db.collection('orders').doc();
-
     // Single-use capability returned only to whoever placed the order. The
     // notification endpoints require it, so merely knowing an order id — or
     // planting one — is not enough to make the shop send mail or SMS.
     const notifyToken = crypto.randomBytes(32).toString('base64url');
     const notifyTokenHash = crypto.createHash('sha256').update(notifyToken).digest('hex');
 
-    const order = {
-      userId: signedInUid,
-      userEmail: signedInEmail || customer.value.email || null,
-      userPhone: customer.value.phone,
-      customer: customer.value,
-      delivery: delivery.value,
-      /* Stored at the top level, not inside `delivery`, because `delivery`
-         collapses to { sameAsBilling: true } when the two addresses match and
-         the pin is meaningful either way. Persisted so the invoice — and its QR
-         code — regenerate identically months later. */
-      deliveryLocation,
-      items: priced.value.items,
-      total: priced.value.total,
-      status: 'Pending',
-      shortCode,
-      createdAt: FieldValue.serverTimestamp(),
-      notify: {
-        tokenHash: notifyTokenHash,
-        expiresAt: Timestamp.fromMillis(Date.now() + NOTIFY_TOKEN_TTL_MS),
-        emailSentAt: null,
-        smsSentAt: null,
-      },
-    };
-
-    const batch = db.batch();
-    batch.set(orderRef, order);
-    batch.set(db.collection('trackingCodes').doc(shortCode), { orderId: orderRef.id, shortCode });
-    // Sales ledger for the storefront's Best Sellers rail: real order data,
-    // not hand-picked products. The counter lives on the public product
-    // document so the homepage can rank without any staff-only reads.
-    for (const item of priced.value.items) {
-      batch.update(db.collection('products').doc(item.id), {
-        salesCount: FieldValue.increment(item.quantity),
-      });
+    // One atomic transaction mints the CH id and writes the order: the id only
+    // exists when the order does, failures consume nothing and leave nothing
+    // partial behind.
+    const orderRef = db.collection('orders').doc();
+    const increments = new Map(priced.value.items.map((item) => [item.id, item.quantity]));
+    let orderNumber;
+    let shortCode;
+    try {
+      ({ orderNumber, shortCode } = await commitSequencedOrder(db, {
+        orderRef,
+        productIncrements: increments,
+        buildDocs: (num, code) => ({
+          order: {
+            userId: signedInUid,
+            userEmail: signedInEmail || customer.value.email || null,
+            userPhone: customer.value.phone,
+            customer: customer.value,
+            delivery: delivery.value,
+            /* Stored at the top level, not inside `delivery`, because `delivery`
+               collapses to { sameAsBilling: true } when the two addresses match and
+               the pin is meaningful either way. Persisted so the invoice — and its QR
+               code — regenerate identically months later. */
+            deliveryLocation,
+            items: priced.value.items,
+            total: priced.value.total,
+            status: 'Pending',
+            orderNumber: num,
+            shortCode: code,
+            createdAt: FieldValue.serverTimestamp(),
+            notify: {
+              tokenHash: notifyTokenHash,
+              expiresAt: Timestamp.fromMillis(Date.now() + NOTIFY_TOKEN_TTL_MS),
+              emailSentAt: null,
+              smsSentAt: null,
+            },
+          },
+          tracking: { orderId: orderRef.id, shortCode: code, orderNumber: num },
+        }),
+      }));
+    } catch (error) {
+      // Known failure modes already carry a customer-safe status + message
+      // (e.g. product vanished mid-checkout, sequence exhausted). Anything
+      // else is unexpected: log it in full, answer generically.
+      if (error && error.orderStatus) {
+        return res.status(error.orderStatus).json({ error: error.message, code: error.orderCode });
+      }
+      throw error;
     }
-    await batch.commit();
 
     console.log(`[orders] created ${orderRef.id} (${shortCode}) total=${priced.value.total}`);
+
+    /* Exactly ONE customer confirmation + ONE internal new-order
+       notification — strictly after the successful commit, so an id is only
+       ever mailed for an order that exists. Best-effort by contract: a mail
+       failure (or disabled/unconfigured mail) is recorded on the order for
+       debugging, but the 201 below is unaffected. Guards inside each hook
+       make retried creates send nothing twice. */
+    const savedOrder = {
+      shortCode,
+      orderNumber,
+      status: 'Pending',
+      total: priced.value.total,
+      items: priced.value.items,
+      customer: customer.value,
+      userEmail: signedInEmail || customer.value.email || null,
+      notify: { tokenHash: notifyTokenHash },
+    };
+    try {
+      await maybeSendOrderConfirmationEmail(db, orderRef, savedOrder);
+    } catch (emailError) {
+      console.warn(`[orders] confirmation email hook threw for ${shortCode}:`, emailError.message);
+    }
+    try {
+      await maybeSendInternalNewOrderEmail(db, orderRef, savedOrder);
+    } catch (emailError) {
+      console.warn(`[orders] internal email hook threw for ${shortCode}:`, emailError.message);
+    }
 
     return res.status(201).json({
       orderId: orderRef.id,
       shortCode,
+      orderNumber,
       total: priced.value.total,
       itemCount: priced.value.items.reduce((n, i) => n + i.quantity, 0),
       notifyToken,
     });
   } catch (error) {
     console.error('Error creating order:', error);
-    return res.status(500).json({ error: 'Could not place your order. Please try again.' });
+    return res.status(500).json({ error: 'Could not place your order. Please try again.', code: 'INTERNAL' });
   }
 }
 
@@ -482,61 +728,72 @@ async function createPosOrder(req, res) {
     const discount = Math.round(priced.value.total * (discountPercent / 100) * 100) / 100;
     const total = Math.max(0, Math.round((priced.value.total - discount) * 100) / 100);
 
-    const shortCode = `CH${await nextOrderNumber(db)}`;
+    // Same atomic discipline as /api/orders: the CH id, the order, the tracking
+    // code and the sales ledger commit in one transaction, so counter and
+    // storefront checkouts share a single never-duplicated sequence and a
+    // failed bill consumes nothing.
     const orderRef = db.collection('orders').doc();
-
-    const order = {
-      userId: req.caller?.uid || null,
-      userEmail: req.caller?.email || null,
-      customer: {
-        name,
-        phone,
-        email: '',
-        address: 'Counter sale',
-        city: 'Hyderabad',
-        pincode: '500001',
-      },
-      delivery: { sameAsBilling: true },
-      items: priced.value.items,
-      subtotal: priced.value.total,
-      discount,
-      discountPercent,
-      paymentMode,
-      total,
-      status: 'Completed',
-      source: 'pos',
-      shortCode,
-      createdAt: FieldValue.serverTimestamp(),
-    };
-
-    const batch = db.batch();
-    batch.set(orderRef, order);
-    batch.set(db.collection('trackingCodes').doc(shortCode), { orderId: orderRef.id, shortCode });
-    for (const item of priced.value.items) {
-      batch.update(db.collection('products').doc(item.id), {
-        salesCount: FieldValue.increment(item.quantity),
-      });
+    const increments = new Map(priced.value.items.map((item) => [item.id, item.quantity]));
+    let orderNumber;
+    let shortCode;
+    try {
+      ({ orderNumber, shortCode } = await commitSequencedOrder(db, {
+        orderRef,
+        productIncrements: increments,
+        buildDocs: (num, code) => ({
+          order: {
+            userId: req.caller?.uid || null,
+            userEmail: req.caller?.email || null,
+            customer: {
+              name,
+              phone,
+              email: '',
+              address: 'Counter sale',
+              city: 'Hyderabad',
+              pincode: '500001',
+            },
+            delivery: { sameAsBilling: true },
+            items: priced.value.items,
+            subtotal: priced.value.total,
+            discount,
+            discountPercent,
+            paymentMode,
+            total,
+            status: 'Completed',
+            source: 'pos',
+            orderNumber: num,
+            shortCode: code,
+            createdAt: FieldValue.serverTimestamp(),
+          },
+          tracking: { orderId: orderRef.id, shortCode: code, orderNumber: num },
+        }),
+      }));
+    } catch (error) {
+      if (error && error.orderStatus) {
+        return res.status(error.orderStatus).json({ error: error.message, code: error.orderCode });
+      }
+      throw error;
     }
-    await batch.commit();
 
     console.log(`[orders/pos] created ${orderRef.id} (${shortCode}) total=${total} mode=${paymentMode}`);
 
     return res.status(201).json({
       orderId: orderRef.id,
       shortCode,
+      orderNumber,
       total,
       itemCount: priced.value.items.reduce((n, i) => n + i.quantity, 0),
     });
   } catch (error) {
     console.error('Error creating POS order:', error);
-    return res.status(500).json({ error: 'Could not save the bill. Please try again.' });
+    return res.status(500).json({ error: 'Could not save the bill. Please try again.', code: 'INTERNAL' });
   }
 }
 
 /* ---------------------------------------------------------------------------
    Order tracking
 
-   Tracking codes are now purely sequential (CH1001, CH1002, ...) because the
+   Tracking codes are now purely sequential (CH01, CH02, ...) because the
    shop needs to read them aloud over the phone. That makes them guessable, so
    the code alone no longer grants access: this endpoint is the only public way
    to turn a code into an order, and it demands the last four digits of the
@@ -748,12 +1005,116 @@ async function trackOrder(req, res) {
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Public order tracking (Amazon-style timeline source of truth)
+
+   The admin dropdowns already write exactly these canonical statuses, so this
+   is a normaliser — not a second status system — that only absorbs legacy
+   values still sitting in older documents:
+     - POS counter sales are stored as 'Completed' (handed over) → Delivered
+     - 'Processing', if ever present, is closest to Packed
+     - anything unrecognised falls back to Pending (never a fake Delivered)
+   --------------------------------------------------------------------------- */
+
+const CUSTOMER_STATUSES = [
+  'Pending',
+  'Confirmed',
+  'Packed',
+  'Shipped',
+  'Out for Delivery',
+  'Delivered',
+  'Cancelled',
+];
+
+/** Map any stored status string onto the customer-facing canonical set. */
+function normalizeCustomerStatus(status) {
+  const raw = String(status || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
+  if (!raw) return 'Pending';
+  for (const canonical of CUSTOMER_STATUSES) {
+    if (canonical.toLowerCase() === raw) return canonical;
+  }
+  if (raw === 'completed' || raw === 'complete' || raw === 'picked up' || raw === 'pickup') return 'Delivered';
+  if (raw === 'processing' || raw === 'in transit' || raw === 'intransit') return 'Packed';
+  if (raw === 'out for delivery' || raw === 'out of delivery') return 'Out for Delivery';
+  return 'Pending';
+}
+
+/**
+ * The customer-safe subset of an order. Deliberate allowlist: no Firestore
+ * document ids, no customer PII (no names, phones, addresses, emails), no
+ * item names/prices, no notify tokens, no internal fields. Payment method and
+ * note are generic, non-identifying descriptors derived server-side from the
+ * stored payment mode — never free text, never PII.
+ */
+const publicTrackingView = (order) => {
+  const items = Array.isArray(order.items) ? order.items : [];
+  return {
+    orderCode: order.shortCode || null,
+    status: normalizeCustomerStatus(order.status),
+    quantity: items.reduce((n, item) => n + (Number(item.quantity) || 0), 0),
+    total: order.total ?? 0,
+    paymentMethod: String(order.paymentMode || order.paymentStatus || 'Cash on Delivery').slice(0, 40),
+    note: orderPaymentNote(order),
+    createdAt: order.createdAt?.toDate?.()?.toISOString?.() || null,
+    updatedAt: order.updatedAt?.toDate?.()?.toISOString?.() || null,
+  };
+};
+
+/**
+ * GET /api/orders/track/:orderCode
+ *
+ * Public, unauthenticated, rate-limited. Resolves a short code (CH01, …) to
+ * the minimal tracking payload above — never the full document. Unknown or
+ * malformed codes answer 404/400 with the same generic shape so the endpoint
+ * cannot be used to probe for unrelated private data.
+ */
+async function handlePublicTrack(req, res) {
+  const db = req.firestore || getFirestore();
+
+  try {
+    const entered = String(req.params?.orderCode || '').trim().replace(/^#/, '');
+    const raw = entered.toUpperCase();
+
+    // Current sequence codes (CH01, CH02, … CH100, …) plus legacy random-suffix
+    // codes (CH1042-K7QMX3) that predate the sequential system.
+    if (!/^(CH\d+|CH\d+-[A-Z0-9]+)$/.test(raw) || raw.length > 40) {
+      return res.status(400).json({ error: 'Invalid order code' });
+    }
+
+    const codeSnap = await db.collection('trackingCodes').doc(raw).get();
+    const orderId = codeSnap.exists ? codeSnap.data()?.orderId : null;
+    if (!orderId) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const orderSnap = await db.collection('orders').doc(orderId).get();
+    if (!orderSnap.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    return res.json(publicTrackingView(orderSnap.data()));
+  } catch (error) {
+    console.error('Error in public order tracking:', error);
+    return res.status(500).json({ error: 'Unable to load your order. Please try again.' });
+  }
+}
+
 module.exports = {
   createOrder,
   createPosOrder,
   trackOrder,
+  handlePublicTrack,
+  normalizeCustomerStatus,
+  publicTrackingView,
+  CUSTOMER_STATUSES,
   consumeNotifyToken,
   isValidEmail,
+  formatShortCode,
+  parseShortCodeNumber,
+  reserveNextOrderNumber,
+  nextOrderNumber,
+  commitSequencedOrder,
   NOTIFY_TOKEN_TTL_MS,
   MAX_ITEMS,
+  MAX_ORDER_CREATE_ATTEMPTS,
 };

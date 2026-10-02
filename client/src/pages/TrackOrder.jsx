@@ -242,7 +242,7 @@ const TrackOrder = () => {
   /**
    * Tracking goes through the API rather than reading Firestore directly.
    *
-   * Codes are plain running numbers now, so anyone could walk CH1001, CH1002,
+   * Codes are plain running numbers now, so anyone could walk CH01, CH02,
    * ... — the last four digits of the phone number on the order is what stands
    * between that and every customer's address. Only the server can check it,
    * and `trackingCodes` is staff-only in the rules so the browser cannot resolve
@@ -463,7 +463,7 @@ const TrackOrder = () => {
                   type="text"
                   value={orderId}
                   onChange={(e) => setOrderId(e.target.value)}
-                  placeholder="Enter tracking code (e.g. CH1001)"
+                  placeholder="Enter tracking code (e.g. CH01)"
                   className="input-premium tabular pl-12"
                 />
               </div>
@@ -507,7 +507,7 @@ const TrackOrder = () => {
             </div>
             <p className="mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
               Tip: your tracking code is on the order confirmation page and on your invoice (e.g.
-              CH1001).
+              CH01).
             </p>
           </motion.form>
         </motion.div>
@@ -558,7 +558,7 @@ const TrackOrder = () => {
               description={
                 isStaff
                   ? "We couldn't find an order with that tracking code. Please double-check it and try again."
-                  : "We couldn't find an order matching that tracking code and phone number. Please check both and try again. Your tracking code (for example CH1001) is on the order confirmation page, and the digits must match the phone number the order was placed with."
+                  : "We couldn't find an order matching that tracking code and phone number. Please check both and try again. Your tracking code (for example CH01) is on the order confirmation page, and the digits must match the phone number the order was placed with."
               }
             />
           </div>

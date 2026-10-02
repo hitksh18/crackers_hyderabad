@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { collection, getDocs, query, where, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
@@ -160,11 +160,23 @@ const MyOrders = () => {
     setCancellingOrder(order.id);
 
     try {
-      await updateDoc(doc(db, 'orders', order.id), {
-        status: 'Cancelled',
-        cancelledAt: new Date(),
-        cancelledBy: 'customer'
+      // The cancel goes through the server so this status event is seen like
+      // any other: exactly ONE deduped customer "order cancelled" email, and
+      // ownership re-checked server-side. A direct Firestore write here used
+      // to bypass the server entirely, so no cancellation email ever fired.
+      const token = await user.getIdToken();
+      const response = await fetch('/api/orders/status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderId: order.id, status: 'Cancelled' }),
       });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to cancel order');
+      }
 
       setOrders(orders.map(o =>
         o.id === order.id ? { ...o, status: 'Cancelled' } : o
@@ -173,7 +185,7 @@ const MyOrders = () => {
       toast.success('Order cancelled successfully');
     } catch (error) {
       console.error('Error cancelling order:', error);
-      toast.error('Failed to cancel order');
+      toast.error(error.message || 'Failed to cancel order');
     } finally {
       setCancellingOrder(null);
     }

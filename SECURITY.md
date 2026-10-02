@@ -87,15 +87,15 @@ process accordingly.
 still be able to track their delivery. That is only safe while the identifier
 cannot be guessed: order IDs are 20-character Firestore auto-IDs.
 
-Tracking codes are **not** unguessable. They are plain running numbers — `CH1001`,
-`CH1002`, … — because the shop reads them aloud over the phone and prints them on
+Tracking codes are **not** unguessable. They are plain running numbers — `CH01`,
+`CH02`, … — because the shop reads them aloud over the phone and prints them on
 invoices. A second factor carries the weight instead:
 
 - **`POST /api/orders/track` is the only public way to turn a code into an
   order.** It requires the last 4 digits of the phone number on that order.
 - **`trackingCodes.get` is staff-only.** This is what makes the check
   unavoidable. If the browser could resolve a code to an order ID, an attacker
-  would walk `CH1001, CH1002, …`, collect the unguessable auto-IDs, and read the
+   would walk `CH01, CH02, …`, collect the unguessable auto-IDs, and read the
   orders straight through the public `orders.get` — never touching the phone
   check. The endpoint reads with the Admin SDK, so rules do not restrict it.
 - **Staff skip the digits.** A verified Firebase token with a staff role already

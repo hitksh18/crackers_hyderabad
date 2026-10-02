@@ -459,13 +459,10 @@ const DeliveryLocationPicker = ({ value, onChange, onResolved, disabled = false 
       </div>
 
       <div
-        className="relative mt-3 overflow-hidden"
+        className="dlp-map relative mt-3 overflow-hidden"
         style={{
           borderRadius: 'var(--r-md)',
           border: '1px solid var(--hairline-strong)',
-          /* Tall enough on a phone to judge which building the pin is on.
-             Leaflet needs a fixed height — a percentage collapses to zero. */
-          height: 'clamp(260px, 42vh, 380px)',
         }}
       >
         <div

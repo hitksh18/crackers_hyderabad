@@ -17,6 +17,16 @@
     <meta name="color-scheme" content="dark" />
     <meta name="robots" content="index, follow" />
 
+    <!-- Critical first-paint shell: the hero is a dark cinematic scene, so the
+         page behind the JS bundle is already that darkness. This paints before
+         React, Firebase, fonts or product data arrive, and reserves the hero
+         height so the first contentful paint does not shift layout. -->
+    <style>
+      html, body { margin: 0; padding: 0; background: #070505; }
+      #root { min-height: 100svh; background: #070505; }
+      .hero-stage { min-height: 540px; background: #070505; }
+    </style>
+
     <script>
       (function () {
         try {
@@ -47,10 +57,30 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Above-the-fold hints: the navbar logo is the only image in the first
+         viewport (the hero is canvas + gradients), and Firestore serves the
+         progressive product/config hydration after the hero paints. -->
+    <link rel="preload" href="/images/website/nav-logo.png" as="image" fetchpriority="high" />
+    <link rel="preconnect" href="https://firestore.googleapis.com" />
+    <!-- Fonts load async (same families, same display=swap): fallback type
+         renders immediately, webfonts swap in without blocking first paint. -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans:wght@400;600;700&family=Playfair+Display:wght@500;600;700;800&family=Cormorant+Garamond:wght@500;600;700&display=swap"
+    />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans:wght@400;600;700&family=Playfair+Display:wght@500;600;700;800&family=Cormorant+Garamond:wght@500;600;700&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans:wght@400;600;700&family=Playfair+Display:wght@500;600;700;800&family=Cormorant+Garamond:wght@500;600;700&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
 
     <script type="application/ld+json">
       {

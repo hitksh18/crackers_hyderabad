@@ -28,6 +28,7 @@ const ConfirmOrderModal = ({
   onAddMore,
   onQuantityChange,
   onRemove,
+  paymentMethod = 'cod',
 }) => {
   const reduced = useReducedMotion();
   const panelRef = useRef(null);
@@ -255,7 +256,7 @@ const ConfirmOrderModal = ({
 
           <div className="mb-4 flex items-center gap-2 text-sm" style={{ color: 'var(--text-body)' }}>
             <Banknote className="h-5 w-5 shrink-0" strokeWidth={2.2} style={{ color: 'var(--gold-600)' }} />
-            <span>Cash on Delivery / UPI on Delivery</span>
+            <span>{paymentMethod === 'upi' ? 'UPI on Delivery' : 'Cash on Delivery'}</span>
           </div>
 
           <div

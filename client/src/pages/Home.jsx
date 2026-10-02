@@ -1,25 +1,27 @@
-import { useEffect, useRef, useState } from 'react';
-import { Fragment } from 'react';
+import { Fragment, Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useNavigate } from 'react-router-dom';
 
-import Footer from '../components/Footer';
 import ScrollReveal from '../components/ui/ScrollReveal';
 import { Skeleton } from '../components/ui/Skeleton';
 
 import StorefrontHero from '../components/home/StorefrontHero';
-import CategoryShowcase from '../components/home/CategoryShowcase';
-import DealsSection from '../components/home/DealsSection';
-import FeaturedSection from '../components/home/FeaturedSection';
-import HomeProductRail from '../components/home/HomeProductRail';
-import WholesaleSection from '../components/home/WholesaleSection';
-import PromoSection from '../components/home/PromoSection';
-import SecondaryBannerGrid from '../components/home/SecondaryBannerGrid';
-import ProductBannerGrid from '../components/home/ProductBannerGrid';
-import TrustSection from '../components/home/TrustSection';
-import NewsletterBlock from '../components/home/NewsletterBlock';
-import TrackOrderBlock from '../components/home/TrackOrderBlock';
+// Everything below the hero is below the fold: each section splits into its
+// own chunk so the first viewport paints without downloading or executing
+// below-fold code. The hero itself stays synchronous above.
+const CategoryShowcase = lazy(() => import('../components/home/CategoryShowcase'));
+const DealsSection = lazy(() => import('../components/home/DealsSection'));
+const FeaturedSection = lazy(() => import('../components/home/FeaturedSection'));
+const HomeProductRail = lazy(() => import('../components/home/HomeProductRail'));
+const WholesaleSection = lazy(() => import('../components/home/WholesaleSection'));
+const PromoSection = lazy(() => import('../components/home/PromoSection'));
+const SecondaryBannerGrid = lazy(() => import('../components/home/SecondaryBannerGrid'));
+const ProductBannerGrid = lazy(() => import('../components/home/ProductBannerGrid'));
+const TrustSection = lazy(() => import('../components/home/TrustSection'));
+const NewsletterBlock = lazy(() => import('../components/home/NewsletterBlock'));
+const TrackOrderBlock = lazy(() => import('../components/home/TrackOrderBlock'));
+const Footer = lazy(() => import('../components/Footer'));
 import { categoryDefs } from '../components/home/homeData';
 
 import { useHomepageSettings } from '../hooks/useHomepageSettings';
@@ -70,13 +72,15 @@ const Home = () => {
     return () => document.documentElement.classList.remove('route-home');
   }, []);
 
+  /* Config hydration — fast single-document reads that drive hero copy,
+     builder order, banners and trust cards. The hero itself renders fallback
+     content on the very first paint and upgrades in place when this lands;
+     it never waits for any of it. */
   useEffect(() => {
-    const fetchAll = async () => {
+    let cancelled = false;
+    const fetchConfig = async () => {
       try {
-        const [productsSnap, promoSnap, dealsSnap, catSnap, builder, site, homepage, stripSnap] = await Promise.all([
-          getDocs(collection(db, 'products')).catch(() => ({ docs: [] })),
-          getDocs(collection(db, 'promotionalBanners')).catch(() => ({ docs: [] })),
-          getDocs(collection(db, 'festiveDeals')).catch(() => ({ docs: [] })),
+        const [catSnap, builder, site, homepage, stripSnap] = await Promise.all([
           (async () => {
             try {
               const { getDoc, doc } = await import('firebase/firestore');
@@ -95,9 +99,7 @@ const Home = () => {
             } catch { return null; }
           })(),
         ]);
-        setAllProducts(productsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-        setPromotionalBanners(promoSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.enabled !== false).sort((a, b) => (b.order || 0) - (a.order || 0)));
-        setFestiveDeals(dealsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.enabled !== false).sort((a, b) => (a.order || 0) - (b.order || 0)));
+        if (cancelled) return;
         if (catSnap) setCategoryShowcaseConfig(catSnap);
         if (builder) setBuilderConfig(builder);
         if (site) setSiteSettings(site);
@@ -119,11 +121,36 @@ const Home = () => {
         if (stripSnap) setStrip(prev => ({ ...prev, ...stripSnap }));
       } catch (e) {
         console.error(e);
-      } finally {
-        setLoading(false);
       }
     };
-    fetchAll();
+    fetchConfig();
+    return () => { cancelled = true; };
+  }, []);
+
+  /* Catalogue hydration — heavy collection reads (full product list, promos,
+     deals). These progressively enhance the below-fold rails, counts and deal
+     grids; the hero never waits for them. */
+  useEffect(() => {
+    let cancelled = false;
+    const fetchCatalogue = async () => {
+      try {
+        const [productsSnap, promoSnap, dealsSnap] = await Promise.all([
+          getDocs(collection(db, 'products')).catch(() => ({ docs: [] })),
+          getDocs(collection(db, 'promotionalBanners')).catch(() => ({ docs: [] })),
+          getDocs(collection(db, 'festiveDeals')).catch(() => ({ docs: [] })),
+        ]);
+        if (cancelled) return;
+        setAllProducts(productsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setPromotionalBanners(promoSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.enabled !== false).sort((a, b) => (b.order || 0) - (a.order || 0)));
+        setFestiveDeals(dealsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.enabled !== false).sort((a, b) => (a.order || 0) - (b.order || 0)));
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchCatalogue();
+    return () => { cancelled = true; };
   }, []);
 
   const byAdminOrder = (a, b) =>
@@ -202,15 +229,23 @@ const Home = () => {
     }
   };
 
-  const hero = homepageConfig ? (
+  /* Hero renders on the very first paint with fallback content and upgrades
+     in place when the homepage config arrives. StorefrontHero is a static
+     canvas scene (banner/card props are API-compat only), so this never
+     flashes or shifts — and it never shows a skeleton while data loads. */
+  const heroBanners = (homepageConfig?.heroBanners || []).length > 0
+    ? homepageConfig.heroBanners
+    : DEFAULT_HERO_BANNERS;
+  const promoCards = (homepageConfig?.promoCards || []).length > 0
+    ? homepageConfig.promoCards
+    : DEFAULT_PROMO_CARDS;
+  const hero = (
     <StorefrontHero
-      banners={(homepageConfig.heroBanners || []).length > 0 ? homepageConfig.heroBanners : DEFAULT_HERO_BANNERS}
-      cards={(homepageConfig.promoCards || []).length > 0 ? homepageConfig.promoCards : DEFAULT_PROMO_CARDS}
-      durationSec={homepageConfig.carouselDurationSec}
+      banners={heroBanners}
+      cards={promoCards}
+      durationSec={homepageConfig?.carouselDurationSec ?? 5}
       loading={false}
     />
-  ) : (
-    <StorefrontHero banners={[]} cards={[]} durationSec={5} loading />
   );
 
   // Builder-driven section order with fallback
@@ -220,7 +255,10 @@ const Home = () => {
   const renderSection = (section) => {
     switch (section.type) {
       case 'hero':
-        return <Fragment key={section.id}>{hero}</Fragment>;
+        // The hero always renders synchronously above the Suspense boundary
+        // (see return below), so the builder order never duplicates it and a
+        // suspended below-fold chunk can never hide it.
+        return <Fragment key={section.id} />;
       case 'promoCards':
         return null; // hero already includes promoCards
       case 'announcement':
@@ -310,52 +348,63 @@ const Home = () => {
     <div className="min-h-screen">
       <Seo title="Crackers Hyderabad — Premium Fireworks & Wholesale Crackers" description="Premium fireworks and wholesale crackers in Hyderabad. Gift boxes, sparklers, rockets, flower pots and festival collections at wholesale pricing, with order tracking and doorstep delivery." canonical="/" />
 
-      {hasBuilder ? (
-        sections.map(renderSection)
-      ) : (
-        <>
-          {hero}
-          <CategoryShowcase sectionRef={categoriesRef} countInCategory={countInCategory} categories={visibleCategories} heading={homepageContent.categories} />
-          <FeaturedSection products={featuredShown} heading={homepageContent.featured} loading={loading} />
-          <section className="section-pad" style={{ background: 'var(--surface-page)' }}>
-            <div className="shell-wide">
-              <HomeProductRail eyebrow={homepageContent.bestSellers.eyebrow} title={homepageContent.bestSellers.title} subtitle={homepageContent.bestSellers.subtitle} products={bestShown} loading={loading} railLabel="best sellers" />
-            </div>
-          </section>
-          <PromoSection promotionalBanners={promotionalBanners} />
-          <SecondaryBannerGrid banners={homepageConfig?.secondaryBanners || []} />
-          <ProductBannerGrid banners={homepageConfig?.productBanners || []} />
-          {dealsShown.length > 0 && <DealsSection deals={dealsShown} heading={homepageContent.deals} />}
-          {settingsLoading ? (
-            <section className="section-pad-sm" style={{ background: 'var(--surface-card)' }}>
-              <div className="shell-wide" role="status" aria-live="polite" aria-busy="true">
-                <span className="sr-only">Loading homepage banner</span>
-                <Skeleton className="h-56 w-full sm:h-72" rounded="var(--r-xl)" />
-              </div>
-            </section>
-          ) : homepageSettings.bannerImageUrl ? (
-            <section className="section-pad-sm" style={{ background: 'var(--surface-card)' }}>
-              <div className="shell-wide">
-                <ScrollReveal distance={20} className="overflow-hidden" style={{ borderRadius: 'var(--r-xl)', boxShadow: 'var(--shadow-lg)' }}>
-                  <img src={homepageSettings.bannerImageUrl} alt={homepageSettings.bannerImageAlt || 'Crackers Hyderabad Banner'} loading="lazy" className="max-h-[400px] w-full object-cover sm:max-h-[500px]" />
-                </ScrollReveal>
-              </div>
-            </section>
-          ) : null}
-          <TrustSection heading={homepageContent.trust} cards={trustCards} />
-          <section className="section-pad" style={{ background: 'var(--surface-sunken)' }}>
-            <div className="shell-wide">
-              <div className="grid gap-6 lg:grid-cols-[48fr_52fr] lg:gap-6">
-                <NewsletterBlock email={newsletterEmail} onEmailChange={(e) => setNewsletterEmail(e.target.value)} onSubmit={handleSubscribe} copy={newsletterCopy} />
-                <TrackOrderBlock orderId={trackOrderId} onOrderIdChange={(e) => setTrackOrderId(e.target.value)} onSubmit={handleTrackOrder} />
-              </div>
-            </div>
-          </section>
-          <WholesaleSection copy={wholesaleCopy} />
-        </>
-      )}
+      {/* First viewport: paints synchronously on first render — never inside
+          the Suspense boundary below, so lazy below-fold chunks can never
+          delay or replace it. */}
+      {hero}
 
-      <Footer />
+      {/* Below the fold: code-split chunks + progressively hydrated Firestore
+          data stream in after the hero. fallback={null} keeps every section
+          out of the way until its own chunk arrives. */}
+      <Suspense fallback={null}>
+        {hasBuilder ? (
+          sections.map(renderSection)
+        ) : (
+          <>
+            <CategoryShowcase sectionRef={categoriesRef} countInCategory={countInCategory} categories={visibleCategories} heading={homepageContent.categories} />
+            <FeaturedSection products={featuredShown} heading={homepageContent.featured} loading={loading} />
+            <section className="section-pad" style={{ background: 'var(--surface-page)' }}>
+              <div className="shell-wide">
+                <HomeProductRail eyebrow={homepageContent.bestSellers.eyebrow} title={homepageContent.bestSellers.title} subtitle={homepageContent.bestSellers.subtitle} products={bestShown} loading={loading} railLabel="best sellers" />
+              </div>
+            </section>
+            <PromoSection promotionalBanners={promotionalBanners} />
+            <SecondaryBannerGrid banners={homepageConfig?.secondaryBanners || []} />
+            <ProductBannerGrid banners={homepageConfig?.productBanners || []} />
+            {dealsShown.length > 0 && <DealsSection deals={dealsShown} heading={homepageContent.deals} />}
+            {settingsLoading ? (
+              <section className="section-pad-sm" style={{ background: 'var(--surface-card)' }}>
+                <div className="shell-wide" role="status" aria-live="polite" aria-busy="true">
+                  <span className="sr-only">Loading homepage banner</span>
+                  <Skeleton className="h-56 w-full sm:h-72" rounded="var(--r-xl)" />
+                </div>
+              </section>
+            ) : homepageSettings.bannerImageUrl ? (
+              <section className="section-pad-sm" style={{ background: 'var(--surface-card)' }}>
+                <div className="shell-wide">
+                  <ScrollReveal distance={20} className="overflow-hidden" style={{ borderRadius: 'var(--r-xl)', boxShadow: 'var(--shadow-lg)' }}>
+                    <img src={homepageSettings.bannerImageUrl} alt={homepageSettings.bannerImageAlt || 'Crackers Hyderabad Banner'} loading="lazy" className="max-h-[400px] w-full object-cover sm:max-h-[500px]" />
+                  </ScrollReveal>
+                </div>
+              </section>
+            ) : null}
+            <TrustSection heading={homepageContent.trust} cards={trustCards} />
+            <section className="section-pad" style={{ background: 'var(--surface-sunken)' }}>
+              <div className="shell-wide">
+                <div className="grid gap-6 lg:grid-cols-[48fr_52fr] lg:gap-6">
+                  <NewsletterBlock email={newsletterEmail} onEmailChange={(e) => setNewsletterEmail(e.target.value)} onSubmit={handleSubscribe} copy={newsletterCopy} />
+                  <TrackOrderBlock orderId={trackOrderId} onOrderIdChange={(e) => setTrackOrderId(e.target.value)} onSubmit={handleTrackOrder} />
+                </div>
+              </div>
+            </section>
+            <WholesaleSection copy={wholesaleCopy} />
+          </>
+        )}
+      </Suspense>
+
+      <Suspense fallback={null}>
+        <Footer />
+      </Suspense>
     </div>
   );
 };

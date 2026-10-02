@@ -10,15 +10,15 @@ rules_version = '2';
 // capability model, and it is only safe while the identifier is unguessable:
 // order IDs are 20-character Firestore auto-IDs.
 //
-// Tracking codes are NOT unguessable — they are plain running numbers (CH1001,
-// CH1002, ...), which is what the customer asked to be printed on the order. A
+// Tracking codes are NOT unguessable — they are plain running numbers (CH01,
+// CH02, ...), which is what the customer asked to be printed on the order. A
 // second factor carries the weight instead: the last four digits of the phone
 // number on the order, checked server-side by POST /api/orders/track, which
 // rate-limits and locks out repeated failures. Staff skip the digits because
 // their Firebase token already proves who they are.
 //
 // So `trackingCodes.get` must stay staff-only. Opening it would hand an
-// attacker walking CH1001, CH1002, ... the order's unguessable auto-ID, which
+// attacker walking CH01, CH02, ... the order's unguessable auto-ID, which
 // they could then read straight through the public `orders.get` — stepping
 // around the phone check entirely and harvesting every customer's name, phone,
 // email and delivery address, exactly the leak this file exists to prevent.

@@ -7,7 +7,7 @@ const HERO_SHELL_BG = '#070505';
 
 const HERO_TRUST_ITEMS = [
   { icon: BadgeCheck, title: '100% Genuine', sub: 'Products' },
-  { icon: Truck, title: 'Free Shipping', sub: 'Above ₹2,500' },
+  { icon: Truck, title: 'Free Shipping', sub: 'Above ₹2,000' },
   { icon: ShieldCheck, title: 'Safe & Secure', sub: 'Payments' },
   { icon: Headphones, title: 'Dedicated', sub: 'Support' },
 ];

@@ -1,0 +1,464 @@
+import { useState, useEffect, useRef } from 'react';
+import { collection, getDocs, deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { db } from '../firebase';
+import { ArrowLeft, GripVertical, Package, Plus, RotateCcw, Search, ChevronDown } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import toast from '../utils/toast';
+import CustomModal from '../components/CustomModal';
+import { useModal } from '../hooks/useModal';
+import ProductRegisterRow from '../components/admin/ProductRegisterRow';
+import AccountMenu from '../components/admin/AccountMenu';
+import EmptyState from '../components/ui/EmptyState';
+import { TableSkeleton } from '../components/ui/Skeleton';
+import { deleteTradePricing, fetchTradePricingMap, mergeTradePricing } from '../lib/tradePricing';
+
+const AllProducts = () => {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState('All');
+  const [filterStock, setFilterStock] = useState('All');
+  const [filterFeatured, setFilterFeatured] = useState('All');
+  const [dragId, setDragId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
+  const dirtyRef = useRef(false);
+  const { isOpen, isConfirming, modalConfig, openModal, closeModal, handleConfirm } = useModal();
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      const [productsResult, pricingResult] = await Promise.allSettled([
+        getDocs(collection(db, 'products')),
+        fetchTradePricingMap(),
+      ]);
+
+      if (productsResult.status === 'rejected') throw productsResult.reason;
+
+      let pricingMap = new Map();
+      if (pricingResult.status === 'fulfilled') {
+        pricingMap = pricingResult.value;
+      } else {
+        console.error('Error fetching trade pricing:', pricingResult.reason);
+        toast.error('Trade pricing is unavailable — offline prices may be blank.');
+      }
+
+      const productsData = mergeTradePricing(
+        productsResult.value.docs.map(doc => ({ id: doc.id, ...doc.data() })),
+        pricingMap
+      );
+      setProducts(productsData);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      toast.error('Failed to fetch products');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteProduct = async (productId) => {
+    const product = products.find(p => p.id === productId);
+    openModal({
+      title: 'Delete Product',
+      message: `Are you sure you want to delete "${product?.name}"?\n\nThis action cannot be undone.`,
+      type: 'danger',
+      confirmText: 'Delete Product',
+      cancelText: 'Cancel',
+      pendingText: 'Deleting...',
+      onConfirm: async () => {
+        const loadingToast = toast.loading(`Deleting "${product?.name || 'product'}"...`);
+        try {
+          await deleteDoc(doc(db, 'products', productId));
+          await deleteTradePricing(productId);
+          setProducts((prev) => prev.filter(p => p.id !== productId));
+          toast.success('Product deleted successfully', { id: loadingToast });
+          return true;
+        } catch (error) {
+          console.error('Error deleting product:', error);
+          toast.error('Failed to delete product', { id: loadingToast });
+          return false;
+        }
+      },
+    });
+  };
+
+  const toggleFeatured = async (productId, currentStatus) => {
+    try {
+      await updateDoc(doc(db, 'products', productId), {
+        isFeatured: !currentStatus
+      });
+      setProducts(products.map(p =>
+        p.id === productId ? { ...p, isFeatured: !currentStatus } : p
+      ));
+      toast.success(currentStatus ? 'Removed from featured' : 'Added to featured');
+    } catch (error) {
+      console.error('Error toggling featured:', error);
+      toast.error('Failed to update featured status');
+    }
+  };
+
+  const toggleOutOfStock = async (productId, currentStatus) => {
+    try {
+      await updateDoc(doc(db, 'products', productId), {
+        outOfStock: !currentStatus
+      });
+      setProducts(products.map(p =>
+        p.id === productId ? { ...p, outOfStock: !currentStatus } : p
+      ));
+      toast.success(currentStatus ? 'Marked as in stock' : 'Marked as out of stock');
+    } catch (error) {
+      console.error('Error toggling stock status:', error);
+      toast.error('Failed to update stock status');
+    }
+  };
+
+  const sortProductsByOrder = (list) =>
+    [...list].sort((a, b) =>
+      (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999) || (a.name || '').localeCompare(b.name || '')
+    );
+
+  const moveProduct = async (productId, direction) => {
+    try {
+      let list = sortProductsByOrder(products);
+      const cur = list.findIndex(p => p.id === productId);
+      const target = cur + direction;
+      if (target < 0 || target >= list.length) return;
+
+      if (list.some(p => p.sortOrder == null)) {
+        const batch = writeBatch(db);
+        list = list.map((p, i) => ({ ...p, sortOrder: i + 1 }));
+        list.forEach(p => {
+          batch.set(doc(db, 'products', p.id), { sortOrder: p.sortOrder }, { merge: true });
+        });
+        await batch.commit();
+      }
+
+      const a = list[cur];
+      const b = list[target];
+      await Promise.all([
+        updateDoc(doc(db, 'products', a.id), { sortOrder: b.sortOrder }),
+        updateDoc(doc(db, 'products', b.id), { sortOrder: a.sortOrder }),
+      ]);
+
+      setProducts(list.map(p => {
+        if (p.id === a.id) return { ...p, sortOrder: b.sortOrder };
+        if (p.id === b.id) return { ...p, sortOrder: a.sortOrder };
+        return p;
+      }));
+      toast.success('Product order updated');
+    } catch (error) {
+      console.error('Error reordering product:', error);
+      toast.error('Failed to update product order');
+    }
+  };
+
+  const handleDragStart = (e, productId) => {
+    setDragId(productId);
+    dirtyRef.current = false;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', productId);
+  };
+
+  const reorderInMemory = (targetId) => {
+    if (!dragId || dragId === targetId) return;
+    const list = sortProductsByOrder(products);
+    const from = list.findIndex(p => p.id === dragId);
+    const to = list.findIndex(p => p.id === targetId);
+    if (from < 0 || to < 0 || from === to) return;
+
+    const [moved] = list.splice(from, 1);
+    list.splice(to, 0, moved);
+
+    dirtyRef.current = true;
+    setDragOverId(targetId);
+    setProducts(list.map((p, i) => ({ ...p, sortOrder: i + 1 })));
+  };
+
+  const handleDragOver = (e, productId) => {
+    if (!dragId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverId !== productId) {
+      reorderInMemory(productId);
+    }
+  };
+
+  const persistOrder = async () => {
+    if (!dirtyRef.current) return;
+    dirtyRef.current = false;
+    try {
+      const list = sortProductsByOrder(products);
+      const batch = writeBatch(db);
+      list.forEach((p, i) => {
+        batch.set(doc(db, 'products', p.id), { sortOrder: i + 1 }, { merge: true });
+      });
+      await batch.commit();
+      toast.success('Product order updated');
+    } catch (error) {
+      console.error('Error saving product order:', error);
+      toast.error('Failed to save product order');
+    }
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    await persistOrder();
+  };
+
+  const handleDragEnd = async () => {
+    await persistOrder();
+    setDragId(null);
+    setDragOverId(null);
+  };
+
+  const filteredProducts = products.filter(p => {
+    const matchesSearch = (p.name || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = filterCategory === 'All' || (p.categories && Array.isArray(p.categories) ? p.categories.includes(filterCategory) : p.category === filterCategory);
+    const matchesStock = filterStock === 'All' ||
+      (filterStock === 'In Stock' && !p.outOfStock) ||
+      (filterStock === 'Out of Stock' && p.outOfStock);
+    const matchesFeatured = filterFeatured === 'All' ||
+      (filterFeatured === 'Featured' && p.isFeatured) ||
+      (filterFeatured === 'Not Featured' && !p.isFeatured);
+    return matchesSearch && matchesCategory && matchesStock && matchesFeatured;
+  });
+
+  const categories = ['All', 'Rockets', 'Sparkles', 'Ground Chakkars', 'Sky Shots', 'Gift Boxes', 'Flower Pots', 'Bombs', 'Garlands', 'Kids Special', 'Guns, Rolls & Pop Pop', 'Threads and Novelties'];
+
+  const sortedAll = sortProductsByOrder(products);
+  const sortedFiltered = sortProductsByOrder(filteredProducts);
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setFilterCategory('All');
+    setFilterStock('All');
+    setFilterFeatured('All');
+  };
+
+  const hasActiveFilters = searchQuery || filterCategory !== 'All' || filterStock !== 'All' || filterFeatured !== 'All';
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[var(--surface-page)]">
+        <div className="mx-auto w-full max-w-[1550px] px-4 py-4 lg:px-8">
+          <TableSkeleton rows={8} cols={4} label="Loading products" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[var(--surface-page)] text-[var(--text-body)] transition-colors duration-200 overflow-x-hidden">
+      <CustomModal
+        isOpen={isOpen}
+        onClose={closeModal}
+        onConfirm={handleConfirm}
+        busy={isConfirming}
+        busyText={modalConfig.pendingText}
+        {...modalConfig}
+      />
+
+      {/* Dedicated Products Navbar - ONE horizontal row */}
+      <header className="sticky top-0 z-30 flex min-h-[60px] w-full shrink-0 items-center border-b bg-[var(--surface-card)] px-4 py-2 transition-colors duration-200 lg:px-8" style={{ borderColor: 'var(--hairline)' }}>
+        <div className="mx-auto flex w-full max-w-[1550px] flex-wrap items-center gap-3 lg:flex-nowrap lg:gap-3">
+          <Link
+            to="/dashboard"
+            className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold"
+            style={{ color: 'var(--ember-600)' }}
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Back to Dashboard</span>
+            <span className="sm:hidden">Back</span>
+          </Link>
+
+          <div className="relative w-full sm:w-[280px] lg:w-[300px] xl:w-[340px] order-last lg:order-none">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-9 w-full rounded-full border bg-[var(--surface-sunken)] pl-10 pr-4 text-sm placeholder:text-[var(--text-subtle)] focus:outline-none transition-colors duration-200"
+              style={{ borderColor: 'var(--hairline)', color: 'var(--text-strong)' }}
+            />
+          </div>
+
+          <h1 className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 text-sm font-bold tracking-tight lg:block" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>
+            All Products
+          </h1>
+
+          <div className="ml-auto flex items-center gap-2">
+            <div className="relative">
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                className="h-9 appearance-none rounded-full border bg-[var(--surface-sunken)] pl-3 pr-8 text-xs font-semibold focus:outline-none"
+                style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
+              >
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>{cat === 'All' ? 'Category: All' : cat}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
+            </div>
+
+            <div className="relative hidden sm:block">
+              <select
+                value={filterStock}
+                onChange={(e) => setFilterStock(e.target.value)}
+                className="h-9 appearance-none rounded-full border bg-[var(--surface-sunken)] pl-3 pr-8 text-xs font-semibold focus:outline-none"
+                style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
+              >
+                <option value="All">Stock: All</option>
+                <option value="In Stock">In Stock</option>
+                <option value="Out of Stock">Out of Stock</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
+            </div>
+
+            <div className="relative hidden sm:block">
+              <select
+                value={filterFeatured}
+                onChange={(e) => setFilterFeatured(e.target.value)}
+                className="h-9 appearance-none rounded-full border bg-[var(--surface-sunken)] pl-3 pr-8 text-xs font-semibold focus:outline-none"
+                style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
+              >
+                <option value="All">Featured: All</option>
+                <option value="Featured">Featured</option>
+                <option value="Not Featured">Not Featured</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
+            </div>
+
+            {hasActiveFilters && (
+              <button type="button" onClick={clearFilters} className="hidden h-9 items-center gap-1 rounded-full border px-3 text-xs font-semibold sm:inline-flex" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)', color: 'var(--text-muted)' }}>
+                <RotateCcw className="h-3.5 w-3.5" /> Clear
+              </button>
+            )}
+
+            <Link to="/products/add" className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-xs font-bold text-white transition-colors duration-200" style={{ background: 'var(--grad-ember)' }}>
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add New Product</span>
+              <span className="sm:hidden">Add</span>
+            </Link>
+            <AccountMenu />
+          </div>
+
+          {/* Mobile second row for stock/featured when needed */}
+          <div className="flex w-full gap-2 sm:hidden">
+            <div className="relative flex-1">
+              <select
+                value={filterStock}
+                onChange={(e) => setFilterStock(e.target.value)}
+                className="h-9 w-full appearance-none rounded-full border bg-[var(--surface-sunken)] pl-3 pr-7 text-xs font-semibold"
+                style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
+              >
+                <option value="All">Stock: All</option>
+                <option value="In Stock">In Stock</option>
+                <option value="Out of Stock">Out of Stock</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
+            </div>
+            <div className="relative flex-1">
+              <select
+                value={filterFeatured}
+                onChange={(e) => setFilterFeatured(e.target.value)}
+                className="h-9 w-full appearance-none rounded-full border bg-[var(--surface-sunken)] pl-3 pr-7 text-xs font-semibold"
+                style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
+              >
+                <option value="All">Featured: All</option>
+                <option value="Featured">Featured</option>
+                <option value="Not Featured">Not Featured</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto w-full max-w-[1550px] px-4 py-3 lg:px-8">
+        {/* Compact toolbar - result count + reorder hint */}
+        <div className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Showing <span className="tabular font-bold" style={{ color: 'var(--ember-600)' }}>{filteredProducts.length}</span> of <span className="tabular font-bold" style={{ color: 'var(--text-strong)' }}>{products.length}</span> products
+            {hasActiveFilters && <button type="button" onClick={clearFilters} className="ml-2 text-xs font-semibold underline" style={{ color: 'var(--ember-600)' }}>Clear filters</button>}
+          </p>
+          <p className="hidden items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold sm:inline-flex" style={{ background: 'rgba(210,166,79,0.12)', borderColor: 'rgba(210,166,79,0.3)', color: 'var(--gold-600)' }}>
+            <GripVertical className="h-3.5 w-3.5" /> Drag rows to reorder — customers see this order first
+          </p>
+        </div>
+
+        {/* Product list */}
+        {filteredProducts.length === 0 ? (
+          <EmptyState
+            icon={Package}
+            title="No products found"
+            description="Try adjusting your filters or add a new product"
+            action={
+              <button type="button" onClick={clearFilters} className="btn-outline">
+                <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                Clear filters
+              </button>
+            }
+            secondaryAction={
+              <Link to="/products/add" className="btn-primary">
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Add New Product
+              </Link>
+            }
+          />
+        ) : (
+          <section aria-label="Product register" className="mt-3">
+            {/* Column header - desktop */}
+            <div
+              className="mb-2 hidden items-center gap-3 rounded-xl border px-4 py-2.5 xl:flex"
+              style={{ background: 'var(--surface-sunken)', borderColor: 'var(--hairline)' }}
+              aria-hidden="true"
+            >
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <span className="w-9 shrink-0" />
+                <span className="w-14 shrink-0" />
+                <span className="label-caps flex-1">Product</span>
+              </div>
+              <span className="label-caps w-[9rem] shrink-0">Pricing</span>
+              <span className="label-caps w-[11rem] shrink-0">Status</span>
+              <span className="label-caps w-[7rem] shrink-0">Order</span>
+              <span className="label-caps w-[6rem] shrink-0 text-right">Actions</span>
+            </div>
+
+            <ul role="list" className="flex flex-col gap-2">
+              {sortedFiltered.map((product, index) => {
+                const position = sortedAll.findIndex(p => p.id === product.id) + 1;
+                return (
+                  <ProductRegisterRow
+                    key={product.id}
+                    product={product}
+                    position={position}
+                    total={sortedAll.length}
+                    index={index}
+                    reduced={false}
+                    isDragging={dragId === product.id}
+                    isDropTarget={dragId !== product.id && dragOverId === product.id}
+                    onDragStart={(e) => handleDragStart(e, product.id)}
+                    onDragOver={(e) => handleDragOver(e, product.id)}
+                    onDrop={handleDrop}
+                    onDragEnd={handleDragEnd}
+                    onMoveUp={(id) => moveProduct(id, -1)}
+                    onMoveDown={(id) => moveProduct(id, 1)}
+                    onToggleFeatured={toggleFeatured}
+                    onToggleStock={toggleOutOfStock}
+                    onDelete={handleDeleteProduct}
+                  />
+                );
+              })}
+            </ul>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default AllProducts;

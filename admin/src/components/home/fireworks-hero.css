@@ -1,0 +1,281 @@
+/* =========================================================================
+   CINEMATIC FIREWORKS HERO — Crackers Hyderabad
+   -------------------------------------------------------------------------
+   A real-time canvas night scene. No background images, no pre-rendered
+   fireworks, no DOM particles.    Layer order (bottom → top):
+
+     .fx-bg          night-sky gradients
+     .fx-mouselight  mouse spotlight
+     .fx-canvas      the whole fireworks simulation (shells, bursts, sparks,
+                     smoke, haze) — drawn by FireworksHero.jsx
+     .fx-content     eyebrow / title / sub / CTAs
+     .fx-embers      rising residual sparks
+     .fx-grade       vignette + grain + top blend (readability)
+
+   The canvas sits under the content on purpose: the headline is framed by
+   the fireworks, never covered by them.
+   ========================================================================= */
+
+.fx-hero {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  max-width: 100%;
+  overflow: clip;
+  background: #050403;
+  /* Compact cinematic frame: content plus the feature strip below it fit a
+     standard desktop viewport without a large scroll. */
+  height: clamp(540px, 78svh, 760px);
+  min-height: 540px;
+  /* Parallax + spotlight state (set from JS, -1..1 and % respectively) */
+  --px: 0;
+  --py: 0;
+  --mouse-x: 50%;
+  --mouse-y: 42%;
+}
+
+/* ---------------- 1. Night-sky background ---------------- */
+.fx-bg {
+  position: absolute;
+  inset: -24px;
+  z-index: 0;
+  background:
+    radial-gradient(52% 38% at 50% 30%, rgba(255, 178, 92, 0.13) 0%, transparent 70%),
+    radial-gradient(70% 46% at 18% 82%, rgba(154, 44, 16, 0.16) 0%, transparent 68%),
+    radial-gradient(60% 42% at 84% 78%, rgba(190, 140, 54, 0.12) 0%, transparent 70%),
+    radial-gradient(90% 30% at 50% 100%, rgba(120, 58, 20, 0.14) 0%, transparent 70%),
+    linear-gradient(180deg, #020202 0%, #060403 30%, #0d0705 55%, #160b05 78%, #0a0605 100%);
+  transform: translate3d(calc(var(--px) * 2px), calc(var(--py) * 1.5px), 0);
+  will-change: transform;
+}
+
+/* Central readability glow behind the title, with a breath of warm light so
+   the ivory/gold lettering separates from the bursts without any text glow */
+.fx-bg::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  width: min(78%, 880px);
+  aspect-ratio: 16 / 9;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(closest-side, rgba(255, 190, 110, 0.07) 0%, transparent 60%),
+    radial-gradient(closest-side, rgba(0, 0, 0, 0.55) 0%, transparent 72%);
+}
+
+/* ---------------- 2. Mouse spotlight ---------------- */
+.fx-mouselight {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at var(--mouse-x) var(--mouse-y),
+    rgba(255, 190, 80, 0.06),
+    transparent 28%
+  );
+}
+
+/* ---------------- 3. Fireworks canvas ---------------- */
+.fx-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ---------------- 4. Central content ---------------- */
+.fx-content {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 3.5rem 1.25rem 4rem;
+  transform: translate3d(calc(var(--px) * 1px), calc(var(--py) * 1px), 0);
+  will-change: transform;
+}
+
+.fx-rise {
+  opacity: 0;
+  animation: fx-rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: var(--d, 0s);
+}
+
+@keyframes fx-rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fx-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1.4rem;
+}
+
+.fx-eyebrow::before,
+.fx-eyebrow::after {
+  content: '';
+  width: 2.5rem;
+  height: 1px;
+  background: rgba(178, 140, 70, 0.8);
+}
+
+.fx-eyebrow span {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-indent: 0.1em;
+  color: #c9a961;
+}
+
+.fx-title {
+  margin: 0;
+  font-family: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
+  font-size: clamp(56px, 6vw, 96px);
+  line-height: 1.04;
+  letter-spacing: -0.01em;
+  text-shadow: 0 2px 28px rgba(0, 0, 0, 0.6), 0 0 64px rgba(201, 165, 92, 0.12);
+}
+
+.fx-title-crackers {
+  display: block;
+  color: #f6efe0;
+  font-weight: 500;
+}
+
+.fx-title-hyd {
+  display: block;
+  font-weight: 600;
+  padding-bottom: 0.08em;
+  background: linear-gradient(180deg, #eed9a4 0%, #d4af68 55%, #b08a44 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Desktop: single-line title where horizontal space allows. Small screens
+   keep the stacked two-line treatment so nothing overflows. */
+@media (min-width: 768px) {
+  .fx-title {
+    white-space: nowrap;
+  }
+
+  .fx-title-crackers {
+    display: inline;
+    margin-right: 0.28em;
+  }
+
+  .fx-title-hyd {
+    display: inline;
+  }
+}
+
+.fx-sub {
+  margin: 1.3rem 0 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  text-indent: 0.1em;
+  color: rgba(248, 242, 231, 0.66);
+}
+
+.fx-ctas {
+  margin-top: 2.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+}
+
+.fx-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  height: 3.25rem;
+  padding: 0 2.5rem;
+  border-radius: 0.65rem;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-decoration: none;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+}
+
+.fx-btn-primary {
+  background: linear-gradient(180deg, #ddbb72 0%, #be9550 100%);
+  color: #241a0c;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 8px 26px rgba(190, 149, 80, 0.28);
+}
+
+.fx-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(190, 149, 80, 0.4);
+}
+
+/* ---------------- 6. Cinematic grade (top, always readable) -------- */
+.fx-grade {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(5, 3, 3, 0.5) 0%, transparent 18%, transparent 62%, rgba(5, 3, 3, 0.55) 100%),
+    radial-gradient(120% 100% at 50% 42%, transparent 58%, rgba(0, 0, 0, 0.38) 100%);
+}
+
+/* ---------------- Reduced motion ----------------
+   No simulation is started at all, so the scene is just the static night sky. */
+@media (prefers-reduced-motion: reduce) {
+  .fx-rise { animation: none; opacity: 1; }
+  .fx-bg,
+  .fx-content { transform: none; }
+}
+
+/* ---------------- Small screens: scene stays, intensity drops --------- */
+@media (max-width: 767px) {
+  .fx-hero {
+    height: clamp(560px, 92svh, 720px);
+    min-height: 520px;
+  }
+
+  .fx-content { padding: 3.5rem 1.25rem 4rem; }
+
+  .fx-title {
+    font-size: clamp(42px, 12vw, 64px);
+    line-height: 1.08;
+  }
+
+  .fx-sub { letter-spacing: 0.18em; }
+
+  .fx-btn-primary {
+    height: 3rem;
+    padding: 0 2rem;
+    font-size: 13px;
+  }
+}
+
+/* Very narrow screens: keep the single CTA comfortably tappable. */
+@media (max-width: 480px) {
+  .fx-ctas {
+    width: min(100%, 340px);
+  }
+
+  .fx-btn-primary {
+    justify-content: center;
+    width: 100%;
+  }
+}

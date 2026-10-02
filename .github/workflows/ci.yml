@@ -15,17 +15,32 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: client/package-lock.json
+          cache-dependency-path: |
+            client/package-lock.json
+            admin/package-lock.json
+            billing/package-lock.json
 
       - name: Install client dependencies
         run: npm ci --prefix client --no-audit --no-fund
 
+      - name: Install admin dependencies
+        run: npm ci --prefix admin --no-audit --no-fund
+
+      - name: Install billing dependencies
+        run: npm ci --prefix billing --no-audit --no-fund
+
       - name: Lint
-        run: npm run lint --prefix client
+        run: |
+          npm run lint --prefix client
+          npm run lint --prefix admin
+          npm run lint --prefix billing
 
       - name: Build
-        # No Firebase secrets here on purpose: the build falls back to the
-        # committed client/.env.production values (public web config that
-        # ships in the browser bundle by design). Real secrets are only
-        # overlaid at deploy time by deploy-hostinger.yml.
-        run: npm run build --prefix client
+        # No Firebase secrets here on purpose: the builds fall back to the
+        # committed client/.env, admin/.env and billing/.env values (public
+        # web config that ships in the browser bundle by design). Real
+        # secrets are only overlaid at deploy time by deploy-hostinger.yml.
+        run: |
+          npm run build --prefix client
+          npm run build --prefix admin
+          npm run build --prefix billing

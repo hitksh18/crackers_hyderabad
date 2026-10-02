@@ -44,7 +44,7 @@ const CheckoutField = ({
     <div className={`min-w-0 ${className}`}>
       <label
         htmlFor={id}
-        className="mb-1.5 block text-sm font-semibold"
+        className="mb-1 block text-xs font-semibold"
         style={{ color: 'var(--text-body)' }}
       >
         {label}
@@ -56,22 +56,22 @@ const CheckoutField = ({
       </label>
 
       {rows ? (
-        <textarea {...shared} rows={rows} className="input-premium resize-y" />
+        <textarea {...shared} rows={rows} className="input-premium resize-y text-sm" />
       ) : (
-        <input {...shared} type={type} className="input-premium" />
+        <input {...shared} type={type} className="input-premium text-sm" />
       )}
 
       {error ? (
         <p
           id={`${id}-error`}
-          className="mt-1.5 flex items-start gap-1.5 text-xs font-semibold"
+          className="mt-1 flex items-start gap-1.5 text-xs font-semibold"
           style={{ color: 'var(--crimson-600)' }}
         >
           <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" strokeWidth={2.4} aria-hidden="true" />
           <span>{error}</span>
         </p>
       ) : hint ? (
-        <p id={`${id}-hint`} className="mt-1.5 text-xs" style={{ color: 'var(--text-subtle)' }}>
+        <p id={`${id}-hint`} className="mt-1 text-xs" style={{ color: 'var(--text-subtle)' }}>
           {hint}
         </p>
       ) : null}

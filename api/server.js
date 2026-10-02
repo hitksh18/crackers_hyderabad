@@ -5,8 +5,8 @@ const cors = require('cors');
 // undefined and would throw at runtime.
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
-const { getFirestore } = require('firebase-admin/firestore');
-const nodemailer = require('nodemailer');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+// nodemailer is only used through lib/email.js (single Gmail SMTP config).
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -36,7 +36,13 @@ const {
   createRateLimiter,
   securityHeaders,
 } = require('./lib/security');
-const { createOrder, createPosOrder, trackOrder, consumeNotifyToken, isValidEmail } = require('./lib/orders');
+const { createOrder, createPosOrder, trackOrder, handlePublicTrack, consumeNotifyToken, isValidEmail } = require('./lib/orders');
+// Single source of truth for SMTP (Gmail App Password via SMTP_*, EMAIL_*
+// fallback) — order confirmations, password resets and manual resends.
+// The compact confirmation template + payment note live in
+// lib/emailTemplates + lib/email so every mail path renders identically.
+const { readEmailConfig, createSmtpTransporter, orderPaymentNote, maybeSendOrderConfirmationEmail, sendStatusUpdateEmail } = require('./lib/email');
+const { orderConfirmationHtml, orderConfirmationText } = require('./lib/emailTemplates');
 const { handleReverseGeocode, handleSearchPlaces, handleGeocodeConfig } = require('./lib/geocode');
 
 if (process.env.NODE_ENV === 'production') try {
@@ -46,6 +52,18 @@ if (process.env.NODE_ENV === 'production') try {
   }
 } catch (e) {
   console.warn('Could not load .env file:', e.message);
+}
+
+// Email-only env (server, git-ignored). Loaded in ALL environments so local
+// dev picks up SMTP without exporting vars by hand. Root .env still wins
+// when both set the same key (loaded second in production).
+try {
+  const emailEnvPath = path.join(__dirname, '..', '.env.email');
+  if (fs.existsSync(emailEnvPath)) {
+    process.loadEnvFile(emailEnvPath);
+  }
+} catch (e) {
+  console.warn('Could not load .env.email file:', e.message);
 }
 
 const app = express();
@@ -68,6 +86,8 @@ const DEFAULT_ORIGINS = [
   'http://localhost:5173',
   'https://crackershyderabad.com',
   'https://www.crackershyderabad.com',
+  'https://admin.crackershyderabad.com',
+  'https://billing.crackershyderabad.com',
 ];
 
 const ALLOWED_ORIGINS = [
@@ -743,21 +763,15 @@ app.post(
    them an open relay for mail and SMS sent from the shop's own identity.
    --------------------------------------------------------------------------- */
 
-let emailConfigured = false;
-
+/* Email readiness + transporter for the two legacy callers (staff password
+   reset, manual invoice resend). Both delegate to lib/email.js so every mail
+   path uses the same Gmail SMTP configuration as order confirmations. */
 function checkEmailConfig() {
-  if (emailConfigured) return true;
-  emailConfigured = !!(process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS);
-  return emailConfigured;
+  return readEmailConfig().ok;
 }
 
 function getEmailTransporter() {
-  return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.EMAIL_PORT || '587', 10),
-    secure: process.env.EMAIL_PORT === '465',
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-  });
+  return createSmtpTransporter();
 }
 
 async function loadOrderRef(orderId) {
@@ -776,134 +790,61 @@ async function loadOrderRef(orderId) {
  * victim from the shop's own authenticated SMTP session. Authorisation is now
  * either a single-use token handed to whoever actually placed the order, or a
  * verified staff identity.
+ *
+ * Returns 'staff' | 'token' | false: the caller kind matters downstream, because
+ * a token-driven send is an automatic notification (deduped exactly once) while
+ * a staff send is an explicit manual resend.
  */
 async function authoriseNotification(req, entry, channel) {
   const caller = await authenticate(req);
-  if (caller && STAFF_ROLES.includes(caller.role)) return true;
+  if (caller && STAFF_ROLES.includes(caller.role)) return 'staff';
 
-  return consumeNotifyToken(
+  const ok = await consumeNotifyToken(
     getFirestore(),
     entry.ref,
     entry.order,
     req.body?.notifyToken,
     channel
   );
+  return ok ? 'token' : false;
 }
 
-const formatINR = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
-
-// Each rendered row is ~500 bytes of markup and a Firestore document may hold
-// tens of thousands of array elements, so an uncapped render is a ~40x
-// amplification into a single multi-megabyte string.
-const MAX_EMAIL_ROWS = 200;
-
+/* Manual resend (POST /api/orders/email) renders the SAME compact,
+// item-free confirmation template as the automatic mail — summary, live
+// status, note and actions only. The itemised invoice is generated
+// client-side from the tracking page behind DOWNLOAD INVOICE. */
 function buildOrderEmailHtml(order) {
-  const allItems = Array.isArray(order.items) ? order.items : [];
-  const items = allItems.slice(0, MAX_EMAIL_ROWS);
-  const omitted = allItems.length - items.length;
-  const rows = items
-    .map((item, index) => {
-      const price = item.discountPrice || item.onlinePrice || item.price || 0;
-      const total = price * item.quantity;
-      return `
-      <tr>
-        <td style="padding:10px;border-bottom:1px solid #eee;color:#333;">${index + 1}</td>
-        <td style="padding:10px;border-bottom:1px solid #eee;color:#333;">${escapeHtml(item.name || 'N/A')}</td>
-        <td style="padding:10px;border-bottom:1px solid #eee;color:#333;text-align:center;">${escapeHtml(item.quantity)}</td>
-        <td style="padding:10px;border-bottom:1px solid #eee;color:#333;text-align:right;">${formatINR(price)}</td>
-        <td style="padding:10px;border-bottom:1px solid #eee;color:#333;text-align:right;font-weight:600;">${formatINR(total)}</td>
-      </tr>`;
-    })
-    .join('');
-
-  const cust = order.customer || {};
-  const displayOrderId = escapeHtml(
-    String(order.shortCode || order.orderId || order.id || 'N/A').toUpperCase()
-  );
-  const orderDate = new Date().toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+  const code = String(order.shortCode || order.orderId || order.id || 'N/A').toUpperCase();
+  const items = Array.isArray(order.items) ? order.items : [];
+  const quantity = items.reduce((n, item) => n + (Number(item.quantity) || 0), 0);
+  const trackBase = (process.env.TRACK_BASE_URL || process.env.PUBLIC_SITE_URL || 'https://crackershyderabad.com').replace(/\/+$/, '');
+  return orderConfirmationHtml({
+    orderCode: code,
+    status: order.status || 'Pending',
+    quantity,
+    total: order.total ?? 0,
+    trackUrl: `${trackBase}/track/${code}`,
+    invoiceUrl: `${trackBase}/track-order?id=${encodeURIComponent(code)}`,
+    customerName: order.customer?.name || '',
+    note: orderPaymentNote(order),
   });
+}
 
-  const address = [cust.address, cust.city, cust.pincode].filter(Boolean).join(', ');
-
-  return `
-    <!DOCTYPE html>
-    <html>
-    <body style="margin:0;padding:0;background:#f7f3ec;font-family:Arial,Helvetica,sans-serif;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f3ec;padding:24px 0;">
-        <tr>
-          <td align="center">
-            <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);">
-              <tr>
-                <td style="background:linear-gradient(135deg,#761713,#94251F);padding:28px 32px;text-align:center;">
-                  <h1 style="margin:0;color:#ffffff;font-size:26px;">CRACKERS HYDERABAD</h1>
-                  <p style="margin:6px 0 0;color:#D2A64F;font-size:13px;">Standard Fireworks Exclusive Store</p>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding:32px;">
-                  <h2 style="margin:0 0 6px;color:#761713;font-size:20px;">Order Confirmed</h2>
-                  <p style="margin:0 0 20px;color:#666;font-size:14px;">Thank you for shopping with us, <strong>${escapeHtml(cust.name || 'Valued Customer')}</strong>. Here are your order details:</p>
-
-                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;border:1px solid #eee;border-radius:8px;margin-bottom:24px;">
-                    <tr>
-                      <td style="padding:12px 16px;width:50%;color:#888;font-size:12px;text-transform:uppercase;">Order ID</td>
-                      <td style="padding:12px 16px;color:#761713;font-size:14px;font-weight:bold;">#${displayOrderId}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding:12px 16px;border-top:1px solid #eee;color:#888;font-size:12px;text-transform:uppercase;">Date</td>
-                      <td style="padding:12px 16px;border-top:1px solid #eee;color:#333;font-size:14px;">${escapeHtml(orderDate)}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding:12px 16px;border-top:1px solid #eee;color:#888;font-size:12px;text-transform:uppercase;">Payment</td>
-                      <td style="padding:12px 16px;border-top:1px solid #eee;color:#333;font-size:14px;">${escapeHtml(order.paymentMode || order.paymentStatus || 'Cash on Delivery')}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding:12px 16px;border-top:1px solid #eee;color:#888;font-size:12px;text-transform:uppercase;">Delivery Address</td>
-                      <td style="padding:12px 16px;border-top:1px solid #eee;color:#333;font-size:14px;">${escapeHtml(address || 'N/A')}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding:12px 16px;border-top:1px solid #eee;color:#888;font-size:12px;text-transform:uppercase;">Phone</td>
-                      <td style="padding:12px 16px;border-top:1px solid #eee;color:#333;font-size:14px;">${escapeHtml(cust.phone || 'N/A')}</td>
-                    </tr>
-                  </table>
-
-                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:24px;">
-                    <tr style="background:#761713;">
-                      <td style="padding:10px;color:#ffffff;font-size:12px;font-weight:bold;">S.No</td>
-                      <td style="padding:10px;color:#ffffff;font-size:12px;font-weight:bold;">Item</td>
-                      <td style="padding:10px;color:#ffffff;font-size:12px;font-weight:bold;text-align:center;">Qty</td>
-                      <td style="padding:10px;color:#ffffff;font-size:12px;font-weight:bold;text-align:right;">Price</td>
-                      <td style="padding:10px;color:#ffffff;font-size:12px;font-weight:bold;text-align:right;">Total</td>
-                    </tr>
-                    ${rows || '<tr><td colspan="5" style="padding:10px;color:#999;text-align:center;">No items</td></tr>'}
-                    ${omitted > 0 ? `<tr><td colspan="5" style="padding:10px;color:#999;text-align:center;">and ${omitted} more item${omitted === 1 ? '' : 's'}</td></tr>` : ''}
-                    <tr>
-                      <td colspan="4" style="padding:12px 10px;text-align:right;color:#333;font-size:14px;"><strong>GRAND TOTAL</strong></td>
-                      <td style="padding:12px 10px;text-align:right;color:#761713;font-size:16px;font-weight:bold;">${formatINR(order.total)}</td>
-                    </tr>
-                  </table>
-
-                  <p style="margin:0 0 8px;color:#333;font-size:14px;"><strong>Note:</strong> Payment is collected on delivery. Please keep the order ID handy for tracking.</p>
-                  <p style="margin:0;color:#888;font-size:12px;">Track your order status anytime in <strong>My Orders</strong> on our website.</p>
-                </td>
-              </tr>
-              <tr>
-                <td style="background:#faf7f2;border-top:1px solid #eee;padding:20px 32px;text-align:center;">
-                  <p style="margin:0 0 4px;color:#333;font-size:13px;"><strong>Have questions?</strong> Contact us on WhatsApp or visit our store.</p>
-                  <p style="margin:0;color:#888;font-size:12px;">Crackers Hyderabad, Hyderabad, Telangana | www.crackershyderabad.com</p>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-    </body>
-    </html>`;
+function buildOrderEmailText(order) {
+  const code = String(order.shortCode || order.orderId || order.id || 'N/A').toUpperCase();
+  const items = Array.isArray(order.items) ? order.items : [];
+  const quantity = items.reduce((n, item) => n + (Number(item.quantity) || 0), 0);
+  const trackBase = (process.env.TRACK_BASE_URL || process.env.PUBLIC_SITE_URL || 'https://crackershyderabad.com').replace(/\/+$/, '');
+  return orderConfirmationText({
+    orderCode: code,
+    status: order.status || 'Pending',
+    quantity,
+    total: order.total ?? 0,
+    trackUrl: `${trackBase}/track/${code}`,
+    invoiceUrl: `${trackBase}/track-order?id=${encodeURIComponent(code)}`,
+    customerName: order.customer?.name || '',
+    note: orderPaymentNote(order),
+  });
 }
 
 /**
@@ -956,10 +897,126 @@ app.post(
   createPosOrder
 );
 
+/* ---------------------------------------------------------------------------
+   Order status changes.
+
+   Status is written HERE, not by the browser. Three writers used to bypass
+   the server completely — Orders.jsx and OrderDetail.jsx (staff) and
+   MyOrders.jsx (customer self-cancel) all `updateDoc`'d the document — so no
+   server code ever saw a status event: sendStatusUpdateEmail had no caller
+   and could neither send nor dedupe. Owning the write gives us the
+   transition guard in one place: a save that selects the status an order
+   already has produces no event, so it sends nothing downstream.
+
+   Authorization mirrors firestore.rules on the orders collection: any staff
+   role may move the status along; a signed-in customer may only cancel their
+   OWN order, only from a state the rules still consider cancellable.
+   --------------------------------------------------------------------------- */
+
+const ORDER_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled', 'Completed'];
+/* Exactly the customer-cancellable set from firestore.rules. */
+const CUSTOMER_CANCELLABLE_FROM = ['Pending', 'Confirmed', 'Processing'];
+
+app.post('/api/orders/status', adminLimiter, requireFirebase, async (req, res) => {
+  try {
+    const orderId = String(req.body?.orderId || '').trim();
+    const status = String(req.body?.status || '').trim();
+    if (!orderId || orderId.length > 128) {
+      return res.status(400).json({ error: 'Missing order id' });
+    }
+    if (!ORDER_STATUSES.includes(status)) {
+      return res.status(400).json({ error: 'Invalid order status' });
+    }
+
+    const caller = await authenticate(req);
+    if (!caller) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const isStaffCaller = STAFF_ROLES.includes(caller.role);
+
+    const db = getFirestore();
+    const orderRef = db.collection('orders').doc(orderId);
+
+    let order = null;
+    let changed = false;
+    try {
+      await db.runTransaction(async (tx) => {
+        // The callback can re-run on contention; never inherit side effects.
+        order = null;
+        changed = false;
+        const snap = await tx.get(orderRef);
+        if (!snap.exists) return;
+        const current = snap.data() || {};
+        order = { ...current, id: snap.id };
+        const previousStatus = String(current.status || 'Pending');
+
+        // Authorise first: a non-owner must not be able to probe an order's
+        // current status by watching whether a same-status save "succeeds".
+        if (!isStaffCaller) {
+          const ownsOrder =
+            (current.userId && current.userId === caller.uid) ||
+            (current.customer?.email &&
+              String(current.customer.email).toLowerCase() === String(caller.email || '').toLowerCase());
+          if (!ownsOrder || status !== 'Cancelled' || !CUSTOMER_CANCELLABLE_FROM.includes(previousStatus)) {
+            const denied = new Error('Not permitted for this order');
+            denied.status = 403;
+            throw denied;
+          }
+        }
+
+        // Same-status save: not a transition, so not an event.
+        if (previousStatus === status) return;
+
+        const patch = {
+          status,
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: caller.uid,
+        };
+        if (status === 'Cancelled') {
+          patch.cancelledAt = FieldValue.serverTimestamp();
+          patch.cancelledBy = isStaffCaller ? 'staff' : 'customer';
+        }
+        tx.update(orderRef, patch);
+        changed = true;
+      });
+    } catch (txError) {
+      if (txError && txError.status === 403) {
+        return res.status(403).json({ error: txError.message });
+      }
+      console.error('[orders/status] transaction failed:', txError.message);
+      return res.status(500).json({ error: 'Could not update the order status' });
+    }
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    if (!changed) {
+      return res.json({ success: true, changed: false });
+    }
+
+    /* ONE customer email for this status event, strictly AFTER the Firestore
+       write committed, deduped per event key (notify.statusEmails.<key>) so a
+       retry or a repeat of the same transition mails nothing. Best-effort: a
+       mail failure is logged but never fails the status update. */
+    let emailed = false;
+    try {
+      const result = await sendStatusUpdateEmail(db, orderRef, { ...order, status }, status);
+      emailed = Boolean(result && result.ok);
+    } catch (emailError) {
+      console.warn(`[orders/status] email hook threw for ${order.shortCode || orderId}:`, emailError.message);
+    }
+
+    return res.json({ success: true, changed: true, emailed });
+  } catch (error) {
+    console.error('Error updating order status:', error);
+    return res.status(500).json({ error: 'Could not update the order status' });
+  }
+});
+
 /**
  * Public order tracking.
  *
- * This endpoint exists because tracking codes are sequential (CH1001, CH1002)
+ * This endpoint exists because tracking codes are sequential (CH01, CH02)
  * and therefore guessable. `trackingCodes.get` is staff-only in the rules, so
  * this is the only public route from a code to an order, and it requires the
  * last four digits of the order's phone number. Staff, holding a verified
@@ -976,6 +1033,16 @@ app.post('/api/orders/track', trackLimiter, requireFirebase, async (req, res) =>
   return trackOrder(req, res);
 });
 
+/**
+ * Public tracking timeline source: GET /api/orders/track/:orderCode.
+ *
+ * Unauthenticated by design — this is what https://crackershyderabad.com/track/CH01
+ * (and a future email link) reads. It answers with the minimal customer-safe
+ * payload only (code, status, quantity, total, timestamps): no customer PII,
+ * no item details, no tokens. Rate-limited like the phone-gated POST above.
+ */
+app.get('/api/orders/track/:orderCode', trackLimiter, requireFirebase, withDb(handlePublicTrack));
+
 app.post('/api/orders/email', notifyLimiter, requireFirebase, async (req, res) => {
   try {
     const entry = await loadOrderRef(req.body?.orderId);
@@ -983,7 +1050,8 @@ app.post('/api/orders/email', notifyLimiter, requireFirebase, async (req, res) =
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    if (!(await authoriseNotification(req, entry, 'email'))) {
+    const grant = await authoriseNotification(req, entry, 'email');
+    if (!grant) {
       return res.status(403).json({ error: 'Not permitted for this order' });
     }
 
@@ -1000,9 +1068,27 @@ app.post('/api/orders/email', notifyLimiter, requireFirebase, async (req, res) =
 
     if (!checkEmailConfig()) {
       return res.status(503).json({
-        error: 'Email service not configured. Add EMAIL_HOST, EMAIL_USER and EMAIL_PASS to the server environment.',
+        error: 'Email service not configured. Set SMTP_HOST, SMTP_USER and SMTP_PASSWORD (or EMAIL_HOST, EMAIL_USER, EMAIL_PASS) in the server environment.',
         setupRequired: true,
       });
+    }
+
+    /* Token-driven send = an AUTOMATIC confirmation, so it goes through the
+       same guarded hook the post-commit send uses: notify.confirmationEmailSentAt
+       makes it exactly-once no matter how many callers ask. The storefront used
+       to fire this endpoint on every checkout WHILE the server also mailed the
+       confirmation itself — two hooks, two flags neither checked, two emails
+       per order. Staff sends (below) stay plain manual resends. */
+    if (grant === 'token') {
+      const result = await maybeSendOrderConfirmationEmail(getFirestore(), entry.ref, order);
+      if (result.skipped === 'already-sent') {
+        return res.json({ success: true, skipped: 'already-sent' });
+      }
+      if (!result.ok) {
+        return res.status(500).json({ error: 'Failed to send order email' });
+      }
+      console.log(`Order email sent for ${order.id} (messageId: ${result.messageId})`);
+      return res.json({ success: true, messageId: result.messageId });
     }
 
     const displayOrderId = String(order.shortCode || order.id).toUpperCase();
@@ -1013,6 +1099,7 @@ app.post('/api/orders/email', notifyLimiter, requireFirebase, async (req, res) =
       to: [{ address: customerEmail, name: '' }],
       subject: `Order Confirmed - #${displayOrderId} | Crackers Hyderabad`,
       html: buildOrderEmailHtml(order),
+      text: buildOrderEmailText(order),
     });
 
     console.log(`Order email sent for ${order.id} (messageId: ${info.messageId})`);

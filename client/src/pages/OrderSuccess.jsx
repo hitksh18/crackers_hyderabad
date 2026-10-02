@@ -332,6 +332,28 @@ const OrderSuccess = () => {
                     <strong style={{ color: 'var(--gold-600)' }}>tracking code</strong> to follow
                     your order&apos;s status.
                   </p>
+
+                  {shortCode && (
+                    <>
+                      <div className="h-px w-full" style={{ background: 'var(--hairline)' }} />
+                      <div className="flex flex-wrap items-center justify-between gap-3 px-1 py-4 text-left">
+                        <p
+                          className="tabular text-sm font-bold"
+                          style={{ color: 'var(--text-strong)' }}
+                        >
+                          Order #{trackingCode}
+                        </p>
+                        <Link
+                          to={`/track/${trackingCode}`}
+                          className="inline-flex min-h-[44px] items-center gap-2 text-sm font-bold"
+                          style={{ color: 'var(--gold-600)' }}
+                        >
+                          Track Your Order
+                          <span aria-hidden="true">→</span>
+                        </Link>
+                      </div>
+                    </>
+                  )}
                 </div>
               </motion.div>
             )}

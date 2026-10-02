@@ -10,8 +10,6 @@ import {
   Save,
   X,
   Loader2,
-  LayoutDashboard,
-  Receipt,
   ClipboardList,
   LogIn,
 } from 'lucide-react';
@@ -329,29 +327,6 @@ const Profile = () => {
             </Link>
           </motion.section>
 
-          {/* ---------------- Admin access ---------------- */}
-          {isAdmin && (
-            <motion.section
-              variants={revealVariants(reduced, 18)}
-              className="panel-editorial glass-card p-5 sm:p-8"
-            >
-              <p className="section-eyebrow">Staff</p>
-              <h3 className="subsection-title mt-3">Admin Access</h3>
-              <p className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                You have administrative privileges. Manage products, orders, and billing.
-              </p>
-              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                <Link to="/admin/dashboard" className="btn-maroon">
-                  <LayoutDashboard className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                  Go to Dashboard
-                </Link>
-                <Link to="/admin/billing" className="btn-outline">
-                  <Receipt className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                  Billing System
-                </Link>
-              </div>
-            </motion.section>
-          )}
         </motion.div>
       </div>
     </div>

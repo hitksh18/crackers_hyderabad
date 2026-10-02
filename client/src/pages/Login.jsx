@@ -20,6 +20,7 @@ import toast from '../utils/toast';
 import Seo from '../components/Seo';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { revealVariants, staggerParent } from '../lib/motion';
+import { ADMIN_URL, BILLING_URL } from '../lib/consoleUrls';
 import { Diya } from '../components/ui/Ornaments';
 import GoogleMark from '../components/ui/GoogleMark';
 
@@ -60,6 +61,27 @@ const STORY_POINTS = [
    parked in sessionStorage before leaving and restored on the way back. */
 const FROM_KEY = 'auth_from';
 
+/* Staff consoles live on separate subdomains (Firebase sessions are per
+   origin, so each console asks for its own sign-in). A deep link the visitor
+   was aiming at (`from`) always wins; otherwise each role lands on its own
+   home — customers on the storefront, staff on their console. */
+const getHomePath = (role) => {
+  if (role === 'sales' || role === 'billing') return BILLING_URL;
+  if (role === 'admin') return `${ADMIN_URL}/dashboard`;
+  if (role === 'mod' || role === 'packer') return `${ADMIN_URL}/orders`;
+  return '/';
+};
+
+/* Internal destinations go through React Router; cross-subdomain
+   destinations need a real navigation. */
+const goToDestination = (navigate, destination) => {
+  if (/^https?:\/\//.test(destination)) {
+    window.location.assign(destination);
+    return;
+  }
+  navigate(destination, { replace: true });
+};
+
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -76,13 +98,6 @@ const Login = () => {
 
   const [from] = useState(() => location.state?.from || sessionStorage.getItem(FROM_KEY) || null);
 
-  const getHomePath = (role) => {
-    if (role === 'admin') return '/admin/dashboard';
-    if (role === 'sales' || role === 'billing') return '/admin/billing';
-    if (role === 'packer' || role === 'mod') return '/admin/orders';
-    return '/';
-  };
-
   // Centralized redirect is now ONLY for auth restoration / Google redirect.
   // Email login navigates directly in handleEmailLogin (OLD known-good path:
   // result.role -> from||getHomePath). This effect must not duplicate it.
@@ -92,7 +107,7 @@ const Login = () => {
     if (authReady && user && userRole) {
       const destination = from || getHomePath(userRole);
       if (from) sessionStorage.removeItem(FROM_KEY);
-      navigate(destination, { replace: true });
+      goToDestination(navigate, destination);
     }
   }, [authReady, user, userRole, loading, navigate, from, location.pathname]);
 
@@ -121,7 +136,7 @@ const Login = () => {
         if (result?.role) {
           const destination = from || getHomePath(result.role);
           if (from) sessionStorage.removeItem(FROM_KEY);
-          navigate(destination, { replace: true });
+          goToDestination(navigate, destination);
         }
       }
     } catch (error) {
@@ -151,7 +166,7 @@ const Login = () => {
       if (result?.role) {
         const destination = from || getHomePath(result.role);
         if (from) sessionStorage.removeItem(FROM_KEY);
-        navigate(destination, { replace: true });
+        goToDestination(navigate, destination);
       }
     } catch (error) {
       if (from) sessionStorage.removeItem(FROM_KEY);

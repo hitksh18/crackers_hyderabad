@@ -9,9 +9,7 @@ import {
   User,
   LogIn,
   LogOut,
-  LayoutDashboard,
   ClipboardList,
-  Receipt,
   Phone,
   ChevronRight,
 } from 'lucide-react';
@@ -34,13 +32,6 @@ const MobileMenu = ({
   onClose,
   pathname,
   user,
-  isAdmin,
-  isSales,
-  isBilling,
-  isPacker,
-  isMod,
-  isStaffMember,
-  canSeeBilling,
   cartCount,
   onSignOut,
   phoneHref,
@@ -98,13 +89,11 @@ const MobileMenu = ({
     { to: '/cart', label: 'Cart', icon: ShoppingCart, count: cartCount },
   ];
 
+  /* Staff surfaces live in the separate admin frontend — the storefront menu
+     carries only customer account links. */
   const accountLinks = [
     { to: '/profile', label: 'My Profile', icon: User, show: true },
-    { to: '/my-orders', label: 'My Orders', icon: ClipboardList, show: !isStaffMember },
-    { to: '/admin/billing', label: 'Billing', icon: Receipt, show: canSeeBilling },
-    { to: '/admin/dashboard', label: 'Admin Dashboard', icon: LayoutDashboard, show: isAdmin },
-    { to: '/admin/orders', label: 'Orders & Packing', icon: ClipboardList, show: isPacker || isMod },
-    { to: '/price-list', label: 'Price List', icon: Receipt, show: isSales || isBilling || isMod },
+    { to: '/my-orders', label: 'My Orders', icon: ClipboardList, show: true },
   ].filter((item) => item.show);
 
   const rowClass =

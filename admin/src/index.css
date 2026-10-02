@@ -1,0 +1,3262 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================================================================
+   CRACKERS HYDERABAD — FESTIVE EDITORIAL LUXURY
+   Design tokens. Everything downstream reads from here.
+   ========================================================================= */
+
+:root {
+  /* ---- Type families ---- */
+  --font-display: 'Playfair Display', Georgia, Cambria, serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Prices, on screen and in the invoice PDF. See .price below. */
+  --font-money: 'Noto Sans', 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* ---- Fluid type scale ---- */
+  --font-display-xl: clamp(2.75rem, 1.6rem + 5.2vw, 5.25rem);
+--font-hero: clamp(2.25rem, 1.55rem + 3.2vw, 3.75rem);
+  --font-section: clamp(1.85rem, 1.3rem + 2.5vw, 3rem);
+  --font-subsection: clamp(1.3rem, 1.1rem + 1.05vw, 1.75rem);
+  --font-card-title: clamp(1.0625rem, 1.02rem + 0.2vw, 1.1875rem);
+  --font-category: clamp(1rem, 0.94rem + 0.3vw, 1.2rem);
+  --font-body-size: clamp(0.875rem, 0.85rem + 0.12vw, 1rem);
+  --font-small: 0.8125rem;
+  --font-micro: 0.6875rem;
+
+  /* ---- Brand colour ---- */
+  --maroon-900: #3A0B0C;
+  --maroon-800: #571010;
+  --maroon-700: #761713;
+  --maroon-600: #94251F;
+  --ember-600: #C33A14;
+  --ember-500: #DF4C21;
+  --ember-400: #EC7049;
+  --saffron-400: #F7AE2C;
+  --gold-400: #D2A64F;
+  --gold-500: #BE8C36;
+  --gold-600: #9E7029;
+  --crimson-600: #CB2A2A;
+  --leaf-600: #2C7A53;
+
+  /* Period-over-period movement on the analytics dashboard. Separate tokens
+     rather than reusing leaf/crimson directly, because these two need to stay
+     legible on the dark surface and the brand scales are fixed hexes. */
+  --delta-up: #4FB483;
+  --delta-down: #F2716B;
+  --delta-flat: #A79E92;
+
+  /* ---- Surfaces (dark only — the site has no light theme) ---- */
+  --surface-page: #14100E;
+  --surface-card: #1E1815;
+  --surface-raised: #251E1A;
+  --surface-sunken: #17120F;
+  --surface-inverse: #FDF9F0;
+  --hairline: rgba(237, 231, 223, 0.10);
+  --hairline-strong: rgba(237, 231, 223, 0.18);
+
+  /* ---- Glass surfaces (dark only). Layered translucent fills + top-light
+     + hairline so the effect reads "premium glass" even where
+     backdrop-filter is unsupported or disabled. Readability always wins
+     over glassiness. ---- */
+  --glass-fill: linear-gradient(152deg, rgba(37, 30, 26, 0.8) 0%, rgba(30, 24, 21, 0.55) 100%);
+  --glass-fill-strong: linear-gradient(160deg, rgba(37, 30, 26, 0.94) 0%, rgba(28, 22, 19, 0.88) 100%);
+  --glass-fill-nav: linear-gradient(180deg, rgba(20, 16, 14, 0.92) 0%, rgba(30, 24, 21, 0.72) 100%);
+  --glass-fill-soft: linear-gradient(152deg, rgba(37, 30, 26, 0.66) 0%, rgba(30, 24, 21, 0.4) 100%);
+  --glass-blur: blur(20px) saturate(150%);
+  --glass-blur-strong: blur(28px) saturate(165%);
+  --glass-blur-soft: blur(14px) saturate(140%);
+  --glass-toplight: inset 0 1px 0 rgba(237, 231, 223, 0.12);
+  --glass-toplight-soft: inset 0 1px 0 rgba(237, 231, 223, 0.08);
+
+  /* ---- Text (dark only) ---- */
+  --text-strong: #F2ECE3;
+  --text-body: #D6CEC3;
+  --text-muted: #A79E92;
+  --text-subtle: #8B8377;
+  --text-on-dark: #EDE7DF;
+  --white-soft: #F2ECE3;
+
+  /* ---- Gradients ---- */
+  --grad-ember: linear-gradient(122deg, #9E2C10 0%, #C33A14 52%, #DF4C21 100%);
+  --grad-maroon: linear-gradient(122deg, #3A0B0C 0%, #761713 55%, #94251F 100%);
+  --grad-gold: linear-gradient(122deg, #9E7029 0%, #D2A64F 48%, #E2C177 100%);
+  --grad-festive: linear-gradient(120deg, #571010 0%, #94251F 42%, #C33A14 78%, #F7AE2C 140%);
+
+  /* ---- Elevation. Warm-tinted, never neutral grey. ---- */
+  --shadow-xs: 0 1px 2px rgba(58, 11, 12, 0.06);
+  --shadow-sm: 0 2px 8px rgba(58, 11, 12, 0.07);
+  --shadow-md: 0 8px 24px rgba(58, 11, 12, 0.09);
+  --shadow-lg: 0 18px 44px rgba(58, 11, 12, 0.13);
+  --shadow-xl: 0 32px 70px rgba(58, 11, 12, 0.18);
+  --shadow-ember: 0 10px 30px rgba(195, 58, 20, 0.28);
+  --shadow-gold: 0 8px 24px rgba(190, 140, 54, 0.25);
+
+  /* ---- Radius ---- */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-xl: 26px;
+  --r-2xl: 34px;
+  --r-pill: 999px;
+
+/* ---- Rhythm ---- */
+  --space-section: clamp(4.375rem, 3.75rem + 2vw, 6.25rem);
+  --space-block: clamp(3.125rem, 2.9rem + 1.2vw, 4.375rem);
+  --space-heading: clamp(1.875rem, 1.7rem + 0.8vw, 2.8125rem);
+  --gutter: clamp(1rem, 0.75rem + 1vw, 2rem);
+
+  /* ---- Motion ---- */
+  --dur-instant: 100ms;
+  --dur-fast: 180ms;
+  --dur-base: 280ms;
+  --dur-slow: 400ms;
+  --dur-cinematic: 900ms;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-soft: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-in-soft: cubic-bezier(0.55, 0.06, 0.68, 0.19);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ---- Legacy variable names still referenced by components (dark values) ---- */
+  --maroon: #EC7049;
+  --cream: rgba(237, 231, 223, 0.06);
+  --muted: #A79E92;
+  --avatar-bg: rgba(237, 231, 223, 0.09);
+  --avatar-icon: #D6CEC3;
+  --avatar-border: rgba(237, 231, 223, 0.16);
+  --card-bg: #1E1815;
+}
+
+.dark {
+  --surface-page: #14100E;
+  --surface-card: #1E1815;
+  --surface-raised: #251E1A;
+  --surface-sunken: #17120F;
+  --surface-inverse: #FDF9F0;
+  --hairline: rgba(237, 231, 223, 0.10);
+  --hairline-strong: rgba(237, 231, 223, 0.18);
+
+  /* Dark glass — deeper, cooler-tinted fills so translucency still reads
+     against the near-black page without washing out. */
+  --glass-fill: linear-gradient(152deg, rgba(37, 30, 26, 0.8) 0%, rgba(30, 24, 21, 0.55) 100%);
+  --glass-fill-strong: linear-gradient(160deg, rgba(37, 30, 26, 0.94) 0%, rgba(28, 22, 19, 0.88) 100%);
+  --glass-fill-nav: linear-gradient(180deg, rgba(20, 16, 14, 0.92) 0%, rgba(30, 24, 21, 0.72) 100%);
+  --glass-fill-soft: linear-gradient(152deg, rgba(37, 30, 26, 0.66) 0%, rgba(30, 24, 21, 0.4) 100%);
+  --glass-toplight: inset 0 1px 0 rgba(237, 231, 223, 0.12);
+  --glass-toplight-soft: inset 0 1px 0 rgba(237, 231, 223, 0.08);
+
+  --text-strong: #F2ECE3;
+  --text-body: #D6CEC3;
+  --text-muted: #A79E92;
+  --text-subtle: #8B8377;
+  --white-soft: #F2ECE3;
+
+  --maroon: #EC7049;
+  --cream: rgba(237, 231, 223, 0.06);
+  --muted: #A79E92;
+  --avatar-bg: rgba(237, 231, 223, 0.09);
+  --avatar-icon: #D6CEC3;
+  --avatar-border: rgba(237, 231, 223, 0.16);
+  --card-bg: #1E1815;
+
+  /* Lifted well clear of the dark surface — the light-mode green and red both
+     read as near-black against #14100E. */
+  --delta-up: #4FB483;
+  --delta-down: #F2716B;
+  --delta-flat: #A79E92;
+}
+
+/* =========================================================================
+   BASE
+   ========================================================================= */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--surface-page);
+  color-scheme: dark;
+  -webkit-text-size-adjust: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--font-body-size);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: transparent;
+  color: var(--text-body);
+  position: relative;
+  max-width: 100%;
+  /* Clip any stray horizontal overflow without hiding root cause — root fix is per-component max-width/overflow */
+  overflow-x: clip;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  color: var(--text-strong);
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  font-weight: 700;
+}
+
+/* Atmosphere: warm ember light + faint paper grain. Fixed, non-interactive,
+   and cheap — two composited layers, no per-frame work. */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  pointer-events: none;
+}
+
+body::before {
+  background:
+    radial-gradient(40% 44% at 10% 16%, rgba(195, 58, 20, 0.10) 0%, transparent 100%),
+    radial-gradient(34% 38% at 90% 8%, rgba(210, 166, 79, 0.14) 0%, transparent 100%),
+    radial-gradient(42% 46% at 82% 86%, rgba(118, 23, 19, 0.08) 0%, transparent 100%),
+    radial-gradient(30% 32% at 16% 90%, rgba(247, 174, 44, 0.09) 0%, transparent 100%);
+  animation: ember-drift 32s ease-in-out infinite alternate;
+}
+
+body::after {
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+}
+
+.dark body::before {
+  background:
+    radial-gradient(40% 44% at 10% 16%, rgba(195, 58, 20, 0.16) 0%, transparent 100%),
+    radial-gradient(34% 38% at 90% 8%, rgba(210, 166, 79, 0.09) 0%, transparent 100%),
+    radial-gradient(42% 46% at 82% 86%, rgba(58, 11, 12, 0.40) 0%, transparent 100%),
+    radial-gradient(30% 32% at 16% 90%, rgba(247, 174, 44, 0.07) 0%, transparent 100%);
+}
+
+.dark body::after {
+  opacity: 0.35;
+}
+
+@keyframes ember-drift {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  100% { transform: translate3d(3%, -2.5%, 0) scale(1.1); }
+}
+
+::selection {
+  background: rgba(210, 166, 79, 0.45);
+  color: var(--maroon-800);
+}
+
+.dark ::selection {
+  background: rgba(236, 112, 73, 0.38);
+  color: #FFFFFF;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--surface-sunken); }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(148, 37, 31, 0.9), rgba(58, 11, 12, 0.95));
+  border-radius: 8px;
+  border: 2px solid var(--surface-sunken);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(195, 58, 20, 0.95), rgba(118, 23, 19, 1));
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(148, 37, 31, 0.9), rgba(58, 11, 12, 0.95));
+  border-color: rgba(237, 231, 223, 0.05);
+}
+
+/* Public homepage only (.route-home is toggled on <html> by Home.jsx while
+   the homepage is mounted, and removed on unmount): hide the visible page
+   scrollbar while keeping normal document scrolling.
+   - Scoped to html/body ONLY, so admin panels, Canvas, modals, dropdowns,
+     rails and every other internal scroll container keep their scrollbars.
+   - overflow-y stays auto (never hidden/clip): wheel, trackpad, touch and
+     keyboard scrolling all keep working on the document scroller.
+   - overflow-x is intentionally untouched here. */
+.route-home,
+.route-home body {
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.route-home::-webkit-scrollbar,
+.route-home body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Products page only (.route-products is toggled on <html> by Products.jsx
+   while the catalogue is mounted, removed on unmount): hide the visible page
+   scrollbar while keeping normal document scrolling.
+   - Scoped to html/body ONLY, so admin panels, modals, dropdowns, rails and
+     every other internal scroll container keep their scrollbars.
+   - overflow-y stays auto (never hidden/clip): wheel, trackpad, touch and
+     keyboard scrolling all keep working on the document scroller.
+   - overflow-x is clipped to guarantee no horizontal scrollbar. */
+.route-products,
+.route-products body {
+  overflow-y: auto;
+  overflow-x: clip;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.route-products::-webkit-scrollbar,
+.route-products body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Focus is never removed — only restyled. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--ember-600);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+.dark button:focus-visible,
+.dark a:focus-visible,
+.dark input:focus-visible,
+.dark select:focus-visible,
+.dark textarea:focus-visible,
+.dark [tabindex]:focus-visible {
+  outline-color: var(--saffron-400);
+}
+
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  max-width: 100%;
+}
+
+/* =========================================================================
+   REDUCED MOTION — global kill-switch.
+   Motion is decoration here; every state it communicates is also
+   communicated by colour, text or position.
+   ========================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  body::before { animation: none; }
+
+  .hero-particle,
+  .firework-spark,
+  .ambient-only { display: none !important; }
+}
+
+/* =========================================================================
+   TYPOGRAPHY ROLES
+   ========================================================================= */
+
+.hero-title {
+  font-family: var(--font-display);
+  font-size: var(--font-hero);
+  line-height: 1.06;
+  letter-spacing: -0.025em;
+  font-weight: 700;
+}
+
+.display-title {
+  font-family: var(--font-display);
+  font-size: var(--font-display-xl);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: var(--font-section);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.subsection-title {
+  font-family: var(--font-display);
+  font-size: var(--font-subsection);
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+.card-title {
+  font-family: var(--font-display);
+  font-size: var(--font-card-title);
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.category-title {
+  font-family: var(--font-display);
+  font-size: var(--font-category);
+  line-height: 1.25;
+  font-weight: 600;
+}
+
+/* Product names. Layered over .card-title / .section-title, which keep the
+   size and weight and only lose the serif — so this must stay below them in
+   the file, since both are single-class selectors and specificity ties are
+   broken by source order. Catalogue names are largely set in caps with digits
+   and dashes ("12 SHOTS- ALL VARIETY 1 BOX"), and Playfair's high-contrast
+   caps are cramped and hard to scan at card sizes. --font-body is Inter, which
+   is already loaded for the rest of the UI, so this costs no extra bytes.
+   Deliberately NOT applied to category or section headings — the serif still
+   does the editorial work there. */
+.product-name {
+  font-family: var(--font-body);
+  letter-spacing: 0;
+}
+
+/* Small caps label. Used for eyebrows, table heads, meta rows. */
+.label-caps {
+  font-family: var(--font-body);
+  font-size: var(--font-micro);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Numerals that must align in tables and price columns. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Money. Prices used to be set in --font-display, but Playfair is a high-
+   contrast serif: at price sizes its ₹ grows a flared, calligraphic tail that
+   reads as decorative rather than as an amount, and its hairline strokes thin
+   out badly on a phone. --font-money is the same family the invoice PDF
+   embeds, so a price looks the same on the card, in the cart and on the
+   printed bill. Always pair with .tabular — that is what keeps a column of
+   amounts in a straight vertical channel. */
+.price {
+  font-family: var(--font-money);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: -0.01em;
+}
+
+/* =========================================================================
+   COMPONENTS
+   ========================================================================= */
+
+@layer components {
+  .brand-gradient { background: var(--grad-ember); }
+  .gold-gradient { background: var(--grad-gold); }
+  .maroon-gradient { background: var(--grad-maroon); }
+
+  /* ---- Surfaces ---- */
+
+  .glass-panel {
+    position: relative;
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--hairline);
+    box-shadow: var(--glass-toplight), var(--shadow-md);
+    border-radius: var(--r-xl);
+  }
+
+  .glass-strong {
+    position: relative;
+    background: var(--glass-fill-strong);
+    -webkit-backdrop-filter: var(--glass-blur-strong);
+    backdrop-filter: var(--glass-blur-strong);
+    border: 1px solid var(--hairline);
+    box-shadow: var(--glass-toplight), var(--shadow-lg);
+    border-radius: var(--r-xl);
+  }
+
+  /* Translucent raised surface for panels that sit on a dark hero/photo.
+     Lightweight blur, generous top-light, gentle shadow. */
+  .glass-surface {
+    position: relative;
+    background: var(--glass-fill-soft);
+    -webkit-backdrop-filter: var(--glass-blur-soft);
+    backdrop-filter: var(--glass-blur-soft);
+    border: 1px solid var(--hairline);
+    box-shadow: var(--glass-toplight-soft), var(--shadow-sm);
+    border-radius: var(--r-lg);
+  }
+
+  /* Sticky navigation bar — slightly more opaque than a card so content
+     scrolling under it stays legible, with a hairline + soft shadow for the
+     "floating on glass" lift. */
+.glass-nav {
+    position: relative;
+    background: var(--glass-fill-nav);
+    -webkit-backdrop-filter: var(--glass-blur-strong);
+    backdrop-filter: var(--glass-blur-strong);
+    border-bottom: 1px solid var(--hairline);
+    box-shadow: var(--glass-toplight-soft), var(--shadow-sm);
+  }
+
+  .card-premium {
+    background: var(--surface-card);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-sm);
+    transition:
+      box-shadow var(--dur-base) var(--ease-out-soft),
+      transform var(--dur-base) var(--ease-out-expo),
+      border-color var(--dur-base) var(--ease-out-soft),
+      background var(--dur-base) var(--ease-out-soft);
+  }
+
+  .card-premium:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-4px);
+    border-color: rgba(195, 58, 20, 0.32);
+  }
+
+  /* Editorial surface with a hairline gold rule at the top edge. */
+  .panel-editorial {
+    position: relative;
+    background: var(--surface-card);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-xl);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+
+  .panel-editorial::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background: var(--grad-gold);
+    opacity: 0.85;
+  }
+
+  /* ---- Buttons ---- */
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.75rem 1.5rem;
+    background: var(--grad-ember);
+    color: #FFFFFF;
+    border: none;
+    border-radius: var(--r-md);
+    font-family: var(--font-body);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    box-shadow: var(--shadow-ember);
+    transition:
+      transform var(--dur-fast) var(--ease-out-soft),
+      box-shadow var(--dur-fast) var(--ease-out-soft),
+      filter var(--dur-fast) var(--ease-out-soft);
+    cursor: pointer;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 38px rgba(195, 58, 20, 0.36);
+    filter: brightness(1.06);
+  }
+
+  .btn-primary:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 6px 16px rgba(195, 58, 20, 0.3);
+  }
+
+  .btn-primary:disabled {
+    background: linear-gradient(122deg, #A9A29A, #8B8377);
+    box-shadow: none;
+    cursor: not-allowed;
+    opacity: 0.85;
+  }
+
+  .btn-outline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.75rem 1.5rem;
+    background: var(--surface-card);
+    color: var(--maroon-700);
+    border: 1.5px solid var(--hairline-strong);
+    border-radius: var(--r-md);
+    font-family: var(--font-body);
+    font-weight: 600;
+    box-shadow: var(--shadow-xs);
+    transition:
+      transform var(--dur-fast) var(--ease-out-soft),
+      box-shadow var(--dur-fast) var(--ease-out-soft),
+      border-color var(--dur-fast) var(--ease-out-soft),
+      background var(--dur-fast) var(--ease-out-soft);
+    cursor: pointer;
+  }
+
+  .btn-outline:hover:not(:disabled) {
+    transform: translateY(-2px);
+    border-color: var(--ember-600);
+    background: #2E241C;
+    box-shadow: 0 10px 24px rgba(195, 58, 20, 0.14);
+  }
+
+  .btn-gold {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    background: var(--grad-gold);
+    color: var(--maroon-900);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: var(--r-md);
+    font-family: var(--font-body);
+    font-weight: 700;
+    box-shadow: var(--shadow-gold);
+    transition:
+      transform var(--dur-fast) var(--ease-out-soft),
+      box-shadow var(--dur-fast) var(--ease-out-soft);
+    cursor: pointer;
+  }
+
+  .btn-gold:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 32px rgba(190, 140, 54, 0.36);
+  }
+
+  .btn-maroon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    background: var(--grad-maroon);
+    color: #FFFFFF;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: var(--r-md);
+    font-family: var(--font-body);
+    font-weight: 600;
+    box-shadow: 0 8px 24px rgba(58, 11, 12, 0.3);
+    transition:
+      transform var(--dur-fast) var(--ease-out-soft),
+      box-shadow var(--dur-fast) var(--ease-out-soft);
+    cursor: pointer;
+  }
+
+  .btn-maroon:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 34px rgba(58, 11, 12, 0.38);
+  }
+
+  /* Quiet action — used inside dense admin tables. */
+  .btn-quiet {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 36px;
+    padding: 0.4rem 0.8rem;
+    background: var(--surface-sunken);
+    color: var(--text-body);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-sm);
+    font-size: var(--font-small);
+    font-weight: 600;
+    transition: background var(--dur-fast) var(--ease-out-soft),
+      border-color var(--dur-fast) var(--ease-out-soft),
+      color var(--dur-fast) var(--ease-out-soft);
+    cursor: pointer;
+  }
+
+  .btn-quiet:hover:not(:disabled) {
+    background: rgba(236, 112, 73, 0.14);
+    border-color: rgba(195, 58, 20, 0.35);
+    color: var(--saffron-400);
+  }
+
+  /* ---- Eyebrow ---- */
+
+  .section-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: var(--font-body);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold-600);
+  }
+
+  .section-eyebrow::before,
+  .section-eyebrow::after {
+    content: '';
+    height: 1px;
+    width: 2rem;
+    background: linear-gradient(90deg, transparent, var(--gold-400), transparent);
+  }
+
+  /* ---- Inputs ---- */
+
+  .input-premium {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.72rem 1rem;
+    background: var(--surface-card);
+    border: 1.5px solid var(--hairline-strong);
+    border-radius: var(--r-md);
+    font-family: var(--font-body);
+    color: var(--text-strong);
+    box-shadow: var(--shadow-xs);
+    transition: border-color var(--dur-fast) var(--ease-out-soft),
+      box-shadow var(--dur-fast) var(--ease-out-soft);
+  }
+
+  .input-premium::placeholder { color: var(--text-subtle); }
+
+  .input-premium:focus {
+    border-color: var(--ember-600);
+    box-shadow: 0 0 0 4px rgba(195, 58, 20, 0.14);
+    outline: none;
+  }
+
+  .input-premium[aria-invalid='true'] {
+    border-color: var(--crimson-600);
+    box-shadow: 0 0 0 4px rgba(203, 42, 42, 0.14);
+  }
+
+  /* ---- Badges ---- */
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: var(--r-pill);
+    font-size: var(--font-micro);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+
+  .badge-gold {
+    background: rgba(210, 166, 79, 0.16);
+    color: var(--gold-600);
+    border-color: rgba(210, 166, 79, 0.4);
+  }
+
+  .badge-leaf {
+    background: rgba(44, 122, 83, 0.12);
+    color: var(--leaf-600);
+    border-color: rgba(44, 122, 83, 0.3);
+  }
+
+  .badge-crimson {
+    background: rgba(203, 42, 42, 0.1);
+    color: var(--crimson-600);
+    border-color: rgba(203, 42, 42, 0.28);
+  }
+
+  .badge-ember {
+    background: rgba(195, 58, 20, 0.1);
+    color: var(--ember-600);
+    border-color: rgba(195, 58, 20, 0.28);
+  }
+
+  .badge-neutral {
+    background: var(--surface-sunken);
+    color: var(--text-muted);
+    border-color: var(--hairline);
+  }
+}
+
+/* Homepage-only: the header continues the dark hero field instead of reading
+   as a floating light card. All other routes keep the regular glass nav. */
+.home-nav {
+  background: linear-gradient(180deg, #120908 0%, #0b0606 100%);
+  border-bottom-color: rgba(255, 248, 236, 0.06);
+  box-shadow: none;
+}
+
+.home-nav::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 -18px;
+  height: 18px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(11, 6, 6, 0.7), transparent);
+}
+
+/* Cinematic hero: substantial but never fullscreen (680–760px on desktop)
+   so the next section peeks below the fold. Its own bounds contain
+   crossfades and controls, so they cannot affect page width. */
+.cinematic-hero {
+  height: clamp(620px, 78vh, 740px);
+  min-height: 620px;
+}
+
+@media (max-width: 767px) {
+  .cinematic-hero {
+    height: 660px;
+    min-height: 600px;
+  }
+}
+
+/* =========================================================================
+   UTILITIES
+   ========================================================================= */
+
+@layer utilities {
+  .text-gradient {
+    background: var(--grad-ember);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .text-gradient-gold {
+    background: var(--grad-gold);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .shadow-glow { box-shadow: 0 0 30px rgba(210, 166, 79, 0.28); }
+
+  .glass {
+    background: var(--glass-fill-soft);
+    -webkit-backdrop-filter: var(--glass-blur-soft);
+    backdrop-filter: var(--glass-blur-soft);
+    border: 1px solid var(--hairline);
+  }
+
+  .glass-strong-util {
+    background: var(--glass-fill-strong);
+    -webkit-backdrop-filter: var(--glass-blur-strong);
+    backdrop-filter: var(--glass-blur-strong);
+    border: 1px solid var(--hairline);
+    box-shadow: var(--glass-toplight), var(--shadow-md);
+  }
+
+  .glass-card {
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--hairline);
+    box-shadow: var(--glass-toplight-soft), var(--shadow-sm);
+  }
+
+  .text-balance { text-wrap: balance; }
+  .text-pretty { text-wrap: pretty; }
+
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Section rhythm */
+  .section-pad {
+    padding-top: var(--space-section);
+    padding-bottom: var(--space-section);
+  }
+
+  .section-pad-sm {
+    padding-top: var(--space-block);
+    padding-bottom: var(--space-block);
+  }
+
+  /* Page shell — one consistent fluid container width everywhere.
+     Content fills ~90–92vw on large screens and scales with the viewport
+     instead of stopping at a narrow fixed 1280px cap. A generous 1800px
+     ceiling is kept only for readability on very wide monitors. */
+  .shell {
+    width: min(92vw, 1800px);
+    max-width: 100%;
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+    box-sizing: border-box;
+  }
+
+  /* Narrow pages (forms, account, single-column checkouts) share the same
+     fluid system but cap lower so forms stay comfortably readable and
+     centred. Still scales with the viewport rather than a rigid 896px box. */
+  .shell-narrow {
+    width: min(92vw, 1000px);
+    max-width: 100%;
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+    box-sizing: border-box;
+  }
+
+  /* Homepage shell — the same fluid width system as .shell, with slightly
+     more generous side padding so hero/feature sections breathe. */
+  .shell-wide {
+    width: min(92vw, 1800px);
+    max-width: 100%;
+    margin-inline: auto;
+    padding-inline: clamp(1.25rem, 4vw, 2.5rem);
+    box-sizing: border-box;
+  }
+
+  /* Horizontal scrollers must never leak past the shell. The native scrollbar
+     is hidden and vertical overflow is contained (no inner vertical
+     scrollbar); the rail scrolls horizontally via the arrow buttons, drag,
+     touch swipe and wheel. overflow-x MUST stay auto — clip would freeze
+     scrollLeft and silently break every rail control. */
+  .rail {
+    /* The gap used by the flex track. Cards are sized against this exact
+       value so N cards + (N-1) gaps always equal the viewport width —
+       the last complete card is never cut off by a gap/width mismatch. */
+    --rail-gap: clamp(1rem, 0.8rem + 0.6vw, 1.5rem);
+    display: flex;
+    gap: var(--rail-gap);
+    /* This element is the carousel viewport AND a real scroll container:
+       it contains the wider track so the page itself never scrolls. */
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.5rem;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scroll-snap-type: x proximity;
+    touch-action: pan-x pan-y;
+    cursor: grab;
+  }
+
+  .rail::-webkit-scrollbar { display: none; }
+
+  .rail.is-dragging { cursor: grabbing; user-select: none; }
+
+  /* Every card is a complete, independent element that snaps to the
+     viewport so a full card lands in view after arrow/drag navigation. */
+  .rail > * { flex: 0 0 auto; scroll-snap-align: start; }
+
+  /* Product card sizing inside a rail: 2 finely-tuned cards on phones
+     (intentional partial card on mobile only), 3 on small tablets,
+     4 on tablets, 5 on desktop, 6 on large screens. Widths are computed
+     against the viewport itself (100% = the overflow-hidden rail/container)
+     using the shared --rail-gap, so the row fits exactly and the final
+     visible card is always complete. */
+  .rail-card {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    /* Mobile (<640px): ~1.2 cards visible, the next card peeks in as an
+       intentional partial preview that is clipped by the viewport only. */
+    width: calc(84% - var(--rail-gap));
+  }
+
+  @media (min-width: 640px) {
+    .rail-card { width: calc((100% - var(--rail-gap) * 2) / 3); }
+  }
+
+  @media (min-width: 1024px) {
+    .rail-card { width: calc((100% - var(--rail-gap) * 3) / 4); }
+  }
+
+  @media (min-width: 1280px) {
+    .rail-card { width: calc((100% - var(--rail-gap) * 4) / 5); }
+  }
+
+  @media (min-width: 1600px) {
+    .rail-card { width: calc((100% - var(--rail-gap) * 5) / 6); }
+  }
+
+  /* Anything with runaway width (tables, wide charts) lives in one of these. */
+  .scroll-x {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .gradient-mesh {
+    background:
+      radial-gradient(at 24% 34%, rgba(195, 58, 20, 0.16) 0px, transparent 52%),
+      radial-gradient(at 92% 18%, rgba(210, 166, 79, 0.18) 0px, transparent 50%),
+      radial-gradient(at 54% 96%, rgba(118, 23, 19, 0.14) 0px, transparent 50%),
+      radial-gradient(at 12% 86%, rgba(247, 174, 44, 0.12) 0px, transparent 48%);
+  }
+
+  .dark .gradient-mesh {
+    background:
+      radial-gradient(at 24% 34%, rgba(195, 58, 20, 0.18) 0px, transparent 52%),
+      radial-gradient(at 92% 18%, rgba(210, 166, 79, 0.10) 0px, transparent 50%),
+      radial-gradient(at 54% 96%, rgba(58, 11, 12, 0.42) 0px, transparent 52%),
+      radial-gradient(at 12% 86%, rgba(247, 174, 44, 0.08) 0px, transparent 48%);
+  }
+}
+
+/* =========================================================================
+   ORNAMENT — restrained Indian motifs. Never more than one per section.
+   ========================================================================= */
+
+/* Rangoli lattice. Sits behind content at low opacity. */
+.bg-festive {
+  background-color: var(--surface-raised);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cg fill='none' stroke='%23BE8C36' stroke-opacity='0.16' stroke-width='1'%3E%3Ccircle cx='80' cy='80' r='26'/%3E%3Ccircle cx='80' cy='80' r='13'/%3E%3Cpath d='M80 34 L88 66 L120 74 L88 82 L80 114 L72 82 L40 74 L72 66 Z'/%3E%3Cpath d='M0 80 H26 M134 80 H160 M80 0 V26 M80 134 V160'/%3E%3Ccircle cx='0' cy='0' r='8'/%3E%3Ccircle cx='160' cy='0' r='8'/%3E%3Ccircle cx='0' cy='160' r='8'/%3E%3Ccircle cx='160' cy='160' r='8'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+
+.dark .bg-festive {
+  background-color: var(--surface-sunken);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cg fill='none' stroke='%23D2A64F' stroke-opacity='0.09' stroke-width='1'%3E%3Ccircle cx='80' cy='80' r='26'/%3E%3Ccircle cx='80' cy='80' r='13'/%3E%3Cpath d='M80 34 L88 66 L120 74 L88 82 L80 114 L72 82 L40 74 L72 66 Z'/%3E%3Cpath d='M0 80 H26 M134 80 H160 M80 0 V26 M80 134 V160'/%3E%3Ccircle cx='0' cy='0' r='8'/%3E%3Ccircle cx='160' cy='0' r='8'/%3E%3Ccircle cx='160' cy='160' r='8'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Thin gold ornamental divider. */
+.rule-gold {
+  height: 1px;
+  border: 0;
+  background: linear-gradient(90deg, transparent, var(--gold-400), transparent);
+  opacity: 0.6;
+}
+
+/* =========================================================================
+   MOTION KEYFRAMES
+   ========================================================================= */
+
+@keyframes float-y {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -12px, 0); }
+}
+
+@keyframes float-y-soft {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  50% { transform: translate3d(0, -7px, 0) rotate(2deg); }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes flicker {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  40% { opacity: 0.72; transform: scale(0.9); }
+  60% { opacity: 0.95; transform: scale(1.05); }
+}
+
+@keyframes burst-glow {
+  0% { transform: scale(0.3); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+@keyframes particle-rise {
+  0% { transform: translate3d(0, 0, 0) scale(0.6); opacity: 0; }
+  15% { opacity: 0.85; }
+  100% { transform: translate3d(0, -130px, 0) scale(1.1); opacity: 0; }
+}
+
+@keyframes heart-pop {
+  0% { transform: scale(0.6); }
+  45% { transform: scale(1.32); }
+  100% { transform: scale(1); }
+}
+
+@keyframes shine-sweep {
+  0% { transform: translateX(-130%) skewX(-18deg); }
+  100% { transform: translateX(230%) skewX(-18deg); }
+}
+
+@keyframes bounce-arrow {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(4px); }
+}
+
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -160% 0; }
+  100% { background-position: 260% 0; }
+}
+
+/* Scrolling announcement bar. The track is two copies of the message
+   sequence; -50% translation loops it seamlessly. Hover pauses the scroll. */
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.marquee-viewport {
+  mask-image: linear-gradient(90deg, transparent 0%, #000 3%, #000 97%, transparent 100%);
+}
+
+.marquee-track {
+  animation: marquee-scroll 30s linear infinite;
+  will-change: transform;
+}
+
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+/* =========================================================================
+   HERO — ASYMMETRIC SHOWCASE
+   The premium 1-large + 2-small storefront layout. Everything below is a
+   token-first building block; the section owns its dark field.
+   ========================================================================= */
+
+/* Carousel / card titles tuned for the compact banner boxes. */
+.hero-carousel-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 1.35rem + 2.6vw, 2.6rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.hero-card-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.125rem, 0.95rem + 1.4vw, 1.625rem);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  font-weight: 700;
+}
+
+/* Configurable label on banners and cards. */
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 0.4rem;
+  border-radius: var(--r-pill);
+  padding: 0.35rem 0.8rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #F7AE2C;
+  border: 1px solid rgba(210, 166, 79, 0.5);
+  background: rgba(26, 23, 20, 0.4);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+}
+
+/* Small-card legibility scrim — text sits on the dark lower third. */
+.hero-card-scrim {
+  background: linear-gradient(
+    180deg,
+    rgba(10, 7, 7, 0.05) 34%,
+    rgba(10, 7, 7, 0.52) 60%,
+    rgba(10, 7, 7, 0.84) 100%
+  );
+}
+
+/* Auto-advance progress fill on the active carousel dot. */
+@keyframes hero-progress {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+.hero-progress-fill {
+  animation-name: hero-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+
+/* Hide horizontal scrollbars on swipe/reel surfaces. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.animate-float { animation: float-y 6s var(--ease-out-soft) infinite; }
+.animate-float-soft { animation: float-y-soft 5s var(--ease-out-soft) infinite; }
+.animate-spin-slow { animation: spin-slow 18s linear infinite; }
+.animate-flicker { animation: flicker 2.4s var(--ease-out-soft) infinite; }
+.animate-bounce-arrow { animation: bounce-arrow 1.4s var(--ease-out-soft) infinite; }
+.animate-gradient-shift {
+  background-size: 200% 200%;
+  animation: gradient-shift 9s ease infinite;
+}
+
+/* Expanding ring behind the live-visitor dot. Sized in em so it follows the
+   dot's font-size, and left to the global reduced-motion rule to stop. */
+@keyframes live-ping {
+  0%   { transform: scale(1);   opacity: 0.55; }
+  70%  { transform: scale(2.6); opacity: 0; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+.live-dot {
+  position: relative;
+  display: inline-block;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: var(--r-pill);
+  background: var(--delta-up);
+}
+
+.live-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  animation: live-ping 1.8s var(--ease-out-soft) infinite;
+}
+
+/* =========================================================================
+   NAV
+   ========================================================================= */
+
+.nav-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.5rem 0.25rem;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: color var(--dur-fast) var(--ease-out-soft);
+}
+
+.nav-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 2px;
+  height: 2px;
+  width: 100%;
+  border-radius: var(--r-pill);
+  background: var(--grad-gold);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur-base) var(--ease-out-expo);
+}
+
+.nav-link:hover { color: var(--text-strong); }
+.nav-link:hover::after { transform: scaleX(1); }
+.nav-link.active { color: var(--maroon-700); }
+.nav-link.active::after { transform: scaleX(1); }
+
+.dark .nav-link { color: var(--text-muted); }
+.dark .nav-link:hover { color: var(--text-strong); }
+.dark .nav-link.active { color: var(--saffron-400); }
+
+/* =========================================================================
+   PRODUCT + CATEGORY
+   ========================================================================= */
+
+.category-card {
+  position: relative;
+  border-radius: var(--r-xl);
+  background: var(--surface-card);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform var(--dur-base) var(--ease-out-expo),
+    box-shadow var(--dur-base) var(--ease-out-soft),
+    border-color var(--dur-base) var(--ease-out-soft),
+    background var(--dur-base) var(--ease-out-soft);
+}
+
+/* Glassy category tile — translucent fill + blur so the page's warm glow
+   shows through the card instead of sitting behind an opaque panel. */
+.category-card.is-glass {
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: var(--glass-blur-soft);
+  backdrop-filter: var(--glass-blur-soft);
+  box-shadow: var(--glass-toplight-soft), var(--shadow-sm);
+}
+
+.category-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(195, 58, 20, 0.5), rgba(210, 166, 79, 0.45), rgba(118, 23, 19, 0.4));
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out-soft);
+  z-index: 0;
+  filter: blur(10px);
+}
+
+.category-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 22px 48px rgba(118, 23, 19, 0.2);
+  border-color: rgba(195, 58, 20, 0.4);
+}
+
+.category-card:hover::before { opacity: 0.7; }
+.category-card > * { position: relative; z-index: 1; }
+
+.product-img-panel {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(165deg, #251E1A 0%, #2E241C 100%);
+}
+
+/* Glassy image panel — translucent warm fill + soft top-light; the product
+   image sits above it so the panel reads as a lit glass inset. */
+.product-img-panel.glass-img {
+  background: var(--glass-fill);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.category-icon-wrap {
+  display: block;
+  will-change: transform;
+  transition: transform 300ms var(--ease-out-expo);
+}
+
+.category-card:hover .category-icon-wrap {
+  transform: scale(1.05);
+}
+
+/* Category grid: 2-col mobile, 3-col desktop, final row centered */
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .category-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+}
+
+/* Overflow row: 2-col grid on mobile, centered flex row on desktop */
+.category-grid-overflow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .category-grid-overflow {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+  .category-grid-overflow-cell {
+    flex: 0 0 calc((100% - 2 * 1rem) / 3);
+  }
+}
+
+.category-icon-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: radial-gradient(
+    closest-side,
+    rgba(210, 166, 79, 0.25),
+    rgba(210, 166, 79, 0.09) 55%,
+    transparent 75%
+  );
+}
+
+.dark .product-img-panel {
+  background: linear-gradient(165deg, #251E1A 0%, #2E241C 100%);
+}
+
+.dark .product-img-panel.glass-img {
+  background: var(--glass-fill);
+  box-shadow: inset 0 1px 0 rgba(237, 231, 223, 0.08);
+}
+
+/* Discount ribbon. */
+.ribbon {
+  position: absolute;
+  top: 14px;
+  right: -34px;
+  transform: rotate(45deg);
+  transform-origin: center;
+  z-index: 10;
+  background: var(--grad-maroon);
+  color: #FFFFFF;
+  font-family: var(--font-body);
+  font-size: var(--font-micro);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 5px 40px;
+  box-shadow: 0 4px 12px rgba(58, 11, 12, 0.4);
+}
+
+/* Compact rail variant — sits flush to the smaller image panel corner. */
+.ribbon-sm {
+  top: 6px;
+  right: -22px;
+  font-size: 9px;
+  padding: 3px 28px;
+}
+
+.wishlist-btn { transition: transform var(--dur-fast) var(--ease-out-soft), background var(--dur-fast) var(--ease-out-soft); }
+.wishlist-btn:active { transform: scale(0.85); }
+.wishlist-btn .heart-pop { animation: heart-pop 0.35s var(--ease-spring); }
+
+/* CTA shine sweep — one per view, on the primary action only. */
+.btn-shine { position: relative; overflow: hidden; }
+
+.btn-shine::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.32), transparent);
+  transform: translateX(-130%) skewX(-18deg);
+  pointer-events: none;
+}
+
+.btn-shine:hover::before { animation: shine-sweep 0.8s var(--ease-out-soft); }
+
+.shine { position: relative; overflow: hidden; }
+
+.shine::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.28) 50%, rgba(255, 255, 255, 0) 100%);
+  transform: rotate(45deg);
+  animation: shine-sweep 3s infinite;
+  pointer-events: none;
+}
+
+.liquid-border { position: relative; overflow: hidden; }
+
+.liquid-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(45deg, var(--ember-600), var(--gold-400), var(--ember-600));
+  background-size: 200% 200%;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: gradient-shift 3s linear infinite;
+  pointer-events: none;
+}
+
+/* =========================================================================
+   SKELETONS + EMPTY STATES
+   ========================================================================= */
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-sunken);
+  border-radius: var(--r-md);
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s var(--ease-out-soft) infinite;
+}
+
+.dark .skeleton::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(237, 231, 223, 0.08) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+}
+
+/* =========================================================================
+   MISC COMPONENT CLASSES CARRIED OVER
+   ========================================================================= */
+
+.sticky-cart-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  transform: translateY(110%);
+  transition: transform var(--dur-slow) var(--ease-out-expo);
+}
+
+.sticky-cart-bar.visible { transform: translateY(0); }
+
+.search-expand input {
+  transition: box-shadow var(--dur-base) var(--ease-out-soft),
+    border-color var(--dur-base) var(--ease-out-soft),
+    background var(--dur-base) var(--ease-out-soft);
+}
+
+.search-expand input:focus {
+  border-color: var(--ember-600);
+  box-shadow: 0 0 0 4px rgba(195, 58, 20, 0.13), var(--shadow-md);
+  background: var(--surface-card);
+}
+
+.hero-particle {
+  position: absolute;
+  border-radius: var(--r-pill);
+  pointer-events: none;
+  animation: particle-rise 6s linear infinite;
+  will-change: transform, opacity;
+}
+
+.firework-spark {
+  position: absolute;
+  border-radius: var(--r-pill);
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.diya { display: inline-block; }
+
+.arrow-btn {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--r-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-card);
+  border: 1px solid var(--hairline-strong);
+  color: var(--text-muted);
+  box-shadow: var(--shadow-xs);
+  transition: color var(--dur-fast) var(--ease-out-soft),
+    border-color var(--dur-fast) var(--ease-out-soft),
+    background var(--dur-fast) var(--ease-out-soft),
+    transform var(--dur-fast) var(--ease-out-soft);
+  cursor: pointer;
+}
+
+.arrow-btn:hover {
+  color: var(--ember-600);
+  border-color: var(--ember-600);
+  background: #2E241C;
+  transform: scale(1.06);
+}
+
+.arrow-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* =========================================================================
+   GLASS COMPONENT EXTENSIONS
+   ========================================================================= */
+
+/* Modal / dialog surface — strong glass so the underlying page stays faintly
+   visible through the scrim, with a crisp top-light edge. */
+.modal-glass {
+  background: var(--glass-fill-strong);
+  -webkit-backdrop-filter: var(--glass-blur-strong);
+  backdrop-filter: var(--glass-blur-strong);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--glass-toplight), var(--shadow-xl);
+}
+
+/* Filter pill / chip — translucent so it sits on the page like frosted glass. */
+.glass-chip {
+  background: var(--glass-fill-soft);
+  -webkit-backdrop-filter: var(--glass-blur-soft);
+  backdrop-filter: var(--glass-blur-soft);
+  border: 1px solid var(--hairline);
+  color: var(--text-body);
+  transition:
+    border-color var(--dur-fast) var(--ease-out-soft),
+    background var(--dur-fast) var(--ease-out-soft),
+    color var(--dur-fast) var(--ease-out-soft),
+    transform var(--dur-fast) var(--ease-out-soft),
+    box-shadow var(--dur-fast) var(--ease-out-soft);
+}
+
+.glass-chip:hover {
+  border-color: rgba(195, 58, 20, 0.4);
+  color: var(--text-strong);
+  transform: translateY(-1px);
+}
+
+.glass-chip.is-active {
+  background: var(--grad-ember);
+  border-color: transparent;
+  color: #FFFFFF;
+  box-shadow: var(--shadow-ember);
+}
+
+/* Glass table — translucent header band + hairline rows for the price list. */
+.glass-table { background: var(--glass-fill-soft); }
+.glass-table thead th { background: var(--glass-fill); }
+
+/* Glass input — frosted field that still reads as an editable surface. */
+.input-premium.is-glass {
+  background: var(--glass-fill-soft);
+  -webkit-backdrop-filter: var(--glass-blur-soft);
+  backdrop-filter: var(--glass-blur-soft);
+  border-color: var(--hairline-strong);
+}
+
+/* Docked action bar (sticky add-to-cart) — floating glass with a strong
+   top-light so it lifts off the page instead of sitting flat. */
+.sticky-cart-bar.is-glass {
+  background: var(--glass-fill-nav);
+  -webkit-backdrop-filter: var(--glass-blur-strong);
+  backdrop-filter: var(--glass-blur-strong);
+  border-top: 1px solid var(--hairline);
+  box-shadow: var(--glass-toplight-soft), 0 -8px 28px rgba(58, 11, 12, 0.12);
+}
+
+.react-hot-toast { animation-duration: 0.15s !important; }
+
+.editor-tab-inactive {
+  background: var(--surface-card);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--shadow-xs);
+  color: var(--text-muted);
+}
+
+.admin-btn-orange { color: var(--maroon); }
+
+/* =========================================================================
+   DARK MODE COMPATIBILITY LAYER
+   Pages still written against raw Tailwind greys resolve through here.
+   New work should use the semantic tokens above instead.
+   ========================================================================= */
+
+.dark body { color: var(--text-body); }
+
+/* Glass surfaces keep their translucency in dark mode — the token fills are
+   already dark-tinted, so we only defend the hairline + shadow. */
+.dark .glass-panel,
+.dark .glass-strong,
+.dark .glass-surface,
+.dark .glass-nav,
+.dark .glass-card {
+  background: var(--glass-fill);
+  border-color: var(--hairline);
+  box-shadow: var(--glass-toplight), 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.dark .glass-strong,
+.dark .glass-strong-util,
+.dark .glass-nav { background: var(--glass-fill-strong); }
+.dark .glass-surface { background: var(--glass-fill-soft); }
+.dark .glass-nav { background: var(--glass-fill-nav); }
+
+.dark .card-premium,
+.dark .panel-editorial,
+.dark .category-card {
+  background: var(--surface-card);
+  border-color: var(--hairline);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.dark .card-premium:hover {
+  border-color: rgba(236, 112, 73, 0.45);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.62);
+}
+
+/* When a card carries both `card-premium` and `glass-card`, the glass fill
+   wins so the frosted surface survives dark mode. */
+.dark .card-premium.glass-card,
+.dark .panel-editorial.glass-card {
+  background: var(--glass-fill);
+  box-shadow: var(--glass-toplight), 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.dark .category-card.is-glass { background: var(--glass-fill); box-shadow: var(--glass-toplight-soft), 0 8px 32px rgba(0, 0, 0, 0.5); }
+
+.dark .glass { background: var(--glass-fill-soft); border-color: var(--hairline); }
+.dark .glass-strong-util { background: var(--glass-fill-strong); border-color: var(--hairline); }
+
+.dark .modal-glass { background: var(--glass-fill-strong); border-color: var(--hairline); }
+.dark .glass-chip { background: var(--glass-fill-soft); border-color: var(--hairline); }
+.dark .glass-chip:hover { border-color: rgba(247, 174, 44, 0.5); }
+.dark .glass-table { background: var(--glass-fill-soft); }
+.dark .glass-table thead th { background: var(--glass-fill); }
+.dark .input-premium.is-glass { background: var(--glass-fill-soft); border-color: var(--hairline-strong); }
+.dark .sticky-cart-bar.is-glass { background: var(--glass-fill-nav); border-color: var(--hairline); }
+
+.dark .input-premium {
+  background: rgba(237, 231, 223, 0.05);
+  border-color: var(--hairline-strong);
+  color: var(--text-strong);
+}
+
+.dark .input-premium:focus {
+  border-color: var(--saffron-400);
+  box-shadow: 0 0 0 4px rgba(247, 174, 44, 0.18);
+}
+
+.dark .section-eyebrow { color: var(--gold-400); }
+.dark .btn-outline {
+  background: var(--surface-raised);
+  color: var(--saffron-400);
+  border-color: rgba(247, 174, 44, 0.4);
+}
+.dark .btn-outline:hover { border-color: var(--saffron-400); background: #2E241C; }
+.dark .btn-gold { color: var(--maroon-900); }
+.dark .btn-quiet { background: rgba(237, 231, 223, 0.06); }
+.dark .btn-quiet:hover { background: rgba(236, 112, 73, 0.14); color: var(--saffron-400); }
+.dark .arrow-btn { background: var(--surface-raised); border-color: var(--hairline-strong); }
+.dark .arrow-btn:hover { background: #2E241C; color: var(--saffron-400); border-color: var(--saffron-400); }
+.dark .editor-tab-inactive { background: var(--surface-raised); border-color: var(--hairline); color: var(--text-muted); }
+.dark .admin-btn-orange { color: var(--maroon-900); }
+.dark .skeleton { background: rgba(237, 231, 223, 0.05); }
+
+.dark .text-gray-900,
+.dark .text-gray-800 { color: var(--text-strong); }
+.dark .text-gray-700,
+.dark .text-gray-600 { color: var(--text-body); }
+.dark .text-gray-500,
+.dark .text-gray-400,
+.dark .text-gray-300 { color: var(--text-muted); }
+.dark .text-gray-200 { color: var(--text-subtle); }
+.dark .text-white { color: var(--text-strong); }
+
+.dark .bg-white { background: var(--surface-card); }
+.dark .bg-gray-50 { background: var(--surface-sunken); }
+.dark .bg-gray-100 { background: rgba(237, 231, 223, 0.06); }
+.dark .bg-gray-200 { background: rgba(237, 231, 223, 0.1); }
+.dark .bg-gray-300 { background: rgba(237, 231, 223, 0.14); }
+
+.dark .border-gray-100 { border-color: rgba(237, 231, 223, 0.08); }
+.dark .border-gray-200 { border-color: var(--hairline); }
+.dark .border-gray-300 { border-color: var(--hairline-strong); }
+
+.dark .hover\:bg-gray-50:hover { background: rgba(237, 231, 223, 0.06); }
+.dark .hover\:bg-gray-100:hover { background: rgba(237, 231, 223, 0.1); }
+.dark .hover\:bg-accent-50:hover { background: rgba(210, 166, 79, 0.12); }
+.dark .hover\:bg-purple-50:hover { background: rgba(195, 58, 20, 0.12); }
+.dark .hover\:bg-red-50:hover { background: rgba(203, 42, 42, 0.14); }
+
+.dark .bg-primary-50 { background: rgba(195, 58, 20, 0.12); }
+.dark .bg-primary-100 { background: rgba(195, 58, 20, 0.18); }
+.dark .bg-accent-50 { background: rgba(210, 166, 79, 0.12); }
+.dark .bg-purple-50 { background: rgba(195, 58, 20, 0.1); }
+.dark .bg-purple-100 { background: rgba(195, 58, 20, 0.16); }
+.dark .bg-red-50 { background: rgba(203, 42, 42, 0.12); }
+.dark .bg-orange-100 { background: rgba(236, 112, 73, 0.16); }
+.dark .bg-blue-100 { background: rgba(96, 165, 250, 0.16); }
+.dark .bg-teal-100 { background: rgba(45, 212, 191, 0.16); }
+.dark .bg-amber-100 { background: rgba(210, 166, 79, 0.18); }
+.dark .bg-green-100 { background: rgba(62, 154, 107, 0.18); }
+.dark .bg-red-100 { background: rgba(203, 42, 42, 0.16); }
+.dark .bg-yellow-100 { background: rgba(247, 174, 44, 0.16); }
+.dark .bg-emerald-100 { background: rgba(62, 154, 107, 0.16); }
+.dark .bg-indigo-100 { background: rgba(129, 140, 248, 0.16); }
+
+.dark .text-primary-600 { color: var(--ember-400); }
+.dark .text-primary-700,
+.dark .text-primary-800 { color: #F59C7C; }
+.dark .text-primary-900 { color: var(--text-strong); }
+.dark .text-accent-600,
+.dark .text-accent-700 { color: var(--gold-400); }
+.dark .text-accent-800 { color: #E2C177; }
+.dark .text-purple-900 { color: var(--text-strong); }
+.dark .text-purple-800,
+.dark .text-purple-700 { color: #F59C7C; }
+.dark .text-purple-600 { color: var(--ember-400); }
+.dark .text-purple-200,
+.dark .text-purple-100 { color: #FCC4AF; }
+.dark .text-orange-800 { color: #F59C7C; }
+.dark .text-blue-800 { color: #93C5FD; }
+.dark .text-teal-800 { color: #5EEAD4; }
+.dark .text-amber-800 { color: var(--gold-400); }
+.dark .text-green-800,
+.dark .text-green-600 { color: #8CC7A8; }
+.dark .text-red-600 { color: #EF7373; }
+.dark .text-red-800 { color: #F7A6A6; }
+.dark .text-yellow-800,
+.dark .text-yellow-500 { color: var(--saffron-400); }
+.dark .text-emerald-800 { color: #8CC7A8; }
+.dark .text-indigo-800 { color: #A5B4FC; }
+.dark .text-blue-600 { color: #60A5FA; }
+
+.dark .bg-purple-600,
+.dark .bg-primary-600 { background: var(--ember-600); }
+.dark .bg-purple-700 { background: var(--maroon-600); }
+.dark .bg-purple-800 { background: var(--maroon-800); }
+.dark .hover\:bg-purple-700:hover { background: var(--maroon-600); }
+.dark .hover\:bg-purple-100:hover { background: rgba(195, 58, 20, 0.18); }
+.dark .hover\:bg-purple-600:hover { background: var(--maroon-600); }
+.dark .hover\:from-purple-600:hover { --tw-gradient-from: var(--maroon-600); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .hover\:to-purple-700:hover { --tw-gradient-to: var(--maroon-600); }
+.dark .hover\:from-purple-700:hover { --tw-gradient-from: var(--maroon-600); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .hover\:to-purple-800:hover { --tw-gradient-to: var(--maroon-800); }
+
+.dark .from-purple-600 { --tw-gradient-from: var(--ember-600); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .from-purple-700 { --tw-gradient-from: var(--maroon-600); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .to-purple-700 { --tw-gradient-to: var(--maroon-600); }
+.dark .to-purple-800 { --tw-gradient-to: var(--maroon-800); }
+.dark .from-primary-600 { --tw-gradient-from: var(--ember-600); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .via-primary-700 { --tw-gradient-via: var(--maroon-600); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to); }
+
+.dark .border-purple-300 { border-color: rgba(195, 58, 20, 0.4); }
+.dark .border-purple-500 { border-color: var(--ember-600); }
+.dark .ribbon { color: #FFFFFF; }
+.dark .btn-shine { color: inherit; }
+
+/* =========================================================================
+   CATALOGUE PAGE — compact single-search, one-line pills, toolbar
+
+   The pills row has two modes, split at the width where all 12 category
+   names actually fit on one line:
+
+     < 1360px  (phones, tablets, small desktops): a CONTAINED horizontal
+                scroller. Genuinely scrollable (nothing is clipped or
+                unreachable) and the page itself never moves.
+     ≥ 1360px  (desktop): one line, no scrollbar, no second row, all 12
+                pills visible. The row is measured, not guessed: trims of
+                padding/icon size are bought back as readable text, so the
+                most compact desktop (1366px) still gets 10.75px labels.
+
+   The page's own shell is a touch wider than the default 92vw (.shell)
+   because the 12 names are a fixed amount of text: at 92vw, the compact
+   sizes that fit have no room to spare, at 95vw they do. The header,
+   search bar and grid sit on the same inner edge.
+   ========================================================================= */
+
+/* ---- Products page shell: 95vw so the pill line fits with headroom ---- */
+.shell.products-page {
+  width: min(95vw, 1800px);
+  padding-inline: clamp(0.75rem, 1.5vw, 2rem);
+}
+
+/* ---- Category pills: shared-container row -----------------------------
+   The row is a plain flex child of .shell.products-page, so its left and
+   right edges are the shell's content edges — the exact same boundaries
+   used by the header, toolbar and product grid. No negative margins, no
+   full-bleed offsets. Below 85em the row scrolls internally (scrollbar
+   hidden, page never scrolls); at ≥85em the desktop rule turns scrolling
+   off entirely so all 12 pills sit on one line. */
+.catalogue-pills {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--pill-row-gap, 0.25rem);
+  padding: 0.25rem 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.catalogue-pills::-webkit-scrollbar { display: none; }
+
+/* ---- Category pills: base sizing --------------------------------------
+   Comfortable, readable size. Phones and tablets scroll the row, so there
+   is nothing to be gained by shrinking the labels here — only the ≥85em
+   one-line band below needs fluid sizing, and it declares its own. */
+.catalogue-pill {
+  --pill-icon: 0.875rem;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  height: 38px;
+  min-height: 38px;
+  max-height: 38px;
+  gap: 0.3125rem;
+  line-height: 1;
+}
+
+.catalogue-pill-icon {
+  position: relative;
+  width: var(--pill-icon);
+  height: var(--pill-icon);
+  flex: 0 0 var(--pill-icon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.catalogue-pill-icon > span,
+.catalogue-pill-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+
+/* ---- Desktop: compact, centred, fully-contained pill navigation ----
+   Applies at >=64em (1024px) only — phones and tablets keep the base
+   left-aligned contained scroller untouched below.
+
+   The row stays a plain flex child of .shell.products-page (same content
+   boundaries as the toolbar and grid) and centres its pill group with
+   `safe center`, so there is balanced breathing room on both sides.
+   Sizing is compact and fluid (34–36px pills, ~10–12px labels) so all 12
+   categories fit on ONE row with every pill fully visible: no wrapping,
+   no desktop scrolling (overflow-x is clip purely as a backstop so the
+   row can never cause page-level horizontal overflow), no transforms,
+   no negative margins, no offsets. */
+@media (min-width: 64em) {
+  .catalogue-pills {
+    width: 100%;
+    justify-content: center;
+    justify-content: safe center;
+    gap: clamp(0.25rem, 0.196rem + 0.18vw, 0.375rem);
+    overflow-x: clip;
+  }
+  .catalogue-pill {
+    --pill-icon: clamp(0.6875rem, 0.505rem + 0.256vw, 0.8125rem);
+    flex: 0 1 auto;
+    font-size: clamp(0.625rem, 0.4425rem + 0.256vw, 0.75rem);
+    padding-left: clamp(0.25rem, -0.237rem + 0.718vw, 0.625rem);
+    padding-right: clamp(0.25rem, -0.237rem + 0.718vw, 0.625rem);
+    gap: 0.3125rem;
+    height: clamp(2.125rem, 1.9425rem + 0.256vw, 2.25rem);
+    min-height: clamp(2.125rem, 1.9425rem + 0.256vw, 2.25rem);
+    max-height: clamp(2.125rem, 1.9425rem + 0.256vw, 2.25rem);
+  }
+}
+
+/* ---- Narrow desktop (1024–1139px): balanced two-row wrap -------------
+   Measured reality: 12 readable pills need ~1140px for one row, but only
+   ~940–1050px exist here — one row would force ~8px text or hidden pills.
+   So in this sliver only, pills wrap into centred rows instead: everything
+   stays fully visible, readable and centred, with no scrolling, no page
+   overflow and no clipping. At >=1140px the single-row rule above applies.
+   Phones/tablets (<1024px) keep their existing scroller, unchanged. */
+@media (min-width: 64em) and (max-width: 71.1875em) {
+  .catalogue-pills {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 0.5rem;
+    overflow-x: visible;
+  }
+}
+
+/* ---- Search ---------------------------------------------------------- */
+.catalogue-search {
+  display: flex;
+  justify-content: center;
+}
+
+.catalogue-search-field {
+  position: relative;
+  width: min(100%, 34rem);
+  display: flex;
+  align-items: center;
+}
+
+.catalogue-search-icon {
+  position: absolute;
+  left: 0.875rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  width: 1rem;
+  height: 1rem;
+  color: var(--text-subtle);
+}
+
+.catalogue-search-field input {
+  width: 100%;
+  min-height: 2.75rem;
+  background: var(--surface-card);
+  border: 1.5px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  padding: 0.6rem 2.75rem 0.6rem 2.5rem;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  color: var(--text-strong);
+  box-shadow: var(--shadow-xs);
+  transition: border-color var(--dur-fast) var(--ease-out-soft),
+    box-shadow var(--dur-fast) var(--ease-out-soft);
+}
+
+.catalogue-search-field input::placeholder { color: var(--text-subtle); }
+
+.catalogue-search-field input:focus {
+  outline: none;
+  border-color: var(--ember-500);
+  box-shadow: var(--shadow-xs), 0 0 0 3px rgba(223, 76, 33, 0.12);
+}
+
+.dark .catalogue-search-field input {
+  background: rgba(237, 231, 223, 0.05);
+  border-color: var(--hairline-strong);
+  color: var(--text-strong);
+}
+
+.dark .catalogue-search-field input:focus {
+  border-color: var(--saffron-400);
+  box-shadow: 0 0 0 4px rgba(247, 174, 44, 0.18);
+}
+
+.catalogue-search-clear {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.catalogue-search-clear:hover {
+  background: var(--surface-raised);
+  color: var(--text-strong);
+}
+
+/* ---- Toolbar: count + sort + view toggle ------------------------------ */
+.catalogue-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--hairline);
+}
+
+.catalogue-count {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.catalogue-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sort-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sort-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--surface-card);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  padding: 0.4rem 2rem 0.4rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: var(--font-body);
+  color: var(--text-body);
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B6459' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  min-height: 34px;
+  box-shadow: var(--shadow-xs);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.sort-select:focus {
+  outline: none;
+  border-color: var(--ember-600);
+  box-shadow: 0 0 0 3px rgba(195, 58, 20, 0.12);
+}
+
+.view-toggle {
+  display: flex;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+
+.view-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  background: var(--surface-card);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.view-toggle-btn + .view-toggle-btn {
+  border-left: 1px solid var(--hairline-strong);
+}
+
+.view-toggle-btn.active {
+  background: var(--grad-maroon);
+  color: #FFFFFF;
+}
+
+.view-toggle-btn:not(.active):hover {
+  background: var(--surface-sunken);
+  color: var(--text-body);
+}
+
+/* ---- Admin reorder row ------------------------------------------------ */
+.catalogue-admin {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-top: 0.5rem;
+}
+
+.admin-reorder {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface-card);
+  padding: 0 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: var(--font-body);
+  color: var(--text-body);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.admin-reorder.active {
+  background: var(--leaf-600);
+  border-color: var(--leaf-600);
+  color: #FFFFFF;
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-reorder:not(.active):hover {
+  border-color: var(--ember-600);
+  color: var(--ember-400);
+  background: rgba(195, 58, 20, 0.12);
+}
+
+.admin-reorder-hint {
+  border-radius: var(--r-sm);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* ---- Products page header: tighter vertical rhythm --------------------
+   Desktop minimum is 44px (requirement: 44–56px), subtitle 16px. The
+   mobile block below overrides for phones. */
+.products-page-header .section-title {
+  font-size: clamp(2.75rem, 1.825rem + 1.083vw, 3.125rem);
+}
+
+/* =========================================================================
+   MOBILE RESPONSIVE CORRECTIONS
+   Scoped to phones so desktop/tablet (≥640px) keeps its premium layout.
+
+   One coherent rule set, in this order:
+     1. tokens (gutter, section rhythm)   4. sections, top to bottom
+     2. the shared content boundary       5. controls (tap-target band)
+     3. typography                        6. page-level overflow guard
+   Everything here is layout, not per-screenshot nudges. Nothing below
+   ≥640px is touched, so the desktop site is byte-for-byte unchanged.
+   ========================================================================= */
+@media (max-width: 639px) {
+  /* ---- 1. Tokens ------------------------------------------------------ */
+  :root {
+    /* The single mobile gutter. Every section aligns to this boundary. */
+    --gutter: 1.125rem;
+    --space-section: clamp(2.5rem, 2rem + 2vw, 3rem);
+    --space-block: clamp(1.75rem, 1.4rem + 2vw, 2.25rem);
+    --space-heading: clamp(1.35rem, 1.1rem + 1.6vw, 1.75rem);
+  }
+
+  /* ---- 2. Shared content boundary ------------------------------------
+     On phones the three shells collapse into one identical boundary: full
+     viewport width with the gutter as the only inset. The desktop shells
+     inset twice (92vw *and* their own padding, which differed per shell),
+     which is what made sections start at different x positions and left
+     the content column too narrow for real words to fit. */
+  .shell,
+  .shell-narrow,
+  .shell-wide,
+  .shell.products-page {
+    width: 100%;
+    max-width: 100%;
+    padding-inline: var(--gutter);
+  }
+
+  /* ---- 3. Typography --------------------------------------------------
+     Words must never split mid-word on a phone. `overflow-wrap: anywhere`
+     (previously set on category titles) also collapses an element's
+     min-content width to one character, which let flex/grid squeeze the
+     title to ~35px and stack it letter by letter. `break-word` keeps
+     min-content at the longest word, so the box asks for the room a word
+     actually needs and only breaks a word that cannot fit on its own. */
+  h1, h2, h3, h4,
+  .section-title,
+  .subsection-title,
+  .card-title,
+  .category-title,
+  .product-title {
+    word-break: normal;
+    overflow-wrap: break-word;
+    hyphens: none;
+  }
+
+  .section-title {
+    font-size: clamp(1.625rem, 1.4rem + 1.6vw, 1.9rem);
+    line-height: 1.15;
+  }
+
+  .section-title.mt-3 { margin-top: 0.35rem; }
+
+  .section-eyebrow { letter-spacing: 0.16em; }
+
+  /* SectionHeading subtitle — keep it from sprawling across the screen. */
+  .section-title + p.mt-2\.5 { margin-top: 0.4rem; }
+
+  /* ---- 4. Sections ---------------------------------------------------- */
+
+  /* Hero benefit row: Licensed (full) / Safe Delivery | Best Prices /
+     Fast Shipping (full) — a deliberate, centred mobile layout. */
+  .hero-benefits {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 0.75rem;
+    justify-content: center;
+  }
+  .hero-benefits > li {
+    justify-content: center !important;
+  }
+  .hero-benefits > li:nth-child(1),
+  .hero-benefits > li:nth-child(4) {
+    grid-column: 1 / -1;
+  }
+
+  /* Category cards — two equal columns that never exceed the viewport.
+     The pip moves to the meta row in the component on this breakpoint, so
+     the title owns the full inner width. Every pixel not spent on padding,
+     icon or gap goes to the name: at 360px that leaves ~85px, enough for
+     the longest label ("Guns, Rolls & Pop Pop") to wrap onto two whole-word
+     lines. Because grid rows stretch, one three-line title would inflate
+     its neighbour too, which is what pushed cards past 100px. min-height
+     holds the floor so single-word cards don't collapse under the icon. */
+  .category-grid,
+  .category-grid-overflow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.625rem;
+    margin-top: 0.625rem;
+  }
+  .category-card {
+    padding: 0.75rem !important;
+    min-height: 4.5rem;
+    min-width: 0;
+  }
+  .category-card .category-icon-wrap { height: 2.5rem; width: 2.5rem; }
+  .category-title {
+    font-size: 0.9375rem;
+    line-height: 1.25;
+  }
+
+  /* Festive Deals / Offers — guarantee a single stacked centred column on
+     phones regardless of any desktop grid classes. */
+  .promo-grid,
+  .deals-grid {
+    grid-template-columns: 1fr !important;
+    justify-items: center;
+  }
+  .promo-grid > *,
+  .deals-grid > * { width: 100%; max-width: 100%; }
+
+  /* Related / featured rail cards stay fully inside the viewport. */
+  .rail { --rail-gap: 0.75rem; max-width: 100%; }
+
+  /* Why Choose — centre the lone fifth card in the final row instead of
+     stranding it on the left. */
+  .trust-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .trust-grid > :nth-child(5) {
+    grid-column: 1 / -1;
+    justify-self: center;
+    max-width: 50%;
+    width: 100%;
+  }
+
+  /* Footer — the two-column Quick Links / Categories block and all vertical
+     rhythm live on the component as responsive utilities. The floating
+     WhatsApp button is fixed 16px from the bottom-right, so its 72px
+     footprint is reserved as space *below* the bottom bar rather than as a
+     right-hand inset on it. That keeps the bottom bar on the same 18px
+     left/right boundary as every other section while guaranteeing the
+     copyright line is never sitting underneath the button. */
+  footer { padding-bottom: 4.5rem; }
+
+  /* Images never exceed their box or stretch. Explicit width/height
+     attributes on <img> are intrinsic hints, not mobile layout. */
+  img { max-width: 100%; }
+
+  /* ---- 5. Controls ----------------------------------------------------
+     One tap-target band for every button and text input. On desktop each
+     block sets its own vertical padding, so heights land anywhere from
+     43px to 52px; side by side on a phone that reads as sloppiness. The
+     padding is normalised here and min-height holds the floor, so every
+     control resolves to the same 46px regardless of which utilities the
+     component happens to carry. */
+  .btn-primary,
+  .btn-gold,
+  .input-premium {
+    min-height: 2.875rem;
+    padding-block: 0.5rem;
+  }
+
+  /* ---- 6. Products page — compact catalogue layout ------------------
+      Desktop (≥640px) keeps its existing layout byte-for-byte unchanged.
+      Mobile: pills scroll horizontally, toolbar stacks. */
+  .products-page-header .section-eyebrow { margin-top: 0; }
+  .products-page-header .section-title { margin-top: 0.25rem; font-size: clamp(1.5rem, 1.25rem + 1.4vw, 1.85rem); }
+
+  /* Pills: the base rule already makes the row a contained scroller with
+     a hidden scrollbar. On phones, bump the label back to a readable size
+     — the row scrolls, so the fit math that constrains desktop doesn't
+     apply — and keep a $gutter-sized edge spacer at the end. */
+  .catalogue-pill {
+    font-size: 0.75rem;
+    padding-left: 0.4375rem;
+    padding-right: 0.4375rem;
+    height: 34px;
+    min-height: 34px;
+    max-height: 34px;
+  }
+  .catalogue-pills { padding-right: var(--gutter); }
+
+  /* Toolbar: stack vertically on very small screens */
+  .catalogue-toolbar { gap: 0.4rem; margin-top: 0.75rem; padding-top: 0.625rem; }
+  .catalogue-toolbar-actions { width: 100%; justify-content: space-between; }
+
+  /* ---- 7. Page-level overflow guard ----------------------------------
+      A backstop, not the fix: every overflowing element above is corrected
+      at its source (shells, grids, rail viewports). */
+  html, body {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+}
+
+/* =========================================================================
+   PRODUCTS PAGE — DEDICATED MOBILE LAYOUT (<=767px)
+   Spec: premium mobile catalogue, not a squeezed desktop. Every rule here
+   is scoped to max-width 767px, so desktop >=1024 stays byte-identical.
+   ========================================================================= */
+@media (max-width: 767px) {
+  /* ---- 1. MOBILE HEADER 58-64px ---------------------------------------
+     Compact, no overflow. Mirrors spec layout [menu] [LOGO] [search] [cart].
+     Desktop (lg:flex / lg:hidden) is hidden via lg breakpoint already; this
+     only tightens the mobile bar that remains. */
+  nav.sticky .shell {
+    min-height: 58px;
+    max-height: 64px;
+    display: flex;
+    align-items: center;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  nav.sticky .shell > div.lg\:hidden {
+    min-height: 58px;
+    max-height: 64px;
+    width: 100%;
+    gap: 0.5rem;
+  }
+  /* Prevent header content from forcing page width */
+  nav.sticky {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  /* ---- 2. MOBILE CATALOGUE HEADER — compact ---------------------------
+     Catalogue + Our Products with ~16-24px below, no desktop subtitle. */
+  .shell.products-page {
+    padding-top: 0.75rem !important;
+    padding-bottom: 1rem !important;
+    padding-inline: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  /* All direct sections share the same 20px content boundary, so header,
+     toolbar and grid start at the same x. The category strip owns its own
+     20px edge spacers internally (no negative margins). */
+  .shell.products-page > header,
+  .shell.products-page > .catalogue-toolbar,
+  .shell.products-page > .catalogue-admin,
+  .shell.products-page > .mt-6 {
+    padding-inline: 20px;
+  }
+  .products-page-header {
+    padding-top: 0.25rem;
+    padding-bottom: 0;
+    margin-bottom: 0;
+  }
+  .products-page-header .section-eyebrow {
+    font-size: 0.6875rem;
+    letter-spacing: 0.18em;
+    margin: 0;
+    line-height: 1;
+  }
+  .products-page-header .section-title {
+    font-size: clamp(1.4rem, 1.2rem + 1.2vw, 1.75rem) !important;
+    line-height: 1.15 !important;
+    margin-top: 0.25rem !important;
+    margin-bottom: 0 !important;
+  }
+  /* If a desktop subtitle exists, hide it on mobile per spec */
+  .products-page-header .section-title + p,
+  .products-page-header p:not(.section-eyebrow):not(.section-title) {
+    display: none !important;
+  }
+
+  /* ---- 3. CATEGORY NAVIGATION — dedicated scroll container ------------
+     Page must NOT scroll horizontally; only this strip scrolls. */
+  /* Spec selectors — guarantee they exist for verification */
+  .category-scroll-container {
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .category-scroll-container::-webkit-scrollbar { display: none; }
+  .category-list {
+    display: flex;
+    flex-wrap: nowrap;
+    width: max-content;
+  }
+  .category-pill {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  /* Actual catalogue pills - map spec to existing class */
+  /* Shell itself has no horizontal padding at mobile; each section
+     provides its own 20px so the scroll strip can own its edge spacing
+     without negative margins or viewport offsets. */
+  .shell.products-page {
+    overflow: visible !important;
+  }
+  .catalogue-pills {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 0.5rem !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding: 4px 20px !important;
+    margin: 0 !important;
+    scroll-padding-left: 20px;
+    scroll-padding-right: 20px;
+  }
+  .catalogue-pills::-webkit-scrollbar { display: none !important; }
+
+  /* ---- 4. MOBILE CATEGORY PILL SIZE — 32-36px ------------------------ */
+  .catalogue-pill {
+    height: 34px !important;
+    min-height: 34px !important;
+    max-height: 34px !important;
+    padding: 0 12px !important;
+    gap: 6px !important;
+    font-size: 11.5px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+    flex: 0 0 auto !important;
+  }
+  .catalogue-pill-icon {
+    width: 13px !important;
+    height: 13px !important;
+    flex: 0 0 13px !important;
+  }
+  /* Also target spec pill class if used elsewhere */
+  .category-pill {
+    height: 34px;
+    padding: 0 12px;
+    gap: 6px;
+    font-size: 11.5px;
+    line-height: 1;
+  }
+
+  /* Stack spacing: catalogue heading -> category scroller -> divider -> toolbar */
+  .catalogue-pills {
+    margin-top: 16px !important;
+  }
+
+  /* ---- 5. PRODUCTS TOOLBAR — clean two-row mobile layout --------------
+     Row 1: Showing count full width
+     Row 2: [Reorder] [Featured /] [Grid/List] — no overflow */
+  .catalogue-toolbar {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    margin-top: 16px !important;
+    padding-top: 12px !important;
+    padding-bottom: 0 !important;
+    border-top: 1px solid var(--hairline) !important;
+  }
+  .catalogue-count {
+    font-size: 0.8125rem !important;
+    width: 100%;
+    text-align: left;
+    order: 1;
+  }
+  .catalogue-toolbar-actions {
+    width: 100% !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 8px !important;
+    order: 2;
+    justify-content: space-between !important;
+    max-width: 100%;
+    overflow: hidden;
+  }
+  /* Reorder button (mobile duplicate) sits left, sort + view toggle right */
+  .catalogue-toolbar-actions .admin-reorder,
+  .catalogue-toolbar-actions .sort-select,
+  .catalogue-toolbar-actions .view-toggle {
+    flex-shrink: 0;
+  }
+  .catalogue-toolbar-actions .sort-select {
+    min-width: 0;
+    flex: 1 1 auto;
+    max-width: 140px;
+    font-size: 0.8125rem;
+  }
+  .catalogue-toolbar .sort-label {
+    display: none !important;
+  }
+  /* Hide original admin reorder row on mobile — we show inline duplicate */
+  .catalogue-admin {
+    margin-top: 8px !important;
+    gap: 8px !important;
+    flex-wrap: wrap;
+  }
+  .catalogue-admin .admin-reorder {
+    display: none !important;
+  }
+  .catalogue-admin .admin-reorder-hint {
+    width: 100%;
+    font-size: 0.75rem;
+  }
+  /* Mobile-inline reorder (injected in toolbar for <=767) */
+  .mobile-admin-reorder {
+    display: inline-flex !important;
+  }
+
+  /* ---- 6. PRODUCT GRID — exactly 2 columns --------------------------- */
+  .shell.products-page .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+  /* Override the responsive md/lg/xl grid classes at mobile */
+  .shell.products-page [class*="grid-cols-"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .shell.products-page .mt-6 {
+    margin-top: 16px !important;
+  }
+
+  /* ---- 7 & 8. PRODUCT CARD MOBILE DESIGN ------------------------------
+     Tighter card: image 155-175px, compact padding, tighter typography. */
+  .shell.products-page .card-premium {
+    border-radius: 12px !important;
+  }
+  .shell.products-page .card-premium:hover {
+    transform: none !important;
+    box-shadow: var(--shadow-sm) !important;
+  }
+  .shell.products-page .product-img-panel {
+    aspect-ratio: 1 / 0.9 !important;
+    min-height: 155px !important;
+    max-height: 175px !important;
+  }
+  .shell.products-page .product-img-panel img {
+    padding: 10px !important;
+    object-fit: contain !important;
+    object-position: center !important;
+  }
+  .shell.products-page .card-premium > div:last-child,
+  .shell.products-page .card-premium .flex-grow {
+    padding: 10px 11px 11px 11px !important;
+  }
+  .shell.products-page .product-name,
+  .shell.products-page .card-title.product-name {
+    font-size: 14px !important;
+    line-height: 1.25 !important;
+    -webkit-line-clamp: 2 !important;
+    line-clamp: 2 !important;
+    min-height: 0 !important;
+  }
+  .shell.products-page .card-premium a.mt-1\.5 {
+    min-height: 0 !important;
+    margin-top: 4px !important;
+  }
+  .shell.products-page .badge {
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+  }
+  .shell.products-page .price {
+    font-size: 1rem !important;
+    line-height: 1 !important;
+  }
+  .shell.products-page .price + .price {
+    font-size: 0.75rem !important;
+  }
+  .shell.products-page .card-premium .mt-auto {
+    padding-top: 8px !important;
+    margin-top: 8px !important;
+  }
+  /* Add to Cart: full-width, 40-44px */
+  .shell.products-page .btn-primary {
+    min-height: 42px !important;
+    height: 42px !important;
+    padding: 0 12px !important;
+    font-size: 13px !important;
+    width: 100% !important;
+  }
+  .shell.products-page .card-premium .min-h-\[6rem\] {
+    min-height: 42px !important;
+  }
+  .shell.products-page .card-premium .mt-3.flex {
+    margin-top: 10px !important;
+    min-height: 42px !important;
+  }
+  /* Stepper states also stay 42px */
+  .shell.products-page .card-premium .min-h-\[44px\] {
+    min-height: 42px !important;
+  }
+
+  /* ---- 10. MOBILE SPACING consistent 20px ---------------------------- */
+  /* Flow already tightened above; ensure no large desktop gaps remain */
+  .shell.products-page > header + nav,
+  .shell.products-page > header + .category-scroll-container {
+    margin-top: 0 !important;
+  }
+
+  /* ---- 11. NO PAGE HORIZONTAL OVERFLOW ------------------------------- */
+  #root {
+    max-width: 100% !important;
+  }
+  .shell.products-page,
+  .shell.products-page * {
+    max-width: 100%;
+  }
+  /* But allow category scroller to overflow internally */
+  .catalogue-pills,
+  .category-scroll-container {
+    max-width: none !important;
+  }
+  .catalogue-pills *,
+  .category-scroll-container * {
+    max-width: none;
+  }
+  img, video, iframe {
+    max-width: 100%;
+  }
+
+  /* ---- 13. REMOVE BOUNCE/ENTRANCE ANIMATIONS ON MOBILE -------------- */
+  .shell.products-page .card-premium,
+  .shell.products-page .catalogue-pill,
+  .shell.products-page .catalogue-pills {
+    animation: none !important;
+    transition: none !important;
+  }
+  .shell.products-page .card-premium {
+    transform: none !important;
+  }
+  /* Disable hover scale on image at mobile */
+  .shell.products-page .group:hover img {
+    transform: none !important;
+  }
+  /* Page entrance is already disabled in App.jsx for /products; ensure no
+     framer stagger remains visible */
+  .shell.products-page [style*="transform"] {
+    transform: none !important;
+  }
+}
+
+/* Hide mobile inline reorder on desktop */
+@media (min-width: 768px) {
+  .mobile-admin-reorder { display: none !important; }
+}
+
+/* Print — price lists and invoices must come out clean. */
+@media print {
+  body::before,
+  body::after { display: none; }
+
+  .no-print { display: none !important; }
+
+  body {
+    background: #FFFFFF;
+    color: #000000;
+  }
+
+  .card-premium,
+  .glass-panel,
+  .glass-strong,
+  .glass-surface,
+  .glass-nav,
+  .glass-card,
+  .modal-glass,
+  .glass-chip,
+  .glass-table,
+  .panel-editorial {
+    box-shadow: none;
+    border: 1px solid #CCCCCC;
+    background: #FFFFFF;
+  }
+}
+
+
+/* ---------------------------------------------------------------------------
+   Billing / POS register
+   Scoped dark palette — the register keeps a fixed dark POS look regardless
+   of the storefront theme. Every child that styles itself from CSS variables
+   inherits this palette automatically.
+   --------------------------------------------------------------------------- */
+
+.pos-root {
+  --surface-page: #0B0E13;
+  --surface-card: #11161E;
+  --surface-raised: #182029;
+  --surface-sunken: #0E131A;
+  --surface-inverse: #F2ECE3;
+  --hairline: rgba(148, 163, 184, 0.14);
+  --hairline-strong: rgba(148, 163, 184, 0.26);
+  --text-strong: #F3F6FA;
+  --text-body: #C6CFDA;
+  --text-muted: #8B96A5;
+  --text-subtle: #67727F;
+  --text-on-dark: #F3F6FA;
+  --ember-600: #FF6B3D;
+  --ember-500: #FF8A5C;
+  --ember-400: #FFA37F;
+  --crimson-600: #FF5C5C;
+  --leaf-600: #3DD68C;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.5);
+}
+
+.pos-root ::-webkit-scrollbar { width: 10px; height: 10px; }
+.pos-root ::-webkit-scrollbar-track { background: transparent; }
+.pos-root ::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.22);
+  border: 3px solid var(--surface-page);
+  border-radius: 999px;
+}
+.pos-root ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.34); }
+.pos-root { scrollbar-width: thin; scrollbar-color: rgba(148, 163, 184, 0.28) transparent; }
+
+.pos-pane { scrollbar-gutter: stable; }
+
+.pos-chip {
+  border: 1px solid var(--hairline);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+.pos-chip:hover { color: var(--text-strong); border-color: var(--hairline-strong); }
+.pos-chip-active {
+  background: linear-gradient(135deg, rgba(255, 107, 61, 0.16), rgba(255, 107, 61, 0.08));
+  border-color: rgba(255, 107, 61, 0.55);
+  color: var(--ember-400);
+}
+
+.pos-product-card {
+  border: 1px solid var(--hairline);
+  background: var(--surface-card);
+  transition: border-color 150ms ease, transform 150ms ease, background 150ms ease;
+}
+.pos-product-card:hover {
+  border-color: rgba(255, 107, 61, 0.55);
+  background: var(--surface-raised);
+}
+.pos-product-card:active { transform: scale(0.985); }
+.pos-product-card.is-dim { opacity: 0.55; }
+
+/* Compact toolbar buttons used across the register chrome (header + panels). */
+.pos-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  height: 2.25rem;
+  padding: 0 0.625rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--hairline);
+  background: var(--surface-raised);
+  color: var(--text-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+.pos-tool-btn:hover { color: var(--text-strong); border-color: var(--hairline-strong); }
+.pos-tool-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.pos-tool-btn.is-danger { color: var(--crimson-600); }
+.pos-tool-btn.is-accent {
+  background: linear-gradient(135deg, var(--ember-600), var(--ember-500));
+  color: #FFFFFF;
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgba(255, 107, 61, 0.25);
+}
+.pos-tool-btn.is-accent:hover { filter: brightness(1.06); color: #FFFFFF; }
+.pos-tool-btn.is-accent:disabled { filter: none; }
+.pos-tool-btn.is-active {
+  background: rgba(255, 107, 61, 0.14);
+  border-color: rgba(255, 107, 61, 0.5);
+  color: var(--ember-400);
+}
+
+/* Confirm dialogs on the register. */
+.pos-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(4, 6, 10, 0.66);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.pos-dialog {
+  width: 100%;
+  max-width: 24rem;
+  background: var(--surface-card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 1.25rem;
+}
+
+/* Popover panels (held bills). */
+.pos-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  z-index: 40;
+  width: 19rem;
+  max-width: calc(100vw - 2rem);
+  background: var(--surface-card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+/* =========================================================================
+   ADMIN AUTH LOADER — premium dark loading experience
+   Used only by ProtectedRoute while Firebase resolves identity/role.
+   All motion is transform/opacity; prefers-reduced-motion collapses to static.
+   ========================================================================= */
+
+.auth-loader {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  min-height: 100vh;
+  padding: 2.5rem 1.5rem;
+  overflow: hidden;
+  isolation: isolate;
+  background: #0c0a09;
+  /* subtle warm base — near-black with barely-there brown */
+  background-image:
+    radial-gradient(62% 48% at 50% 46%, rgba(210, 166, 79, 0.075) 0%, transparent 62%),
+    radial-gradient(38% 28% at 50% 78%, rgba(118, 23, 19, 0.09) 0%, transparent 70%);
+}
+
+/* When used inside the app shell (not fullscreen) keep same premium feel
+   but let the shell own the viewport — ProtectedRoute renders this inside <main> */
+.auth-loader--embedded {
+  min-height: max(70vh, 560px);
+  border-radius: 0;
+}
+
+/* Extremely subtle ambient glow — barely visible warm haze behind logo */
+.auth-loader__glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(560px, 90vw);
+  height: min(560px, 90vw);
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  background: radial-gradient(
+    closest-side,
+    rgba(210, 166, 79, 0.09) 0%,
+    rgba(210, 166, 79, 0.04) 42%,
+    transparent 72%
+  );
+  filter: blur(0.5px);
+  pointer-events: none;
+  z-index: 0;
+  animation: auth-glow-drift 9s ease-in-out infinite alternate;
+  will-change: transform, opacity;
+}
+
+/* Two near-invisible ambient specks — luxury "dust" */
+.auth-loader__speck {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 9999px;
+  background: rgba(210, 166, 79, 0.22);
+  pointer-events: none;
+  opacity: 0.35;
+}
+
+.auth-loader__inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  width: 100%;
+  max-width: 28rem;
+  animation: auth-inner-in 420ms var(--ease-out-expo) both;
+}
+
+.auth-loader__brand {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  display: grid;
+  place-items: center;
+  border-radius: 9999px;
+}
+
+/* Soft gold halo behind logo */
+.auth-loader__halo {
+  position: absolute;
+  inset: -14px;
+  border-radius: 9999px;
+  background: radial-gradient(closest-side, rgba(210, 166, 79, 0.16), transparent 72%);
+  opacity: 0.9;
+  animation: auth-halo 2.8s ease-in-out infinite;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+
+.auth-loader__logo {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: 9999px;
+  object-fit: cover;
+  display: block;
+  background: #1a1714;
+  border: 1px solid rgba(210, 166, 79, 0.22);
+  box-shadow:
+    0 2px 18px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(210, 166, 79, 0.08),
+    0 8px 32px rgba(0, 0, 0, 0.5);
+  animation: auth-breathe 2.8s ease-in-out infinite;
+  will-change: transform;
+}
+
+.auth-loader__ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  border: 1px solid rgba(210, 166, 79, 0.14);
+  pointer-events: none;
+  animation: auth-ring 2.8s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.auth-loader__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  text-align: center;
+}
+
+.auth-loader__title {
+  font-family: var(--font-display);
+  font-size: clamp(1.05rem, 0.98rem + 0.35vw, 1.25rem);
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  line-height: 1.25;
+  color: #fff8ec;
+  text-wrap: balance;
+}
+
+.auth-loader__subtitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: rgba(237, 231, 223, 0.58);
+  line-height: 1.5;
+}
+
+.auth-loader__dots {
+  display: inline-flex;
+  width: 1.1em;
+  justify-content: flex-start;
+  gap: 1px;
+}
+
+.auth-loader__dots span {
+  opacity: 0.2;
+  animation: auth-dot 1.2s ease-in-out infinite;
+}
+
+.auth-loader__dots span:nth-child(2) { animation-delay: 0.2s; }
+.auth-loader__dots span:nth-child(3) { animation-delay: 0.4s; }
+
+/* Polished track — 164px wide, thin rounded */
+.auth-loader__track {
+  position: relative;
+  width: 164px;
+  height: 3px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.auth-loader__shimmer {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: 0;
+  width: 64px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(210, 166, 79, 0) 12%,
+    rgba(210, 166, 79, 0.95) 50%,
+    rgba(210, 166, 79, 0) 88%,
+    transparent 100%
+  );
+  box-shadow: 0 0 10px rgba(210, 166, 79, 0.45);
+  animation: auth-sweep 1.75s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.auth-loader__foot {
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(210, 166, 79, 0.55);
+  margin-top: -0.5rem;
+}
+
+/* Error variant — same shell, static and calm */
+.auth-loader--error .auth-loader__logo {
+  animation: none;
+  border-color: rgba(210, 166, 79, 0.18);
+}
+.auth-loader--error .auth-loader__halo,
+.auth-loader--error .auth-loader__ring { animation: none; opacity: 0.5; }
+.auth-loader--error .auth-loader__shimmer { display: none; }
+
+@keyframes auth-inner-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes auth-breathe {
+  0%, 100% { transform: scale(0.97); }
+  50%      { transform: scale(1); }
+}
+
+@keyframes auth-halo {
+  0%, 100% { opacity: 0.55; transform: scale(0.95); }
+  50%      { opacity: 0.95; transform: scale(1.02); }
+}
+
+@keyframes auth-ring {
+  0%, 100% { opacity: 0.9; transform: scale(0.98); }
+  50%      { opacity: 0.55; transform: scale(1.03); }
+}
+
+@keyframes auth-glow-drift {
+  0%   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(-49%, -51%) scale(1.04); opacity: 0.9; }
+}
+
+@keyframes auth-sweep {
+  0%   { transform: translateX(-72px); opacity: 0; }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { transform: translateX(164px); opacity: 0; }
+}
+
+@keyframes auth-dot {
+  0%, 70%, 100% { opacity: 0.2; transform: translateY(0); }
+  35%          { opacity: 1; transform: translateY(-1px); }
+}
+
+/* Reduced motion — all decorative motion collapses to static */
+@media (prefers-reduced-motion: reduce) {
+  .auth-loader__glow,
+  .auth-loader__halo,
+  .auth-loader__ring,
+  .auth-loader__logo,
+  .auth-loader__shimmer,
+  .auth-loader__dots span,
+  .auth-loader__inner {
+    animation: none !important;
+  }
+  .auth-loader__shimmer {
+    display: none;
+  }
+  .auth-loader__track::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(210, 166, 79, 0.45);
+    opacity: 0.5;
+  }
+}
+
+/* =========================================================================
+   FLOATING WHATSAPP BUTTON (home page only)
+   Fixed bottom-right, above page content and hero canvas, below modals and
+   full-screen overlays (the component uses z-overlay). Dark-native styling.
+   ========================================================================= */
+.wa-float {
+  right: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  border-radius: 16px;
+  background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+  box-shadow: 0 8px 25px rgba(37, 211, 102, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+@media (min-width: 640px) {
+  .wa-float {
+    right: 20px;
+    bottom: max(20px, env(safe-area-inset-bottom));
+  }
+}
+@media (max-width: 639px) {
+  .wa-float {
+    width: 52px;
+    height: 52px;
+    border-radius: 15px;
+  }
+}
+.wa-float:hover {
+  box-shadow: 0 10px 32px rgba(37, 211, 102, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+/* Gentle attention pulse on the halo every few seconds. Pauses on hover /
+   focus and is fully disabled for reduced motion. */
+@keyframes wa-halo-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.1); opacity: 0.4; }
+}
+.wa-halo {
+  border-radius: inherit;
+  animation: wa-halo-pulse 4.5s ease-in-out infinite;
+}
+.wa-float:hover .wa-halo,
+.wa-float:focus-visible .wa-halo {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wa-halo {
+    animation: none;
+  }
+}

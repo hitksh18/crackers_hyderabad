@@ -3,13 +3,16 @@
 # Usage: sudo bash /root/crackers-deploy/update.sh
 #   (or: sudo bash deploy/kvm/update.sh from the repo checkout on the server)
 #
-# Pulls latest source -> installs deps -> rebuilds frontend -> restarts API ->
-# reloads Nginx if the site config changed -> health check.
+# Pulls latest source -> installs deps -> rebuilds all three frontends
+# (customer / admin / billing) -> restarts API -> reloads Nginx if the site
+# config changed -> health check.
 # NEVER touches: $DEPLOY_DIR/.env, /var/www/crackershyderabad-media, Firestore data.
 set -euo pipefail
 
 DEPLOY_DIR="${DEPLOY_DIR:-/root/crackers-deploy}"
 APP_DIR="${APP_DIR:-/var/www/crackershyderabad}"
+ADMIN_APP_DIR="${ADMIN_APP_DIR:-/var/www/crackershyderabad-admin}"
+BILLING_APP_DIR="${BILLING_APP_DIR:-/var/www/crackershyderabad-billing}"
 SRC_DIR="${SRC_DIR:-$DEPLOY_DIR/repo}"
 
 if [ ! -d "$SRC_DIR/.git" ]; then
@@ -26,18 +29,37 @@ echo "    $(git log --oneline -1)"
 echo "==> 2/6 Install dependencies"
 cd "$SRC_DIR/api" && npm ci --omit=dev --no-audit --no-fund
 cd "$SRC_DIR/client" && npm ci --no-audit --no-fund
+cd "$SRC_DIR/admin" && npm ci --no-audit --no-fund
+cd "$SRC_DIR/billing" && npm ci --no-audit --no-fund
 
-echo "==> 3/6 Build frontend"
-npm run build
-test -f dist/index.html || { echo "ERROR: build produced no dist/index.html"; exit 1; }
+echo "==> 3/6 Build frontends (customer + admin + billing)"
+cd "$SRC_DIR/client" && npm run build
+test -f dist/index.html || { echo "ERROR: client build produced no dist/index.html"; exit 1; }
+cd "$SRC_DIR/admin" && npm run build
+test -f dist/index.html || { echo "ERROR: admin build produced no dist/index.html"; exit 1; }
+cd "$SRC_DIR/billing" && npm run build
+test -f dist/index.html || { echo "ERROR: billing build produced no dist/index.html"; exit 1; }
 
-echo "==> 4/6 Publish build (atomic swap, uploads untouched)"
-rm -rf "${APP_DIR}.new" && mkdir -p "${APP_DIR}.new"
-cp -a "$SRC_DIR/client/dist/." "${APP_DIR}.new/"
-rm -rf "${APP_DIR}.old" || true
-mv "$APP_DIR" "${APP_DIR}.old"
-mv "${APP_DIR}.new" "$APP_DIR"
-chown -R www-data:www-data "$APP_DIR" || true
+# Atomic swap of one build into its document root (uploads untouched).
+publish_app() {
+  src="$1"
+  dest="$2"
+  if [ -d "$dest" ]; then
+    rm -rf "${dest}.old" || true
+    if [ -n "$(ls -A "$dest" 2>/dev/null)" ]; then
+      mv "$dest" "${dest}.old"
+    else
+      rm -rf "$dest"
+    fi
+  fi
+  mv "$src" "$dest"
+  chown -R www-data:www-data "$dest"
+}
+
+echo "==> 4/6 Publish builds (atomic swap, uploads untouched)"
+publish_app "$SRC_DIR/client/dist"  "$APP_DIR"
+publish_app "$SRC_DIR/admin/dist"   "$ADMIN_APP_DIR"
+publish_app "$SRC_DIR/billing/dist" "$BILLING_APP_DIR"
 rm -rf "$DEPLOY_DIR/api" && cp -a "$SRC_DIR/api" "$DEPLOY_DIR/api"
 ln -sfn "$DEPLOY_DIR/.env" "$DEPLOY_DIR/api/.env" 2>/dev/null || cp "$DEPLOY_DIR/.env" "$DEPLOY_DIR/api/.env"
 
@@ -62,4 +84,7 @@ curl -fsS "http://127.0.0.1:3001/api/health" | grep -q '"status":"ok"' \
   || { echo "ERROR: API health check failed"; pm2 logs crackers-api --lines 30 --nostream || true; exit 1; }
 
 echo ""
-echo "UPDATE DONE. Verify https://$(hostname -f)/ in a browser."
+echo "UPDATE DONE. Verify all three apps:"
+echo "  https://$(hostname -f)/              (customer)"
+echo "  https://admin.$(hostname -f)/        (staff console)"
+echo "  https://billing.$(hostname -f)/      (counter register)"

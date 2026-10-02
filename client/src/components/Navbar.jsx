@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, Suspense, lazy } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Home as HomeIcon,
@@ -7,9 +7,7 @@ import {
   ShoppingCart,
   User,
   LogOut,
-  LayoutDashboard,
   ClipboardList,
-  Receipt,
   LogIn,
   Search,
   Phone,
@@ -20,10 +18,15 @@ import { useAuth } from '../context/AuthContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { readSiteSettings } from '../lib/siteSettings';
 import { popoverVariants, SPRING } from '../lib/motion';
-import CartNotificationPill from './CartNotificationPill';
-import MobileMenu from './MobileMenu';
-import SearchOverlay from './SearchOverlay';
 import UserAvatar from './UserAvatar';
+// Interaction-only surfaces: the mobile menu, the mobile search overlay and
+// the cart toast never appear on first paint (they mount on tap / add-to-cart
+// only), so they split into on-demand chunks instead of weighing down the
+// header's first render. The bar itself — logo, links, search, cart, profile
+// — stays fully synchronous above.
+const CartNotificationPill = lazy(() => import('./CartNotificationPill'));
+const MobileMenu = lazy(() => import('./MobileMenu'));
+const SearchOverlay = lazy(() => import('./SearchOverlay'));
 
 const PHONE_HREF = 'tel:+919876543210';
 
@@ -57,10 +60,8 @@ const CartCountBadge = ({ count, reduced }) => {
 
 const Navbar = () => {
   const { getCartCount } = useCart();
-  const { user, isAdmin, isSales, isBilling, isPacker, isMod, signOut, loading: authLoading } = useAuth();
+  const { user, signOut } = useAuth();
   const reduced = useReducedMotion();
-  const isStaffMember = isAdmin || isSales || isBilling || isPacker || isMod;
-  const canSeeBilling = isAdmin || isSales;
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const isActive = (path) => pathname === path;
@@ -160,13 +161,12 @@ const Navbar = () => {
 
   const navLinkClass = (path) => `nav-link ${isActive(path) ? 'active' : ''}`;
 
+  /* Staff surfaces (billing register, dashboard, orders console, price list)
+     live in the separate admin frontend. The storefront menu carries only
+     customer account links. */
   const accountLinks = [
     { to: '/profile', label: 'My Profile', icon: User, show: true },
-    { to: '/my-orders', label: 'My Orders', icon: ClipboardList, show: !isStaffMember },
-    { to: '/admin/billing', label: 'Billing', icon: Receipt, show: canSeeBilling },
-    { to: '/admin/dashboard', label: 'Admin Dashboard', icon: LayoutDashboard, show: isAdmin },
-    { to: '/admin/orders', label: 'Orders & Packing', icon: ClipboardList, show: isPacker || isMod },
-    { to: '/price-list', label: 'Price List', icon: Receipt, show: isSales || isBilling || isMod },
+    { to: '/my-orders', label: 'My Orders', icon: ClipboardList, show: true },
   ].filter((item) => item.show);
 
   const menuRowClass =
@@ -205,6 +205,7 @@ const Navbar = () => {
                 width={64}
                 height={64}
                 decoding="async"
+                fetchPriority="high"
                 className="h-16 w-16 shrink-0"
                 style={{ borderRadius: '50%' }}
               />
@@ -292,24 +293,11 @@ const Navbar = () => {
                 <Phone className="h-[18px] w-[18px]" strokeWidth={2.2} aria-hidden="true" />
               </a>
 
-              {canSeeBilling && (
-                <Link to="/admin/billing" className="btn-primary shrink-0 px-4 py-2 text-sm">
-                  <Receipt className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
-                  <span>Billing</span>
-                </Link>
-              )}
-
-              {authLoading ? (
-                <span
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center"
-                  aria-hidden="true"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  <span className="h-full w-full rounded-full" style={{ background: 'var(--surface-sunken)' }}>
-                    <span className="skeleton block h-full w-full rounded-full" />
-                  </span>
-                </span>
-              ) : user ? (
+              {/* Account slot renders its settled logged-out state on the very
+                  first paint and upgrades in place when Firebase auth + roles
+                  resolve — it never shows a skeleton or blank space while
+                  loading, and the navbar never waits on authentication. */}
+              {user ? (
                 <div className="relative shrink-0" ref={profileMenuRef}>
                   <button
                     type="button"
@@ -452,6 +440,7 @@ const Navbar = () => {
                 width={40}
                 height={40}
                 decoding="async"
+                fetchPriority="high"
                 className="mr-1.5 h-10 w-10 shrink-0 sm:h-11 sm:w-11"
                 style={{ borderRadius: '50%' }}
               />
@@ -493,40 +482,39 @@ const Navbar = () => {
           </div>
 
           {/* Product notification pill (below the bar) */}
-          <CartNotificationPill />
+          <Suspense fallback={null}>
+            <CartNotificationPill />
+          </Suspense>
         </div>
       </nav>
 
       <AnimatePresence>
         {mobileMenuOpen && (
-          <MobileMenu
-            key="mobile-menu"
-            onClose={closeMobileMenu}
-            pathname={pathname}
-            user={user}
-            isAdmin={isAdmin}
-            isSales={isSales}
-            isBilling={isBilling}
-            isPacker={isPacker}
-            isMod={isMod}
-            isStaffMember={isStaffMember}
-            canSeeBilling={canSeeBilling}
-            cartCount={cartCount}
-            onSignOut={signOut}
-            phoneHref={PHONE_HREF}
-          />
+          <Suspense fallback={null}>
+            <MobileMenu
+              key="mobile-menu"
+              onClose={closeMobileMenu}
+              pathname={pathname}
+              user={user}
+              cartCount={cartCount}
+              onSignOut={signOut}
+              phoneHref={PHONE_HREF}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {searchOpen && (
-          <SearchOverlay
-            key="search-overlay"
-            onClose={closeSearch}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onSubmit={handleSearchSubmit}
-          />
+          <Suspense fallback={null}>
+            <SearchOverlay
+              key="search-overlay"
+              onClose={closeSearch}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onSubmit={handleSearchSubmit}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
     </>

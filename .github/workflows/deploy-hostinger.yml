@@ -18,9 +18,9 @@ jobs:
         run: node scripts/generate-sitemap.mjs
 
       # Optional override: repository secrets win when they are set, but an
-      # *unset* secret must never blank out the committed
-      # client/.env.production values (public web config that ships in the
-      # browser bundle by design). Writing only non-empty values to the
+      # *unset* secret must never blank out the committed client/.env,
+      # admin/.env and billing/.env values (public web config that ships in
+      # the browser bundle by design). Writing only non-empty values to the
       # git-ignored .env.production.local achieves exactly that, because
       # Vite loads it with the highest precedence in production mode.
       - name: Apply Firebase secrets (optional override)
@@ -32,24 +32,32 @@ jobs:
           FB_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           FB_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
         run: |
-          touch client/.env.production.local
-          [ -n "$FB_API_KEY" ] && echo "VITE_FIREBASE_API_KEY=$FB_API_KEY" >> client/.env.production.local
-          [ -n "$FB_AUTH_DOMAIN" ] && echo "VITE_FIREBASE_AUTH_DOMAIN=$FB_AUTH_DOMAIN" >> client/.env.production.local
-          [ -n "$FB_PROJECT_ID" ] && echo "VITE_FIREBASE_PROJECT_ID=$FB_PROJECT_ID" >> client/.env.production.local
-          [ -n "$FB_STORAGE_BUCKET" ] && echo "VITE_FIREBASE_STORAGE_BUCKET=$FB_STORAGE_BUCKET" >> client/.env.production.local
-          [ -n "$FB_SENDER_ID" ] && echo "VITE_FIREBASE_MESSAGING_SENDER_ID=$FB_SENDER_ID" >> client/.env.production.local
-          [ -n "$FB_APP_ID" ] && echo "VITE_FIREBASE_APP_ID=$FB_APP_ID" >> client/.env.production.local
-          echo "VITE_BACKEND_API_URL=/api" >> client/.env.production.local
+          for app in client admin billing; do
+            touch "$app/.env.production.local"
+            [ -n "$FB_API_KEY" ] && echo "VITE_FIREBASE_API_KEY=$FB_API_KEY" >> "$app/.env.production.local"
+            [ -n "$FB_AUTH_DOMAIN" ] && echo "VITE_FIREBASE_AUTH_DOMAIN=$FB_AUTH_DOMAIN" >> "$app/.env.production.local"
+            [ -n "$FB_PROJECT_ID" ] && echo "VITE_FIREBASE_PROJECT_ID=$FB_PROJECT_ID" >> "$app/.env.production.local"
+            [ -n "$FB_STORAGE_BUCKET" ] && echo "VITE_FIREBASE_STORAGE_BUCKET=$FB_STORAGE_BUCKET" >> "$app/.env.production.local"
+            [ -n "$FB_SENDER_ID" ] && echo "VITE_FIREBASE_MESSAGING_SENDER_ID=$FB_SENDER_ID" >> "$app/.env.production.local"
+            [ -n "$FB_APP_ID" ] && echo "VITE_FIREBASE_APP_ID=$FB_APP_ID" >> "$app/.env.production.local"
+            echo "VITE_BACKEND_API_URL=/api" >> "$app/.env.production.local"
+          done
 
-      - name: Build client
+      - name: Build frontends (customer + admin + billing)
         run: |
           npm ci --prefix client --no-audit --no-fund
+          npm ci --prefix admin --no-audit --no-fund
+          npm ci --prefix billing --no-audit --no-fund
           npm run build --prefix client
+          npm run build --prefix admin
+          npm run build --prefix billing
 
       - name: Package
         run: |
-          mkdir -p package/dist
+          mkdir -p package/dist package/dist-admin package/dist-billing
           cp -a client/dist/. package/dist/
+          cp -a admin/dist/. package/dist-admin/
+          cp -a billing/dist/. package/dist-billing/
           cp -a api package/api
           cp -a scripts package/scripts
           cp -a deploy.sh package/deploy.sh
