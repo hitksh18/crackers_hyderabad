@@ -2,71 +2,96 @@
 
 # CRACKERS HYDERABAD
 
-### Premium Fireworks E-Commerce Platform
+### PREMIUM FIREWORKS E-COMMERCE PLATFORM
 
 <p>
-  A modern commerce platform with a dedicated storefront, administration
-  console and billing system — powered by a centralized backend.
+A modern commerce platform built for customers, store operations and counter billing.
 </p>
 
 <br>
 
-[![Store](https://img.shields.io/badge/STORE-crackershyderabad.com-111111?style=for-the-badge&logo=googlechrome&logoColor=ffffff)](https://crackershyderabad.com)
-[![Admin](https://img.shields.io/badge/ADMIN-ADMIN%20CONSOLE-111111?style=for-the-badge&logo=shield&logoColor=ffffff)](https://admin.crackershyderabad.com)
-[![Billing](https://img.shields.io/badge/BILLING-POS-111111?style=for-the-badge&logo=cashapp&logoColor=ffffff)](https://billing.crackershyderabad.com)
+[![STORE](https://img.shields.io/badge/STORE-crackershyderabad.com-FF3038?style=for-the-badge&logo=googlechrome&logoColor=white)](https://crackershyderabad.com)
+[![ADMIN](https://img.shields.io/badge/ADMIN-CONSOLE-151515?style=for-the-badge&logo=shield&logoColor=white)](https://admin.crackershyderabad.com)
+[![BILLING](https://img.shields.io/badge/BILLING-POS-252525?style=for-the-badge&logo=cashapp&logoColor=white)](https://billing.crackershyderabad.com)
 
 <br>
 
-<img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=111111" />
-<img src="https://img.shields.io/badge/Vite-7-646CFF?style=flat-square&logo=vite&logoColor=ffffff" />
-<img src="https://img.shields.io/badge/Node.js-22-339933?style=flat-square&logo=nodedotjs&logoColor=ffffff" />
-<img src="https://img.shields.io/badge/Express-5-111111?style=flat-square&logo=express&logoColor=ffffff" />
-<img src="https://img.shields.io/badge/Firebase-Auth%20%2B%20Firestore-FFCA28?style=flat-square&logo=firebase&logoColor=111111" />
-<img src="https://img.shields.io/badge/Nginx-Production-009639?style=flat-square&logo=nginx&logoColor=ffffff" />
+![React](https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=111111)
+![Vite](https://img.shields.io/badge/Vite_7-646CFF?style=flat-square&logo=vite&logoColor=white)
+![Node](https://img.shields.io/badge/Node.js_22-339933?style=flat-square&logo=nodedotjs&logoColor=white)
+![Express](https://img.shields.io/badge/Express_5-111111?style=flat-square&logo=express&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-Auth_%2B_Firestore-FFCA28?style=flat-square&logo=firebase&logoColor=111111)
+![Nginx](https://img.shields.io/badge/Nginx-Production-009639?style=flat-square&logo=nginx&logoColor=white)
 
 </div>
 
-<br>
-
 ---
 
-## Platform
+<div align="center">
+
+## ONE PLATFORM. THREE EXPERIENCES.
+
+</div>
 
 <table>
 <tr>
-<td width="33%" align="center">
+<td align="center" width="33%">
 
-### Storefront
+### STOREFRONT
 
-Customer shopping experience
+Customer commerce
+
+---
+
+Product catalogue  
+Shopping cart  
+Checkout  
+Order tracking  
+Invoices
 
 <br>
 
-[![Open Store](https://img.shields.io/badge/OPEN_STORE-FF3B30?style=for-the-badge&logo=googlechrome&logoColor=white)](https://crackershyderabad.com)
+[**OPEN STORE →**](https://crackershyderabad.com)
 
 </td>
 
-<td width="33%" align="center">
+<td align="center" width="33%">
 
-### Admin Console
+### ADMIN
 
-Operations and management
+Business operations
+
+---
+
+Orders  
+Products  
+Users  
+Analytics  
+Pricing
 
 <br>
 
-[![Open Admin](https://img.shields.io/badge/OPEN_ADMIN-111111?style=for-the-badge&logo=shield&logoColor=white)](https://admin.crackershyderabad.com)
+[**OPEN ADMIN →**](https://admin.crackershyderabad.com)
 
 </td>
 
-<td width="33%" align="center">
+<td align="center" width="33%">
 
-### Billing POS
+### BILLING
 
-Counter sales and invoices
+Counter operations
+
+---
+
+POS  
+Customers  
+Orders  
+Invoices  
+Sales
 
 <br>
 
-[![Open Billing](https://img.shields.io/badge/OPEN_BILLING-444444?style=for-the-badge&logo=cashapp&logoColor=white)](https://billing.crackershyderabad.com)
+[**OPEN BILLING →**](https://billing.crackershyderabad.com)
 
 </td>
 </tr>
@@ -74,17 +99,37 @@ Counter sales and invoices
 
 ---
 
-## Overview
+## PLATFORM
 
-**Crackers Hyderabad** is a production-ready e-commerce platform built for the online sale of standard fireworks.
+**Crackers Hyderabad** is a production-ready e-commerce platform designed for the online sale of standard fireworks.
 
-The platform combines three specialized applications with one centralized backend:
+The architecture combines three specialized applications with one centralized backend.
 
 ```text
-CUSTOMER STOREFRONT
-        |
-        |
-ADMIN CONSOLE ---- CENTRAL API ---- FIREBASE
-        |
-        |
-   BILLING POS
+                         INTERNET
+                            |
+                            v
+                    +---------------+
+                    |     NGINX     |
+                    | REVERSE PROXY |
+                    +-------+-------+
+                            |
+            +---------------+---------------+
+            |               |               |
+            v               v               v
+       STOREFRONT         ADMIN          BILLING
+       CUSTOMER APP      CONSOLE           POS
+            |               |               |
+            +---------------+---------------+
+                            |
+                            v
+                    +---------------+
+                    |  EXPRESS API  |
+                    |     :3001     |
+                    +-------+-------+
+                            |
+             +--------------+--------------+
+             |              |              |
+             v              v              v
+          FIREBASE        MEDIA         BUSINESS
+          AUTH / DB       STORAGE         LOGIC
