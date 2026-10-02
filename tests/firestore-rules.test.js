@@ -100,7 +100,7 @@ describe('orders — enumeration is the main risk', () => {
     await assertFails(getDocs(collection(db, 'orders')));
   });
 
-  for (const role of ['admin', 'sales', 'billing', 'packer', 'mod']) {
+  for (const role of ['admin', 'sales']) {
     it(`lets ${role} list all orders`, async () => {
       await seedOrder('o1', {});
       const db = await asRole(`${role}-uid`, role);
@@ -108,6 +108,13 @@ describe('orders — enumeration is the main risk', () => {
       await assertSucceeds(getDocs(collection(db, 'orders')));
     });
   }
+
+  it('BLOCKS a legacy (no-longer-valid) role from listing orders', async () => {
+    await seedOrder('o1', {});
+    const db = await asRole('legacy-uid', 'packer');
+
+    await assertFails(getDocs(collection(db, 'orders')));
+  });
 
   it('still allows a direct get so guest order tracking keeps working', async () => {
     await seedOrder('o1', {});
@@ -134,7 +141,7 @@ describe('orders — enumeration is the main risk', () => {
 
   it('BLOCKS deletion by anyone who is not an admin', async () => {
     await seedOrder('o1', {});
-    const staff = await asRole('packer-uid', 'packer');
+    const staff = await asRole('sales-uid', 'sales');
 
     await assertFails(deleteDoc(doc(staff, 'orders', 'o1')));
   });
@@ -255,7 +262,13 @@ describe('content collections stay admin-write', () => {
     });
   }
 
-  it('BLOCKS a packer writing products', async () => {
+  it('BLOCKS a sales user writing products', async () => {
+    const db = await asRole('sales-uid', 'sales');
+
+    await assertFails(setDoc(doc(db, 'products', 'p1'), { name: 'x' }));
+  });
+
+  it('BLOCKS a legacy role writing products', async () => {
     const db = await asRole('packer-uid', 'packer');
 
     await assertFails(setDoc(doc(db, 'products', 'p1'), { name: 'x' }));

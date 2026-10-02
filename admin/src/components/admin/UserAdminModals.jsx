@@ -157,12 +157,20 @@ const Identity = ({ user }) => (
   </div>
 );
 
-/** Role editor. The Save button is the confirmation step for a role change. */
-export const RoleEditorModal = ({ user, currentRole, value, onChange, onCancel, onSave }) => (
-  <AnimatePresence>
-    {user && (
-      <Shell labelledBy="role-editor-title" onClose={onCancel}>
-        <Head id="role-editor-title" title="Change User Role" onClose={onCancel} />
+/** Role editor. The Save button is the confirmation step for a role change.
+ *  While `saving` the dialog locks: no second submit, no close mid-flight. On
+ *  failure the parent keeps `user` set, so the modal stays open with the error. */
+export const RoleEditorModal = ({ user, currentRole, value, onChange, onCancel, onSave, saving = false }) => {
+  const close = () => {
+    if (saving) return;
+    onCancel();
+  };
+
+  return (
+    <AnimatePresence>
+      {user && (
+        <Shell labelledBy="role-editor-title" onClose={close}>
+          <Head id="role-editor-title" title="Change User Role" onClose={close} />
 
         <div className="p-5">
           <Identity user={user} />
@@ -232,19 +240,26 @@ export const RoleEditorModal = ({ user, currentRole, value, onChange, onCancel, 
           </fieldset>
 
           <div className="flex gap-2">
-            <button type="button" onClick={onCancel} className="btn-outline flex-1 text-sm">
+            <button type="button" onClick={close} disabled={saving} className="btn-outline flex-1 text-sm">
               Cancel
             </button>
-            <button type="button" onClick={onSave} className="btn-primary flex-1 text-sm">
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={saving}
+              aria-busy={saving}
+              className="btn-primary flex-1 text-sm"
+            >
               <Save className="h-4 w-4" aria-hidden="true" />
-              Save Role
+              {saving ? 'Saving…' : 'Save Role'}
             </button>
           </div>
         </div>
       </Shell>
     )}
-  </AnimatePresence>
-);
+    </AnimatePresence>
+  );
+};
 
 /** Destructive confirmation for disable / delete. Closes only when the parent
  * clears `action` (i.e. on success); stays open on failure so the user can

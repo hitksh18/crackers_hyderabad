@@ -1,4 +1,4 @@
-import { ShieldCheck, UserCog, UserCheck, FileText, PackageOpen, User } from 'lucide-react';
+import { ShieldCheck, UserCheck, User } from 'lucide-react';
 
 /**
  * The role vocabulary for the admin users surface.
@@ -9,7 +9,15 @@ import { ShieldCheck, UserCog, UserCheck, FileText, PackageOpen, User } from 'lu
  * never rely on colour alone.
  */
 
-export const roleOptions = ['admin', 'mod', 'sales', 'billing', 'packer', 'customer'];
+export const roleOptions = ['admin', 'sales', 'customer'];
+
+/** Roles that are no longer part of the vocabulary. Any stored value outside
+ *  roleOptions (legacy mod/billing/packer, case variants, typos) resolves to
+ * 'customer' so every surface agrees on who can do what. */
+export const normalizeRole = (value) => {
+  const role = String(value || '').trim().toLowerCase();
+  return roleOptions.includes(role) ? role : 'customer';
+};
 
 export const roleConfig = {
   admin: {
@@ -25,23 +33,10 @@ export const roleConfig = {
     selected: 'border-maroon-500 bg-maroon-50 dark:bg-maroon-900/30',
     dot: 'bg-maroon-700',
   },
-  mod: {
-    icon: UserCog,
-    label: 'Mod',
-    description: 'Manage orders, billing and price list',
-    badge: 'bg-primary-50 text-primary-800 border-primary-200 dark:bg-primary-900/40 dark:text-primary-200 dark:border-primary-700',
-    solid: 'bg-primary-600 text-white border-primary-600',
-    idle: 'bg-primary-50 text-primary-800 border-primary-200 hover:border-primary-400 dark:bg-primary-900/30 dark:text-primary-200 dark:border-primary-800',
-    rail: 'border-l-primary-600',
-    wash: 'bg-primary-50 dark:bg-primary-900/40',
-    ink: 'text-primary-700 dark:text-primary-200',
-    selected: 'border-primary-500 bg-primary-50 dark:bg-primary-900/30',
-    dot: 'bg-primary-600',
-  },
   sales: {
     icon: UserCheck,
     label: 'Sales',
-    description: 'Access to Billing and Price List only',
+    description: 'Access to sales and billing functionality',
     badge: 'bg-accent-50 text-accent-800 border-accent-200 dark:bg-accent-900/40 dark:text-accent-300 dark:border-accent-700',
     solid: 'bg-accent-700 text-white border-accent-700',
     idle: 'bg-accent-50 text-accent-800 border-accent-200 hover:border-accent-400 dark:bg-accent-900/30 dark:text-accent-300 dark:border-accent-800',
@@ -50,32 +45,6 @@ export const roleConfig = {
     ink: 'text-accent-700 dark:text-accent-300',
     selected: 'border-accent-500 bg-accent-50 dark:bg-accent-900/30',
     dot: 'bg-accent-700',
-  },
-  billing: {
-    icon: FileText,
-    label: 'Billing',
-    description: 'Access to Billing (POS) and Price List',
-    badge: 'bg-leaf-50 text-leaf-800 border-leaf-200 dark:bg-leaf-800/40 dark:text-leaf-300 dark:border-leaf-700',
-    solid: 'bg-leaf-600 text-white border-leaf-600',
-    idle: 'bg-leaf-50 text-leaf-800 border-leaf-200 hover:border-leaf-300 dark:bg-leaf-800/30 dark:text-leaf-300 dark:border-leaf-800',
-    rail: 'border-l-leaf-600',
-    wash: 'bg-leaf-50 dark:bg-leaf-800/40',
-    ink: 'text-leaf-700 dark:text-leaf-300',
-    selected: 'border-leaf-500 bg-leaf-50 dark:bg-leaf-800/30',
-    dot: 'bg-leaf-600',
-  },
-  packer: {
-    icon: PackageOpen,
-    label: 'Packer',
-    description: 'Orders page with packing checklist and status',
-    badge: 'bg-saffron-50 text-saffron-800 border-saffron-200 dark:bg-saffron-900/40 dark:text-saffron-300 dark:border-saffron-700',
-    solid: 'bg-saffron-700 text-white border-saffron-700',
-    idle: 'bg-saffron-50 text-saffron-800 border-saffron-200 hover:border-saffron-400 dark:bg-saffron-900/30 dark:text-saffron-300 dark:border-saffron-800',
-    rail: 'border-l-saffron-500',
-    wash: 'bg-saffron-50 dark:bg-saffron-900/40',
-    ink: 'text-saffron-800 dark:text-saffron-300',
-    selected: 'border-saffron-500 bg-saffron-50 dark:bg-saffron-900/30',
-    dot: 'bg-saffron-700',
   },
   customer: {
     icon: User,

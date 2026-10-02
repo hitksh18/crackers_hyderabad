@@ -31,8 +31,8 @@ const AdminOrderDetail = () => {
   const navigate = useNavigate();
   const reduced = useReducedMotion();
   const { isOpen, isConfirming, modalConfig, openModal, closeModal, handleConfirm } = useModal();
-  const { isAdmin, isMod } = useAuth();
-  const canEditOrder = isAdmin || isMod;
+  const { isAdmin } = useAuth();
+  const canEditOrder = isAdmin;
   const canDeleteOrder = isAdmin;
 
   const [order, setOrder] = useState(null);

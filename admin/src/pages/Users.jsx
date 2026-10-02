@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import '../admin-portrait.css';
-import { collection, getDocs, doc, updateDoc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Search, Users, RefreshCw, Mail, User, Check, Ban, Trash2, Key, Pencil, Clock, Calendar, CircleCheck, CircleX } from 'lucide-react';
 import toast from '../utils/toast';
 import { authFetch, readApiError } from '../utils/apiClient';
 import { useAuth } from '../context/AuthContext';
-import { roleOptions, roleConfig, configFor } from '../components/admin/userRoles';
+import { roleOptions, roleConfig, configFor, normalizeRole } from '../components/admin/userRoles';
 import AccountMenu from '../components/admin/AccountMenu';
 import {
   RoleEditorModal,
@@ -42,6 +42,7 @@ const UserManagement = () => {
   const [editingUser, setEditingUser] = useState(null);
   const [newRole, setNewRole] = useState('');
   const [actionModal, setActionModal] = useState(null);
+  const [savingRole, setSavingRole] = useState(false);
   const { user: currentUser } = useAuth();
 
   useEffect(() => {
@@ -52,8 +53,9 @@ const UserManagement = () => {
   const fetchAuthUsers = async () => {
     setAuthLoading(true);
     try {
-      const response = await authFetch('/api/users');
+      const response = await authFetch('/api/admin/users');
       if (!response.ok) {
+        toast.error(await readApiError(response, 'Failed to load users'));
         setAuthUsers([]);
         return;
       }
@@ -76,7 +78,7 @@ const UserManagement = () => {
       const rolesSnapshot = await getDocs(collection(db, 'roles'));
       const rolesData = {};
       rolesSnapshot.docs.forEach(doc => {
-        rolesData[doc.id] = doc.data().role || 'customer';
+        rolesData[doc.id] = normalizeRole(doc.data().role);
       });
       setRoles(rolesData);
 
@@ -102,7 +104,7 @@ const UserManagement = () => {
   const seenUids = new Set();
 
   authUsers.forEach(authUser => {
-    const role = roles[authUser.uid] || 'customer';
+    const role = normalizeRole(roles[authUser.uid]);
     mergedUsers.push({
       ...authUser,
       id: authUser.uid,
@@ -115,7 +117,7 @@ const UserManagement = () => {
 
   storeUsers.forEach(storeUser => {
     if (seenUids.has(storeUser.uid)) return;
-    const role = roles[storeUser.uid] || 'customer';
+    const role = normalizeRole(roles[storeUser.uid]);
     mergedUsers.push({
       ...storeUser,
       id: storeUser.uid,
@@ -130,7 +132,7 @@ const UserManagement = () => {
   };
 
   const saveRole = async () => {
-    if (!editingUser || !newRole) return;
+    if (!editingUser || !newRole || savingRole) return;
 
     if (editingUser.uid === currentUser?.uid && newRole !== 'admin') {
       toast.error('You cannot remove your own admin privileges');
@@ -138,41 +140,45 @@ const UserManagement = () => {
     }
 
     const loadingToast = toast.loading('Updating role...');
+    setSavingRole(true);
 
     try {
-      const roleRef = doc(db, 'roles', editingUser.uid);
-      const roleDoc = await getDoc(roleRef);
+      // Role changes go through the API (verified admin token + server-side
+      // allow-list) — never a direct Firestore write from the browser.
+      const response = await authFetch(`/api/admin/users/${editingUser.uid}/role`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: newRole }),
+      });
 
-      if (roleDoc.exists()) {
-        await updateDoc(roleRef, { role: newRole });
-      } else {
-        await setDoc(roleRef, { role: newRole });
+      if (!response.ok) {
+        // Keep the modal open so the failure is visible and retryable.
+        toast.error(await readApiError(response, 'Failed to update role'), { id: loadingToast });
+        return;
       }
 
-      setRoles(prev => ({ ...prev, [editingUser.uid]: newRole }));
-      // Verify persistence and refresh authoritative state
-      try {
-        const verifySnap = await getDoc(doc(db, 'roles', editingUser.uid));
-        const persisted = verifySnap.exists() ? verifySnap.data().role : null;
-        if (persisted !== newRole) throw new Error('Role not persisted');
-      } catch (e) {
-        console.warn('Role verify failed:', e.message);
+      const data = await response.json();
+
+      if (!data.success) {
+        toast.error(data.error || 'Failed to update role', { id: loadingToast });
+        return;
       }
-      toast.success(`Role updated to ${newRole} successfully!`, { id: loadingToast });
+
+      setRoles(prev => ({ ...prev, [editingUser.uid]: data.role }));
+      toast.success(`Role updated to ${roleConfig[data.role]?.label || data.role} successfully!`, { id: loadingToast });
       cancelEditing();
-      // Re-fetch authoritative state to prevent stale UI
-      fetchUsersAndRoles();
-      fetchAuthUsers();
     } catch (error) {
       console.error('Error updating role:', error.code, error.message);
       toast.error('Failed to update role', { id: loadingToast });
+    } finally {
+      setSavingRole(false);
     }
   };
 
   const handleResetPassword = async (user) => {
     const loadingToast = toast.loading('Sending password reset email...');
     try {
-      const response = await authFetch(`/api/users/${user.uid}/reset-password`, {
+      const response = await authFetch(`/api/admin/users/${user.uid}/reset-password`, {
         method: 'POST'
       });
 
@@ -197,7 +203,7 @@ const UserManagement = () => {
   const handleDisableUser = async (user, disable) => {
     const loadingToast = toast.loading(disable ? 'Disabling account...' : 'Enabling account...');
     try {
-      const response = await authFetch(`/api/users/${user.uid}/disable`, {
+      const response = await authFetch(`/api/admin/users/${user.uid}/disable`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ disabled: disable })
@@ -211,14 +217,12 @@ const UserManagement = () => {
       const data = await response.json();
 
       if (data.success) {
+        // Update the row in place — no refetch, no stale window.
         setAuthUsers(prev => prev.map(u =>
           u.uid === user.uid ? { ...u, disabled: disable } : u
         ));
         toast.success(disable ? 'Account disabled' : 'Account enabled', { id: loadingToast });
         setActionModal(null);
-        // Refresh authoritative state
-        fetchAuthUsers();
-        fetchUsersAndRoles();
       } else {
         toast.error(data.error || 'Failed to update account', { id: loadingToast });
       }
@@ -231,7 +235,7 @@ const UserManagement = () => {
   const handleDeleteUser = async (user) => {
     const loadingToast = toast.loading('Deleting user...');
     try {
-      const response = await authFetch(`/api/users/${user.uid}`, {
+      const response = await authFetch(`/api/admin/users/${user.uid}`, {
         method: 'DELETE'
       });
 
@@ -245,12 +249,17 @@ const UserManagement = () => {
       const data = await response.json();
 
       if (data.success) {
+        // Backend removed the auth user plus its roles/users documents; drop
+        // every local copy so the row and the role counts disappear at once.
         setAuthUsers(prev => prev.filter(u => u.uid !== user.uid));
+        setStoreUsers(prev => prev.filter(u => u.uid !== user.uid));
+        setRoles(prev => {
+          const next = { ...prev };
+          delete next[user.uid];
+          return next;
+        });
         toast.success('User deleted successfully', { id: loadingToast });
         setActionModal(null);
-        // Refresh authoritative state
-        fetchAuthUsers();
-        fetchUsersAndRoles();
       } else {
         toast.error(data.error || 'Failed to delete user', { id: loadingToast });
       }
@@ -260,14 +269,9 @@ const UserManagement = () => {
     }
   };
 
-  const usersByRole = {
-    admin: mergedUsers.filter(u => u.role === 'admin'),
-    mod: mergedUsers.filter(u => u.role === 'mod'),
-    sales: mergedUsers.filter(u => u.role === 'sales'),
-    billing: mergedUsers.filter(u => u.role === 'billing'),
-    packer: mergedUsers.filter(u => u.role === 'packer'),
-    customer: mergedUsers.filter(u => u.role === 'customer')
-  };
+  const usersByRole = Object.fromEntries(
+    roleOptions.map(role => [role, mergedUsers.filter(u => u.role === role)])
+  );
 
   const getDisplayedUsers = () => {
     let filtered = activeTab === 'all' ? mergedUsers : usersByRole[activeTab] || [];
@@ -399,7 +403,7 @@ const UserManagement = () => {
                           </div>
                           <p className="mt-1 flex items-center gap-1 text-xs" style={{ color: 'var(--text-subtle)' }}><Calendar className="h-3 w-3" />{formatDate(user.creationTime)} <Clock className="ml-2 h-3 w-3" />{user.lastSignInTime ? formatDate(user.lastSignInTime) : 'Never'}</p>
                           <div className="mt-2 flex flex-wrap gap-1.5">
-                            <button type="button" onClick={() => { const u = displayedUsers.find(x=>x.uid===user.uid); if(u) { setEditingUser(u); setNewRole(roles[u.uid]||'customer'); } }} className="inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', color: 'var(--text-body)' }}><Pencil className="h-3 w-3" />Change Role</button>
+                            <button type="button" onClick={() => { const u = displayedUsers.find(x=>x.uid===user.uid); if(u) { setEditingUser(u); setNewRole(normalizeRole(roles[u.uid])); } }} className="inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', color: 'var(--text-body)' }}><Pencil className="h-3 w-3" />Change Role</button>
                             {user.providers?.includes('password') && <button type="button" onClick={() => handleResetPassword(user)} className="inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)' }}><Key className="h-3 w-3" />Reset</button>}
                             {!isCurrent && (user.disabled ? <button type="button" onClick={() => handleDisableUser(user,false)} className="inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold" style={{ color: 'var(--leaf-600)', borderColor: 'var(--hairline)' }}><Check className="h-3 w-3" />Enable</button> : <button type="button" onClick={() => setActionModal({type:'disable',user})} className="inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold" style={{ color: 'var(--gold-600)', borderColor: 'var(--hairline)' }}><Ban className="h-3 w-3" />Disable</button>)}
                             {!isCurrent && <button type="button" onClick={() => setActionModal({type:'delete',user})} className="inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold" style={{ color: 'var(--crimson-600)', borderColor: 'rgba(203,42,42,0.3)', background: 'rgba(203,42,42,0.08)' }}><Trash2 className="h-3 w-3" />Delete</button>}
@@ -429,7 +433,7 @@ const UserManagement = () => {
                       <div className="tabular text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(user.creationTime)}</div>
                       <div className="tabular text-xs" style={{ color: 'var(--text-muted)' }}>{user.lastSignInTime ? formatDate(user.lastSignInTime) : 'Never'}</div>
                       <div className="users-actions flex flex-nowrap items-center justify-end gap-1.5 whitespace-nowrap" style={{ whiteSpace: 'nowrap' }}>
-                        <button type="button" onClick={() => { setEditingUser(user); setNewRole(roles[user.uid]||'customer'); }} className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', color: 'var(--text-body)' }}><Pencil className="h-3 w-3" />Change</button>
+                        <button type="button" onClick={() => { setEditingUser(user); setNewRole(normalizeRole(roles[user.uid])); }} className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', color: 'var(--text-body)' }}><Pencil className="h-3 w-3" />Change</button>
                         {user.providers?.includes('password') && <button type="button" onClick={() => handleResetPassword(user)} className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)' }}><Key className="h-3 w-3" />Reset</button>}
                         {!isCurrent && (user.disabled ? <button type="button" onClick={() => handleDisableUser(user,false)} className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold" style={{ color: 'var(--leaf-600)', border: '1px solid var(--hairline)', background: 'var(--surface-card)' }}><Check className="h-3 w-3" />Enable</button> : <button type="button" onClick={() => setActionModal({type:'disable',user})} className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold" style={{ color: 'var(--gold-600)', border: '1px solid var(--hairline)', background: 'var(--surface-card)' }}><Ban className="h-3 w-3" />Disable</button>)}
                         {!isCurrent && <button type="button" onClick={() => setActionModal({type:'delete',user})} className="inline-flex h-8 items-center justify-center whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold" style={{ color: 'var(--crimson-600)', borderColor: 'rgba(203,42,42,0.3)', background: 'rgba(203,42,42,0.08)' }}><Trash2 className="h-3.5 w-3.5" /></button>}
@@ -445,11 +449,12 @@ const UserManagement = () => {
 
       <RoleEditorModal
         user={editingUser}
-        currentRole={editingUser ? (roles[editingUser.uid] || 'customer') : 'customer'}
+        currentRole={editingUser ? normalizeRole(roles[editingUser.uid]) : 'customer'}
         value={newRole || 'customer'}
         onChange={setNewRole}
         onCancel={cancelEditing}
         onSave={saveRole}
+        saving={savingRole}
       />
 
       <ConfirmActionModal

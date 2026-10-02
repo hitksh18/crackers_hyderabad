@@ -61,7 +61,7 @@ const STORY_POINTS = [
 const FROM_KEY = 'auth_from';
 
 /* Staff console: only these roles may hold a session here. */
-const STAFF_ROLES = ['admin', 'sales', 'billing', 'packer', 'mod'];
+const STAFF_ROLES = ['admin', 'sales'];
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -81,8 +81,7 @@ const Login = () => {
 
   const getHomePath = (role) => {
     if (role === 'admin') return '/dashboard';
-    if (role === 'sales' || role === 'billing') return '/billing';
-    if (role === 'packer' || role === 'mod') return '/orders';
+    if (role === 'sales') return '/billing';
     return '/';
   };
 

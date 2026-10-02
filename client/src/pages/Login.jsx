@@ -66,9 +66,8 @@ const FROM_KEY = 'auth_from';
    was aiming at (`from`) always wins; otherwise each role lands on its own
    home — customers on the storefront, staff on their console. */
 const getHomePath = (role) => {
-  if (role === 'sales' || role === 'billing') return BILLING_URL;
+  if (role === 'sales') return BILLING_URL;
   if (role === 'admin') return `${ADMIN_URL}/dashboard`;
-  if (role === 'mod' || role === 'packer') return `${ADMIN_URL}/orders`;
   return '/';
 };
 

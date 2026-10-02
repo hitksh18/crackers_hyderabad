@@ -204,10 +204,9 @@ Check DevTools Network: JS/CSS/fonts load from `/assets/` (200, long cache),
 
 Sign in as the admin user → `https://admin.YOUR_DOMAIN/dashboard` loads
 KPIs/orders. Landing per role after login: admin → `/dashboard`,
-packer/mod → `/orders`, sales/billing → forwarded to
-`billing.YOUR_DOMAIN`; on the storefront customers stay on `/` and staff
-are handed to their console subdomain (sign in again there — Firebase
-sessions are per-origin). Negative test: sign in as a normal customer →
+sales → forwarded to `billing.YOUR_DOMAIN`; on the storefront customers stay
+on `/` and staff are handed to their console subdomain (sign in again there —
+Firebase sessions are per-origin). Negative test: sign in as a normal customer →
 direct-GET an admin API, e.g.
 
 ```bash
@@ -223,7 +222,7 @@ All `/api/admin/*`, `/api/upload`, `DELETE /api/media` enforce
 
 Flow: browser Firebase Web SDK sign-in → `auth.currentUser.getIdToken()` →
 `Authorization: Bearer` → Admin SDK `verifyIdToken(token, checkRevoked=true)` →
-`roles/{uid}` lookup → route role gate (`admin` / `sales,billing,packer,mod` /
+`roles/{uid}` lookup → route role gate (`admin` / `admin,sales` /
 staff). Guests can place orders + `POST /api/orders/track` (phone-last-4 check);
 everything else needs a token.
 

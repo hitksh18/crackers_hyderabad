@@ -8,7 +8,7 @@ import { BILLING_ROLES } from './lib/roles';
 
 // Counter billing terminal. Served at billing.crackershyderabad.com.
 // ONLY admin and sales roles may pass the guards below — everything else
-// (customer, billing, packer, mod, unknown) is rejected at login and by the
+// (customer, unknown) is rejected at login and by the
 // route guard. The API remains the real authorization boundary.
 const Billing = lazy(() => import('./pages/Billing'));
 

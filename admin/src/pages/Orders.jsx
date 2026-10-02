@@ -51,8 +51,8 @@ const Orders = () => {
   const [statusFilter, setStatusFilter] = useState('All');
   const [dateFilter, setDateFilter] = useState('All');
   const { isOpen, isConfirming, modalConfig, openModal, closeModal, handleConfirm } = useModal();
-  const { isAdmin, isMod } = useAuth();
-  const canEditOrder = isAdmin || isMod;
+  const { isAdmin } = useAuth();
+  const canEditOrder = isAdmin;
   const canDeleteOrder = isAdmin;
   const [editingOrder, setEditingOrder] = useState(null);
   const [editedItems, setEditedItems] = useState([]);

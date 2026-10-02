@@ -28,14 +28,15 @@ const Canvas = lazy(() => import('./pages/Canvas'));
 // NOTE: the counter register is NOT an admin route. It runs as its own
 // frontend (see /billing); /billing below is only a signpost pointing there.
 
-/* Roles permitted on the shared staff surfaces. These mirror the predicates
-   the pages themselves use — if you change one, change the other. */
-const ORDERS_ROLES = ['admin', 'packer', 'mod'];
-const PRICE_LIST_ROLES = ['admin', 'sales', 'billing', 'mod'];
+/* Roles permitted on the shared staff surfaces. The vocabulary is exactly
+   admin, sales, customer — these mirror the predicates the pages themselves
+   use, so if you change one, change the other. */
+const ORDERS_ROLES = ['admin'];
+const PRICE_LIST_ROLES = ['admin', 'sales'];
 /* Roles whose home is the billing console: they pass through this signpost
    on the way in (login landing, root redirect) and are forwarded. Admin may
    open it manually and stays for the explicit "Open Billing" button. */
-const BILLING_HOME_ROLES = ['sales', 'billing'];
+const BILLING_HOME_ROLES = ['sales'];
 
 const RouteFallback = () => (
   <div className="shell section-pad-sm">
@@ -49,8 +50,7 @@ const RouteFallback = () => (
 function RootRedirect() {
   const { userRole } = useAuth();
   if (userRole === 'admin') return <Navigate to="/dashboard" replace />;
-  if (userRole === 'sales' || userRole === 'billing') return <Navigate to="/billing" replace />;
-  if (userRole === 'packer' || userRole === 'mod') return <Navigate to="/orders" replace />;
+  if (userRole === 'sales') return <Navigate to="/billing" replace />;
   return <Navigate to="/login" replace />;
 }
 
@@ -187,9 +187,8 @@ function AdminShell() {
             <Route
               path="/billing"
               element={
-                /* adminOrSales alone would reject the `billing` role and
-                   bounce it RootRedirect -> /billing forever; the signpost is
-                   for every role whose home passes through here. */
+                /* Plain admin/sales landing: the signpost forwards sales (and
+                   admin on the explicit button) to the register. */
                 <ProtectedRoute allowRoles={[...BILLING_HOME_ROLES, 'admin']}>
                   <BillingMoved />
                 </ProtectedRoute>

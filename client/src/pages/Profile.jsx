@@ -43,7 +43,7 @@ const FieldRow = ({ icon: Icon, label, children }) => (
 );
 
 const Profile = () => {
-  const { user, isAdmin, isSales, isBilling, isPacker, isMod, linkWithGoogle } = useAuth();
+  const { user, isAdmin, isSales, linkWithGoogle } = useAuth();
   const [editing, setEditing] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -116,13 +116,7 @@ const Profile = () => {
     ? 'Administrator'
     : isSales
       ? 'Sales'
-      : isBilling
-        ? 'Billing'
-        : isPacker
-          ? 'Packer'
-          : isMod
-            ? 'Moderator'
-            : 'Customer';
+      : 'Customer';
 
   const isGoogleLinked = Boolean(user.providerData?.some((p) => p.providerId === 'google.com'));
 

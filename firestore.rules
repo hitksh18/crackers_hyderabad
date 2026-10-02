@@ -59,7 +59,7 @@ service cloud.firestore {
 
     function isStaff() {
       return isEmailAdmin() ||
-             roleOf() in ['admin', 'sales', 'billing', 'packer', 'mod'];
+             roleOf() in ['admin', 'sales'];
     }
 
     function hasVerifiedEmail() {
@@ -116,16 +116,15 @@ service cloud.firestore {
 
       // Three tiers, matching what each screen actually does.
       //
-      //  - admin and mod may edit the order itself (Orders.jsx line 174 writes
+      //  - admin may edit the order itself (Orders.jsx line 174 writes
       //    items, total and the admin note).
-      //  - other staff may only move the status along. A packer had no reason
-      //    to be able to rewrite items and total, and previously could.
+      //  - sales may only move the status along. Sales has no reason
+      //    to be able to rewrite items and total.
       //  - the customer may only cancel their own order, only from a state that
       //    is still cancellable, and only the cancellation fields. Without
       //    hasOnly() the same write could change total alongside the status.
       allow update: if isSignedIn() && (
         isAdminAny() ||
-        roleOf() == 'mod' ||
         (
           isStaff() &&
           request.resource.data.diff(resource.data).affectedKeys()

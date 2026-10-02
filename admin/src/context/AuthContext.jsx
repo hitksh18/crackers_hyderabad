@@ -54,6 +54,15 @@ const AUTH_TOAST_MESSAGES = {
 const friendlyAuthMessage = (error, fallback = 'We could not sign you in. Please try again.') =>
   AUTH_TOAST_MESSAGES[error?.code] || fallback;
 
+// The role vocabulary is exactly admin | sales | customer. Anything else in
+// roles/{uid} (legacy mod/billing/packer, case variants, blanks) resolves to
+// 'customer', so this app can never act on a role it does not recognise.
+const NORMALISED_ROLES = ['admin', 'sales', 'customer'];
+const normalizeRole = (value) => {
+  const role = String(value || '').trim().toLowerCase();
+  return NORMALISED_ROLES.includes(role) ? role : 'customer';
+};
+
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -66,9 +75,6 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSales, setIsSales] = useState(false);
-  const [isBilling, setIsBilling] = useState(false);
-  const [isPacker, setIsPacker] = useState(false);
-  const [isMod, setIsMod] = useState(false);
   const [isStaff, setIsStaff] = useState(false);
   const [userRole, setUserRole] = useState(null);
   const [roleError, setRoleError] = useState(false);
@@ -89,9 +95,6 @@ export const AuthProvider = ({ children }) => {
       setRoleError(false);
       setIsAdmin(false);
       setIsSales(false);
-      setIsBilling(false);
-      setIsPacker(false);
-      setIsMod(false);
       setIsStaff(false);
       return;
     }
@@ -102,9 +105,6 @@ export const AuthProvider = ({ children }) => {
       setUserRole(null);
       setIsAdmin(false);
       setIsSales(false);
-      setIsBilling(false);
-      setIsPacker(false);
-      setIsMod(false);
       setIsStaff(false);
       return null;
     }
@@ -118,16 +118,13 @@ export const AuthProvider = ({ children }) => {
       );
 
       if (roleDoc.exists()) {
-        const role = roleDoc.data().role;
+        const role = normalizeRole(roleDoc.data().role);
         log('[AUTH] Admin access result:', role);
         setRoleError(false);
         setUserRole(role);
         setIsAdmin(role === 'admin');
         setIsSales(role === 'sales');
-        setIsBilling(role === 'billing');
-        setIsPacker(role === 'packer');
-        setIsMod(role === 'mod');
-        setIsStaff(['admin', 'sales', 'billing', 'packer', 'mod'].includes(role));
+        setIsStaff(role === 'admin' || role === 'sales');
         return role;
       } else {
         log('[AUTH] Admin access result: customer (no role doc)');
@@ -135,9 +132,6 @@ export const AuthProvider = ({ children }) => {
         setUserRole('customer');
         setIsAdmin(false);
         setIsSales(false);
-        setIsBilling(false);
-        setIsPacker(false);
-        setIsMod(false);
         setIsStaff(false);
         return 'customer';
       }
@@ -147,9 +141,6 @@ export const AuthProvider = ({ children }) => {
       setUserRole(null);
       setIsAdmin(false);
       setIsSales(false);
-      setIsBilling(false);
-      setIsPacker(false);
-      setIsMod(false);
       setIsStaff(false);
       return null;
     }
@@ -213,9 +204,6 @@ export const AuthProvider = ({ children }) => {
               setRoleError(false);
               setIsAdmin(false);
               setIsSales(false);
-              setIsBilling(false);
-              setIsPacker(false);
-              setIsMod(false);
               setIsStaff(false);
             }
           } catch (e) {
@@ -332,9 +320,6 @@ export const AuthProvider = ({ children }) => {
       setUserRole(null);
       setIsAdmin(false);
       setIsSales(false);
-      setIsBilling(false);
-      setIsPacker(false);
-      setIsMod(false);
       setIsStaff(false);
       toast.success('Logged out successfully!');
     } catch (error) {
@@ -347,9 +332,6 @@ export const AuthProvider = ({ children }) => {
     user,
     isAdmin,
     isSales,
-    isBilling,
-    isPacker,
-    isMod,
     isStaff,
     userRole,
     roleError,

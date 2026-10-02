@@ -31,6 +31,8 @@ const {
 
 const {
   STAFF_ROLES,
+  canonicalRole,
+  normalizeRole,
   escapeHtml,
   sanitiseSmsText,
   createRateLimiter,
@@ -227,7 +229,9 @@ async function authenticate(req) {
     let role = null;
     try {
       const snap = await getFirestore().collection('roles').doc(decoded.uid).get();
-      if (snap.exists) role = snap.data().role || null;
+      // Normalise so a legacy mod/billing/packer document can never pass a
+      // role check here while the frontends treat the same user as a customer.
+      if (snap.exists) role = normalizeRole(snap.data().role);
     } catch (error) {
       console.error('Role lookup failed:', error.message);
     }
@@ -495,6 +499,41 @@ app.post('/api/admin/users/:uid/disable', adminLimiter, requireAdmin, async (req
   } catch (error) {
     console.error('Error updating user status:', error);
     res.status(500).json({ error: 'Failed to update user status' });
+  }
+});
+
+/* Role change — the single path for assigning admin | sales | customer.
+   Admin token + server-side allow-list: the browser never writes roles/{uid}
+   directly, so a patched frontend cannot hand itself a role outside the
+   vocabulary (and no legacy mod/billing/packer value can be written back). */
+app.post('/api/admin/users/:uid/role', adminLimiter, requireAdmin, async (req, res) => {
+  try {
+    const role = canonicalRole(req.body?.role);
+    if (!role) {
+      return res.status(400).json({ error: 'Invalid role. Allowed roles: admin, sales, customer' });
+    }
+
+    // An admin may promote or demote anyone but themselves: losing the last
+    // admin (or locking yourself out mid-edit) is a self-inflicted outage.
+    if (req.params.uid === req.caller.uid && role !== 'admin') {
+      return res.status(400).json({ error: 'You cannot remove your own admin privileges' });
+    }
+
+    try {
+      await getAuth().getUser(req.params.uid);
+    } catch (error) {
+      if ((error.code || '').includes('user-not-found')) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      throw error;
+    }
+
+    await getFirestore().collection('roles').doc(req.params.uid).set({ role }, { merge: true });
+    console.log(`[admin] ${req.caller.uid} set role=${role} on ${req.params.uid}`);
+    res.json({ success: true, role, message: `Role updated to ${role}` });
+  } catch (error) {
+    console.error('Error updating role:', error.code, error.message);
+    res.status(500).json({ error: 'Failed to update role' });
   }
 });
 

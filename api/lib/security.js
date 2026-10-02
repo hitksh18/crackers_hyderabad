@@ -7,7 +7,29 @@
  * every one of these is small enough not to warrant a package.
  */
 
-const STAFF_ROLES = ['admin', 'sales', 'billing', 'packer', 'mod'];
+/* The staff set is admin + sales only. The role vocabulary is exactly these
+   two plus 'customer'; legacy values (billing/packer/mod) must never grant
+   access — authenticate() normalises them to 'customer' before any check. */
+const STAFF_ROLES = ['admin', 'sales'];
+const VALID_ROLES = ['admin', 'sales', 'customer'];
+
+/**
+ * Validate a caller-supplied role against the vocabulary.
+ * Returns the canonical (lowercase) role, or null when it is not one of
+ * admin | sales | customer — callers must reject null, never fall back.
+ */
+const canonicalRole = (value) => {
+  const role = String(value ?? '').trim().toLowerCase();
+  return VALID_ROLES.includes(role) ? role : null;
+};
+
+/**
+ * Resolve a stored role document value to the canonical vocabulary.
+ * Legacy mod/billing/packer values, case variants and blanks all resolve to
+ * 'customer', so one bad document cannot create inconsistent authorisation
+ * between the API and the frontends.
+ */
+const normalizeRole = (value) => canonicalRole(value) || 'customer';
 
 /**
  * Escape a value for interpolation into HTML.
@@ -101,6 +123,9 @@ const securityHeaders = (req, res, next) => {
 
 module.exports = {
   STAFF_ROLES,
+  VALID_ROLES,
+  canonicalRole,
+  normalizeRole,
   escapeHtml,
   sanitiseSmsText,
   createRateLimiter,
