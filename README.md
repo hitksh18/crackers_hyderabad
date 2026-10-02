@@ -159,3 +159,5 @@ Server env (on the KVM, never in git): `FIREBASE_SERVICE_ACCOUNT_KEY`,
 See `SECURITY.md` before deploying (rules deploy order matters). Never commit
 `.env`, `service-account*.json`, `*.zip` deploy archives, or `node_modules` —
 all are git-ignored.
+#   c r a c k e r s h y d e r a b a d  
+ 
