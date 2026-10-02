@@ -1,0 +1,40 @@
+name: Deploy Crackers Hyderabad
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: crackers-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to KVM
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to KVM
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.KVM_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.KVM_SSH_KNOWN_HOSTS }}
+          KVM_HOST: ${{ secrets.KVM_HOST }}
+          KVM_USER: ${{ secrets.KVM_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/kvm_deploy_key
+          chmod 600 ~/.ssh/kvm_deploy_key
+
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+          ssh \
+            -i ~/.ssh/kvm_deploy_key \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "$KVM_USER@$KVM_HOST" \
+            '/root/crackershyderabad/deploy.sh'
