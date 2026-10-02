@@ -1,41 +1,32 @@
 <div align="center">
 
-# <span style="color:#ff3b30">CRACKERS</span> HYDERABAD
+# CRACKERS HYDERABAD
 
 ### Premium Fireworks E-Commerce Platform
 
 <p>
-  <a href="https://crackershyderabad.com">
-    <img src="https://img.shields.io/badge/Store-crackershyderabad.com-111111?style=for-the-badge&logo=googlechrome&logoColor=white" />
-  </a>
-  <a href="https://admin.crackershyderabad.com">
-    <img src="https://img.shields.io/badge/Admin-Console-111111?style=for-the-badge&logo=shield&logoColor=white" />
-  </a>
-  <a href="https://billing.crackershyderabad.com">
-    <img src="https://img.shields.io/badge/Billing-POS-111111?style=for-the-badge&logo=cashapp&logoColor=white" />
-  </a>
+  A modern commerce platform with a dedicated storefront, administration
+  console and billing system — powered by a centralized backend.
 </p>
 
-<p>
-  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=111111" />
-  <img src="https://img.shields.io/badge/Vite-7-646CFF?style=flat-square&logo=vite&logoColor=white" />
-  <img src="https://img.shields.io/badge/Node.js-22-339933?style=flat-square&logo=nodedotjs&logoColor=white" />
-  <img src="https://img.shields.io/badge/Express-5-000000?style=flat-square&logo=express&logoColor=white" />
-  <img src="https://img.shields.io/badge/Firebase-Auth%20%2B%20Firestore-FFCA28?style=flat-square&logo=firebase&logoColor=111111" />
-  <img src="https://img.shields.io/badge/Nginx-Production-009639?style=flat-square&logo=nginx&logoColor=white" />
-</p>
+<br>
+
+[![Store](https://img.shields.io/badge/STORE-crackershyderabad.com-111111?style=for-the-badge&logo=googlechrome&logoColor=ffffff)](https://crackershyderabad.com)
+[![Admin](https://img.shields.io/badge/ADMIN-ADMIN%20CONSOLE-111111?style=for-the-badge&logo=shield&logoColor=ffffff)](https://admin.crackershyderabad.com)
+[![Billing](https://img.shields.io/badge/BILLING-POS-111111?style=for-the-badge&logo=cashapp&logoColor=ffffff)](https://billing.crackershyderabad.com)
+
+<br>
+
+<img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=111111" />
+<img src="https://img.shields.io/badge/Vite-7-646CFF?style=flat-square&logo=vite&logoColor=ffffff" />
+<img src="https://img.shields.io/badge/Node.js-22-339933?style=flat-square&logo=nodedotjs&logoColor=ffffff" />
+<img src="https://img.shields.io/badge/Express-5-111111?style=flat-square&logo=express&logoColor=ffffff" />
+<img src="https://img.shields.io/badge/Firebase-Auth%20%2B%20Firestore-FFCA28?style=flat-square&logo=firebase&logoColor=111111" />
+<img src="https://img.shields.io/badge/Nginx-Production-009639?style=flat-square&logo=nginx&logoColor=ffffff" />
 
 </div>
 
----
-
-## About
-
-**Crackers Hyderabad** is a production-ready e-commerce platform built for the online sale of standard fireworks.
-
-The platform combines a modern customer storefront with dedicated staff applications for administration and counter billing, all connected through a shared Express backend and Firebase infrastructure.
-
-> **One codebase. Three applications. One centralized backend.**
+<br>
 
 ---
 
@@ -47,11 +38,11 @@ The platform combines a modern customer storefront with dedicated staff applicat
 
 ### Storefront
 
-Customer-facing shopping experience.
+Customer shopping experience
 
-<a href="https://crackershyderabad.com">
-<img src="https://img.shields.io/badge/OPEN-Store-ff3b30?style=for-the-badge" />
-</a>
+<br>
+
+[![Open Store](https://img.shields.io/badge/OPEN_STORE-FF3B30?style=for-the-badge&logo=googlechrome&logoColor=white)](https://crackershyderabad.com)
 
 </td>
 
@@ -59,11 +50,11 @@ Customer-facing shopping experience.
 
 ### Admin Console
 
-Orders, products, users and analytics.
+Operations and management
 
-<a href="https://admin.crackershyderabad.com">
-<img src="https://img.shields.io/badge/OPEN-Admin-111111?style=for-the-badge" />
-</a>
+<br>
+
+[![Open Admin](https://img.shields.io/badge/OPEN_ADMIN-111111?style=for-the-badge&logo=shield&logoColor=white)](https://admin.crackershyderabad.com)
 
 </td>
 
@@ -71,11 +62,11 @@ Orders, products, users and analytics.
 
 ### Billing POS
 
-Counter sales and invoice management.
+Counter sales and invoices
 
-<a href="https://billing.crackershyderabad.com">
-<img src="https://img.shields.io/badge/OPEN-Billing-555555?style=for-the-badge" />
-</a>
+<br>
+
+[![Open Billing](https://img.shields.io/badge/OPEN_BILLING-444444?style=for-the-badge&logo=cashapp&logoColor=white)](https://billing.crackershyderabad.com)
 
 </td>
 </tr>
@@ -83,33 +74,17 @@ Counter sales and invoice management.
 
 ---
 
-# Architecture
+## Overview
+
+**Crackers Hyderabad** is a production-ready e-commerce platform built for the online sale of standard fireworks.
+
+The platform combines three specialized applications with one centralized backend:
 
 ```text
-                         INTERNET
-                             |
-                             v
-                    +------------------+
-                    |       NGINX      |
-                    | Reverse Proxy    |
-                    +--------+---------+
-                             |
-          +------------------+------------------+
-          |                  |                  |
-          v                  v                  v
-   crackershyderabad   admin.crackers...  billing.crackers...
-       STOREFRONT          ADMIN               BILLING
-          |                  |                  |
-          +------------------+------------------+
-                             |
-                             v
-                    +------------------+
-                    |   EXPRESS API    |
-                    |     :3001        |
-                    +--------+---------+
-                             |
-              +--------------+--------------+
-              |              |              |
-              v              v              v
-          FIREBASE         MEDIA          BUSINESS
-       AUTH / FIRESTORE    STORAGE          LOGIC
+CUSTOMER STOREFRONT
+        |
+        |
+ADMIN CONSOLE ---- CENTRAL API ---- FIREBASE
+        |
+        |
+   BILLING POS
