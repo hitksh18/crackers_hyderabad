@@ -1,4 +1,4 @@
-name: Deploy Crackers Hyderabad
+﻿name: Deploy Crackers Hyderabad
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: Deploy to KVM
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.KVM_SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY_B64: ${{ secrets.KVM_SSH_PRIVATE_KEY_B64 }}
           SSH_KNOWN_HOSTS: ${{ secrets.KVM_SSH_KNOWN_HOSTS }}
           KVM_HOST: ${{ secrets.KVM_HOST }}
           KVM_USER: ${{ secrets.KVM_USER }}
@@ -26,7 +26,7 @@ jobs:
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/kvm_deploy_key
+          printf '%s' "$SSH_PRIVATE_KEY_B64" | base64 --decode > ~/.ssh/kvm_deploy_key
           chmod 600 ~/.ssh/kvm_deploy_key
 
           printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
