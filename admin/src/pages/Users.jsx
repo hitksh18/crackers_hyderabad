@@ -1,16 +1,14 @@
 import { useState, useEffect } from 'react';
 import '../admin-portrait.css';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebase';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Search, Users, RefreshCw, Mail, User, Check, Ban, Trash2, Key, Pencil, Clock, Calendar, CircleCheck, CircleX } from 'lucide-react';
+import { ArrowLeft, Search, Users, RefreshCw, Mail, User, Check, Ban, Trash2, Key, Pencil, Clock, Calendar, CircleCheck, CircleX, AlertTriangle } from 'lucide-react';
 import toast from '../utils/toast';
 import { authFetch, readApiError } from '../utils/apiClient';
 import { useAuth } from '../context/AuthContext';
 import { roleOptions, roleConfig, configFor, normalizeRole } from '../components/admin/userRoles';
 import AccountMenu from '../components/admin/AccountMenu';
 import {
-  RoleEditorModal,
+  EditUserModal,
   ConfirmActionModal,
   ResetLinkModal,
 } from '../components/admin/UserAdminModals';
@@ -33,145 +31,149 @@ const getProviderName = (providers) => {
 
 const UserManagement = () => {
   const [authUsers, setAuthUsers] = useState([]);
-  const [storeUsers, setStoreUsers] = useState([]);
   const [roles, setRoles] = useState({});
   const [loading, setLoading] = useState(true);
-  const [authLoading, setAuthLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [editingUser, setEditingUser] = useState(null);
-  const [newRole, setNewRole] = useState('');
+  const [savingUser, setSavingUser] = useState(false);
+  const [ensuringProfile, setEnsuringProfile] = useState(false);
   const [actionModal, setActionModal] = useState(null);
-  const [savingRole, setSavingRole] = useState(false);
   const { user: currentUser } = useAuth();
 
   useEffect(() => {
-    fetchUsersAndRoles();
     fetchAuthUsers();
   }, []);
 
+  // Single source: GET /api/admin/users returns Auth users enriched with
+  // users/{uid} profile fields + roles/{uid}. Auth decides WHO is listed;
+  // Firestore-only UIDs never appear here (orphans stay reconcile-only).
   const fetchAuthUsers = async () => {
-    setAuthLoading(true);
+    setLoading(true);
     try {
       const response = await authFetch('/api/admin/users');
       if (!response.ok) {
         toast.error(await readApiError(response, 'Failed to load users'));
         setAuthUsers([]);
+        setRoles({});
         return;
       }
       const data = await response.json();
       if (data.setupRequired || data.error) {
         setAuthUsers([]);
+        setRoles({});
       } else {
-        setAuthUsers(data.users || []);
+        const list = data.users || [];
+        setAuthUsers(list);
+        const next = {};
+        list.forEach((u) => { next[u.uid] = normalizeRole(u.role); });
+        setRoles(next);
       }
     } catch (error) {
       console.error('Error fetching auth users:', error);
       setAuthUsers([]);
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const fetchUsersAndRoles = async () => {
-    try {
-      const rolesSnapshot = await getDocs(collection(db, 'roles'));
-      const rolesData = {};
-      rolesSnapshot.docs.forEach(doc => {
-        rolesData[doc.id] = normalizeRole(doc.data().role);
-      });
-      setRoles(rolesData);
-
-      const usersSnapshot = await getDocs(collection(db, 'users'));
-      const usersData = usersSnapshot.docs.map(doc => ({
-        uid: doc.id,
-        displayName: doc.data().name || 'No name',
-        email: doc.data().email || '',
-        photoURL: '',
-        creationTime: doc.data().createdAt?.toDate?.()?.toISOString() || '',
-        providers: [],
-        fromStore: true
-      }));
-      setStoreUsers(usersData);
-    } catch (error) {
-      console.error('Error fetching roles:', error);
+      setRoles({});
     } finally {
       setLoading(false);
     }
   };
 
-  const mergedUsers = [];
-  const seenUids = new Set();
-
-  authUsers.forEach(authUser => {
-    const role = normalizeRole(roles[authUser.uid]);
-    mergedUsers.push({
+  const enrichedUsers = authUsers.map(authUser => {
+    const role = normalizeRole(authUser.role ?? roles[authUser.uid]);
+    return {
       ...authUser,
       id: authUser.uid,
-      name: authUser.displayName,
+      name: authUser.displayName || authUser.profileName || null,
       email: authUser.email,
-      role: role
-    });
-    seenUids.add(authUser.uid);
-  });
-
-  storeUsers.forEach(storeUser => {
-    if (seenUids.has(storeUser.uid)) return;
-    const role = normalizeRole(roles[storeUser.uid]);
-    mergedUsers.push({
-      ...storeUser,
-      id: storeUser.uid,
-      role: role
-    });
-    seenUids.add(storeUser.uid);
+      role,
+      // Firestore profile conveniences for the table (empty when missing).
+      profilePhone: authUser.profilePhone || authUser.firestorePhone || authUser.firestorePhoneNumber || '',
+    };
   });
 
   const cancelEditing = () => {
+    if (savingUser || ensuringProfile) return;
     setEditingUser(null);
-    setNewRole('');
   };
 
-  const saveRole = async () => {
-    if (!editingUser || !newRole || savingRole) return;
+  // Full Admin edit: PATCH /api/admin/users/:uid updates Auth fields,
+  // allow-listed users/{uid} profile fields and roles/{uid} in one call,
+  // then swaps the returned combined object into the table — no refetch.
+  const handleSaveUser = async (fields) => {
+    if (!editingUser || savingUser) return;
 
-    if (editingUser.uid === currentUser?.uid && newRole !== 'admin') {
+    if (editingUser.uid === currentUser?.uid && fields.role !== 'admin') {
       toast.error('You cannot remove your own admin privileges');
       return;
     }
+    if (editingUser.uid === currentUser?.uid && fields.disabled === true) {
+      toast.error('You cannot disable your own account');
+      return;
+    }
 
-    const loadingToast = toast.loading('Updating role...');
-    setSavingRole(true);
+    const loadingToast = toast.loading('Saving user...');
+    setSavingUser(true);
 
     try {
-      // Role changes go through the API (verified admin token + server-side
-      // allow-list) — never a direct Firestore write from the browser.
-      const response = await authFetch(`/api/admin/users/${editingUser.uid}/role`, {
-        method: 'POST',
+      const response = await authFetch(`/api/admin/users/${editingUser.uid}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: newRole }),
+        body: JSON.stringify(fields),
       });
 
       if (!response.ok) {
-        // Keep the modal open so the failure is visible and retryable.
-        toast.error(await readApiError(response, 'Failed to update role'), { id: loadingToast });
+        toast.error(await readApiError(response, 'Failed to update user'), { id: loadingToast });
         return;
       }
 
       const data = await response.json();
 
-      if (!data.success) {
-        toast.error(data.error || 'Failed to update role', { id: loadingToast });
+      if (!data.success || !data.user) {
+        toast.error(data.error || 'Failed to update user', { id: loadingToast });
         return;
       }
 
-      setRoles(prev => ({ ...prev, [editingUser.uid]: data.role }));
-      toast.success(`Role updated to ${roleConfig[data.role]?.label || data.role} successfully!`, { id: loadingToast });
-      cancelEditing();
+      const updated = data.user;
+      setAuthUsers(prev => prev.map(u => (u.uid === updated.uid ? updated : u)));
+      setRoles(prev => ({ ...prev, [updated.uid]: normalizeRole(updated.role) }));
+      toast.success('User updated successfully!', { id: loadingToast });
+      setEditingUser(null);
     } catch (error) {
-      console.error('Error updating role:', error.code, error.message);
-      toast.error('Failed to update role', { id: loadingToast });
+      console.error('Error updating user:', error);
+      toast.error('Failed to update user', { id: loadingToast });
     } finally {
-      setSavingRole(false);
+      setSavingUser(false);
+    }
+  };
+
+  // Missing-profile action: POST /api/admin/users/:uid/profile seeds
+  // users/{uid} from the Auth record. Idempotent — existing docs untouched.
+  const handleEnsureProfile = async (user) => {
+    if (!user || ensuringProfile) return;
+    const loadingToast = toast.loading('Creating profile...');
+    setEnsuringProfile(true);
+    try {
+      const response = await authFetch(`/api/admin/users/${user.uid}/profile`, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        toast.error(await readApiError(response, 'Failed to create profile'), { id: loadingToast });
+        return;
+      }
+      const data = await response.json();
+      if (!data.success || !data.user) {
+        toast.error(data.error || 'Failed to create profile', { id: loadingToast });
+        return;
+      }
+      const updated = data.user;
+      setAuthUsers(prev => prev.map(u => (u.uid === updated.uid ? updated : u)));
+      setEditingUser(updated);
+      toast.success(data.created ? 'Profile created' : 'Profile already exists', { id: loadingToast });
+    } catch (error) {
+      console.error('Error creating profile:', error);
+      toast.error('Failed to create profile', { id: loadingToast });
+    } finally {
+      setEnsuringProfile(false);
     }
   };
 
@@ -252,7 +254,6 @@ const UserManagement = () => {
         // Backend removed the auth user plus its roles/users documents; drop
         // every local copy so the row and the role counts disappear at once.
         setAuthUsers(prev => prev.filter(u => u.uid !== user.uid));
-        setStoreUsers(prev => prev.filter(u => u.uid !== user.uid));
         setRoles(prev => {
           const next = { ...prev };
           delete next[user.uid];
@@ -270,17 +271,20 @@ const UserManagement = () => {
   };
 
   const usersByRole = Object.fromEntries(
-    roleOptions.map(role => [role, mergedUsers.filter(u => u.role === role)])
+    roleOptions.map(role => [role, enrichedUsers.filter(u => u.role === role)])
   );
 
   const getDisplayedUsers = () => {
-    let filtered = activeTab === 'all' ? mergedUsers : usersByRole[activeTab] || [];
+    let filtered = activeTab === 'all' ? enrichedUsers : usersByRole[activeTab] || [];
 
     if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
       filtered = filtered.filter(user =>
-        (user.displayName?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (user.email?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (user.uid?.toLowerCase().includes(searchQuery.toLowerCase()))
+        (user.displayName?.toLowerCase().includes(q)) ||
+        (user.profileName?.toLowerCase().includes(q)) ||
+        (user.email?.toLowerCase().includes(q)) ||
+        (user.profilePhone?.toLowerCase().includes(q)) ||
+        (user.uid?.toLowerCase().includes(q))
       );
     }
 
@@ -288,9 +292,8 @@ const UserManagement = () => {
   };
 
   const displayedUsers = getDisplayedUsers();
-  const isLoading = loading || authLoading;
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-[var(--surface-page)]">
         <div className="mx-auto w-full max-w-[1600px] px-4 py-6 lg:px-8">
@@ -302,18 +305,26 @@ const UserManagement = () => {
 
   return (
     <div className="min-h-screen bg-[var(--surface-page)] text-[var(--text-body)] transition-colors duration-200 overflow-x-hidden">
-      {/* Dedicated Navbar */}
+      {/* Dedicated Navbar: 3-column grid (1fr auto 1fr) so the title is
+          truly centered in normal flow and can never overlap the actions.
+          Left = back link, center = title, right = refresh + account menu. */}
       <header className="sticky top-0 z-30 flex h-[60px] w-full shrink-0 items-center border-b bg-[var(--surface-card)] px-4 lg:px-8" style={{ borderColor: 'var(--hairline)' }}>
-        <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-4">
-          <Link to="/dashboard" className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold" style={{ color: 'var(--ember-600)' }}>
-            <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Back to Dashboard</span><span className="sm:hidden">Back</span>
-          </Link>
-          <h1 className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 text-sm font-bold tracking-tight sm:block" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>User Management</h1>
-          <span className="absolute left-1/2 -translate-x-1/2 text-sm font-bold sm:hidden" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>Users</span>
-          <button type="button" onClick={() => { fetchAuthUsers(); fetchUsersAndRoles(); }} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)', color: 'var(--text-body)' }}>
-            <RefreshCw className="h-4 w-4" /> <span className="hidden sm:inline">Refresh</span>
-          </button>
-          <AccountMenu />
+        <div className="mx-auto grid w-full max-w-[1600px] items-center gap-2 sm:gap-4" style={{ gridTemplateColumns: '1fr auto 1fr' }}>
+          <div className="flex min-w-0 justify-start">
+            <Link to="/dashboard" className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold" style={{ color: 'var(--ember-600)' }}>
+              <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Back to Dashboard</span><span className="sm:hidden">Back</span>
+            </Link>
+          </div>
+          <div className="min-w-0 text-center">
+            <h1 className="hidden truncate text-sm font-bold tracking-tight sm:block" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>User Management</h1>
+            <span className="block truncate text-sm font-bold sm:hidden" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>Users</span>
+          </div>
+          <div className="flex min-w-0 items-center justify-end gap-2">
+            <button type="button" onClick={() => { fetchAuthUsers(); }} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)', color: 'var(--text-body)' }}>
+              <RefreshCw className="h-4 w-4" /> <span className="hidden sm:inline">Refresh</span>
+            </button>
+            <AccountMenu />
+          </div>
         </div>
       </header>
 
@@ -321,7 +332,7 @@ const UserManagement = () => {
         {/* Role filters - compact pills */}
         <div className="flex flex-wrap gap-1.5">
           {[
-            { key: 'all', label: 'All Users', count: mergedUsers.length },
+            { key: 'all', label: 'All Users', count: enrichedUsers.length },
             ...roleOptions.map(r => ({ key: r, label: roleConfig[r]?.label || r, count: (usersByRole[r]||[]).length }))
           ].map(tab => {
             const isActive = activeTab === tab.key;
@@ -394,8 +405,9 @@ const UserManagement = () => {
                           {user.photoURL ? <img src={user.photoURL} alt="" className="h-9 w-9 rounded-full object-cover" /> : <RoleIcon className="h-4 w-4" style={{ color: 'var(--text-muted)' }} />}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{user.displayName || 'No name'} {isCurrent && <span className="ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'var(--ember-600)', color: '#fff' }}>You</span>}</p>
+                          <p className="truncate text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{user.displayName || user.profileName || 'No name'} {isCurrent && <span className="ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'var(--ember-600)', color: '#fff' }}>You</span>}</p>
                           <p className="truncate text-xs" style={{ color: 'var(--text-muted)' }}>{user.email || '—'}</p>
+                          <p className="truncate text-xs tabular" style={{ color: 'var(--text-muted)' }}>{user.profilePhone || (user.profileMissing ? 'No profile' : '—')}</p>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5">
                             <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold" style={{ background: 'var(--surface-card)', borderColor: 'var(--hairline)', color: 'var(--text-body)' }}><RoleIcon className="h-3 w-3" />{cfg.label}</span>
                             <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]" style={{ background: 'var(--surface-sunken)', borderColor: 'var(--hairline)', color: 'var(--text-muted)' }}>{getProviderName(user.providers)}</span>
@@ -403,7 +415,7 @@ const UserManagement = () => {
                           </div>
                           <p className="mt-1 flex items-center gap-1 text-xs" style={{ color: 'var(--text-subtle)' }}><Calendar className="h-3 w-3" />{formatDate(user.creationTime)} <Clock className="ml-2 h-3 w-3" />{user.lastSignInTime ? formatDate(user.lastSignInTime) : 'Never'}</p>
                           <div className="mt-2 flex flex-wrap gap-1.5">
-                            <button type="button" onClick={() => { const u = displayedUsers.find(x=>x.uid===user.uid); if(u) { setEditingUser(u); setNewRole(normalizeRole(roles[u.uid])); } }} className="inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', color: 'var(--text-body)' }}><Pencil className="h-3 w-3" />Change Role</button>
+                            <button type="button" onClick={() => { const u = displayedUsers.find(x=>x.uid===user.uid); if(u) { setEditingUser(u); } }} className="inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', color: 'var(--text-body)' }}><Pencil className="h-3 w-3" />Change Role</button>
                             {user.providers?.includes('password') && <button type="button" onClick={() => handleResetPassword(user)} className="inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)' }}><Key className="h-3 w-3" />Reset</button>}
                             {!isCurrent && (user.disabled ? <button type="button" onClick={() => handleDisableUser(user,false)} className="inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold" style={{ color: 'var(--leaf-600)', borderColor: 'var(--hairline)' }}><Check className="h-3 w-3" />Enable</button> : <button type="button" onClick={() => setActionModal({type:'disable',user})} className="inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold" style={{ color: 'var(--gold-600)', borderColor: 'var(--hairline)' }}><Ban className="h-3 w-3" />Disable</button>)}
                             {!isCurrent && <button type="button" onClick={() => setActionModal({type:'delete',user})} className="inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold" style={{ color: 'var(--crimson-600)', borderColor: 'rgba(203,42,42,0.3)', background: 'rgba(203,42,42,0.08)' }}><Trash2 className="h-3 w-3" />Delete</button>}
@@ -419,8 +431,9 @@ const UserManagement = () => {
                           {user.photoURL ? <img src={user.photoURL} alt="" className="h-8 w-8 rounded-full object-cover" /> : <RoleIcon className="h-4 w-4" style={{ color: 'var(--text-muted)' }} />}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold leading-tight" style={{ color: 'var(--text-strong)' }}>{user.displayName || 'No name'} {isCurrent && <span className="ml-1 rounded-full px-1 py-0.5 text-[10px] font-bold align-middle" style={{ background: 'var(--ember-600)', color: '#fff' }}>You</span>}</p>
+                          <p className="truncate text-sm font-semibold leading-tight" style={{ color: 'var(--text-strong)' }}>{user.displayName || user.profileName || 'No name'} {isCurrent && <span className="ml-1 rounded-full px-1 py-0.5 text-[10px] font-bold align-middle" style={{ background: 'var(--ember-600)', color: '#fff' }}>You</span>}</p>
                           <p className="truncate text-xs leading-tight" style={{ color: 'var(--text-muted)' }}>{user.email || '—'}</p>
+                          <p className="truncate text-xs tabular leading-tight" style={{ color: 'var(--text-subtle)' }}>{user.profilePhone || (user.profileMissing ? 'No profile' : '')}</p>
                         </div>
                       </div>
                       <div>
@@ -433,7 +446,7 @@ const UserManagement = () => {
                       <div className="tabular text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(user.creationTime)}</div>
                       <div className="tabular text-xs" style={{ color: 'var(--text-muted)' }}>{user.lastSignInTime ? formatDate(user.lastSignInTime) : 'Never'}</div>
                       <div className="users-actions flex flex-nowrap items-center justify-end gap-1.5 whitespace-nowrap" style={{ whiteSpace: 'nowrap' }}>
-                        <button type="button" onClick={() => { setEditingUser(user); setNewRole(normalizeRole(roles[user.uid])); }} className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', color: 'var(--text-body)' }}><Pencil className="h-3 w-3" />Change</button>
+                        <button type="button" onClick={() => { setEditingUser(user); }} className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', color: 'var(--text-body)' }}><Pencil className="h-3 w-3" />Change</button>
                         {user.providers?.includes('password') && <button type="button" onClick={() => handleResetPassword(user)} className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)' }}><Key className="h-3 w-3" />Reset</button>}
                         {!isCurrent && (user.disabled ? <button type="button" onClick={() => handleDisableUser(user,false)} className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold" style={{ color: 'var(--leaf-600)', border: '1px solid var(--hairline)', background: 'var(--surface-card)' }}><Check className="h-3 w-3" />Enable</button> : <button type="button" onClick={() => setActionModal({type:'disable',user})} className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold" style={{ color: 'var(--gold-600)', border: '1px solid var(--hairline)', background: 'var(--surface-card)' }}><Ban className="h-3 w-3" />Disable</button>)}
                         {!isCurrent && <button type="button" onClick={() => setActionModal({type:'delete',user})} className="inline-flex h-8 items-center justify-center whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold" style={{ color: 'var(--crimson-600)', borderColor: 'rgba(203,42,42,0.3)', background: 'rgba(203,42,42,0.08)' }}><Trash2 className="h-3.5 w-3.5" /></button>}
@@ -447,14 +460,13 @@ const UserManagement = () => {
         </div>
       </div>
 
-      <RoleEditorModal
+      <EditUserModal
         user={editingUser}
-        currentRole={editingUser ? normalizeRole(roles[editingUser.uid]) : 'customer'}
-        value={newRole || 'customer'}
-        onChange={setNewRole}
         onCancel={cancelEditing}
-        onSave={saveRole}
-        saving={savingRole}
+        onSave={handleSaveUser}
+        onEnsureProfile={() => editingUser && handleEnsureProfile(editingUser)}
+        saving={savingUser}
+        ensuringProfile={ensuringProfile}
       />
 
       <ConfirmActionModal

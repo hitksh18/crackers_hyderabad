@@ -15,7 +15,12 @@ export function apiUrl(path) {
   if (!path) return path;
   if (/^https?:\/\//i.test(path)) return path;
   if (!API_BASE) return path;
-  return `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
+  const suffix = path.startsWith('/') ? path : `/${path}`;
+  // API_BASE is a path prefix ('/api') in local dev, where the Vite proxy
+  // forwards the full path to the backend. Never duplicate it: requesting
+  // '/api/api/admin/users' matches no Express route and returns 404.
+  if (suffix === API_BASE || suffix.startsWith(`${API_BASE}/`)) return suffix;
+  return `${API_BASE}${suffix}`;
 }
 
 export async function authFetch(url, options = {}) {

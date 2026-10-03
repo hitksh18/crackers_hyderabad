@@ -125,7 +125,7 @@ const corsOptions = {
     return callback(new Error('CORS not allowed'), false);
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
@@ -417,29 +417,183 @@ const toUserPayload = (userRecord) => ({
   lastRefreshTime: userRecord.metadata.lastRefreshTime || null,
 });
 
+/* ---------------------------------------------------------------------------
+   Combined User Management object — Auth is the source of truth for which
+   accounts exist; Firestore users/{uid} + roles/{uid} are profile data only.
+
+   Flow: Auth users → users/{uid} → roles/{uid} → combined object.
+   NEVER the reverse: Firestore-only UIDs are orphans and are never merged
+   into the list (see POST /api/admin/users/reconcile for cleanup).
+
+   users/{uid} schema observed in this repo (do not invent fields):
+     name, displayName, email, phone, phoneNumber, createdAt, updatedAt,
+     wishlist (array — preserved, never edited here).
+   NOTE: no `address` field exists in users/{uid}; it is intentionally absent
+   from the editable allow-list below.
+   roles/{uid} schema: { role: 'admin' | 'sales' | 'customer' }.
+   --------------------------------------------------------------------------- */
+
+const toPlainProfile = (data) => {
+  if (!data || typeof data !== 'object') return null;
+  const out = {};
+  if (typeof data.name === 'string') out.name = data.name;
+  if (typeof data.displayName === 'string') out.displayName = data.displayName;
+  if (typeof data.email === 'string') out.email = data.email;
+  if (typeof data.phone === 'string') out.phone = data.phone;
+  if (typeof data.phoneNumber === 'string') out.phoneNumber = data.phoneNumber;
+  if (data.createdAt !== undefined) {
+    try {
+      out.createdAt = typeof data.createdAt.toDate === 'function'
+        ? data.createdAt.toDate().toISOString()
+        : data.createdAt;
+    } catch { out.createdAt = null; }
+  }
+  if (data.updatedAt !== undefined) {
+    try {
+      out.updatedAt = typeof data.updatedAt.toDate === 'function'
+        ? data.updatedAt.toDate().toISOString()
+        : data.updatedAt;
+    } catch { out.updatedAt = null; }
+  }
+  if (Array.isArray(data.wishlist)) out.wishlistCount = data.wishlist.length;
+  return out;
+};
+
+const buildCombinedUser = (userRecord, profileDataOrNull, roleValue) => {
+  const base = toUserPayload(userRecord);
+  const hasProfile = profileDataOrNull !== null && profileDataOrNull !== undefined;
+  const profile = hasProfile ? toPlainProfile(profileDataOrNull) : null;
+  const role = normalizeRole(roleValue);
+  // Firestore profile conveniences — empty/default values when the doc is
+  // missing. The Auth row still appears; nothing fake is created.
+  const profileName = hasProfile
+    ? (profileDataOrNull.name || profileDataOrNull.displayName || '')
+    : '';
+  const profileEmail = hasProfile ? (profileDataOrNull.email || '') : '';
+  const profilePhone = hasProfile
+    ? (profileDataOrNull.phone || profileDataOrNull.phoneNumber || '')
+    : '';
+  return {
+    ...base,
+    id: userRecord.uid,
+    name: base.displayName || profileName || null,
+    role,
+    hasProfile,
+    profileMissing: !hasProfile,
+    profile,
+    profileName,
+    profileEmail,
+    profilePhone,
+    // Raw Firestore field aliases (empty string when missing) for the table.
+    firestoreName: hasProfile ? (profileDataOrNull.name || '') : '',
+    firestoreDisplayName: hasProfile ? (profileDataOrNull.displayName || '') : '',
+    firestoreEmail: profileEmail,
+    firestorePhone: hasProfile ? (profileDataOrNull.phone || '') : '',
+    firestorePhoneNumber: hasProfile ? (profileDataOrNull.phoneNumber || '') : '',
+  };
+};
+
+const isValidUidParam = (value) =>
+  typeof value === 'string' && value.length >= 1 && value.length <= 128 && !/[\s/]/.test(value);
+
+const sanitizeNameField = (value, max = 120) =>
+  String(value).trim().slice(0, max);
+
+const sanitizePhoneField = (value, max = 32) =>
+  String(value).trim().slice(0, max);
+
+const isPlausiblePhone = (value) => /^[\d+\-()\s]{0,32}$/.test(value);
+
 app.get('/api/admin/users', adminLimiter, requireAdmin, async (req, res) => {
   try {
-    const users = [];
+    const authRecords = [];
     let nextPageToken;
 
-    do {
-      const result = await getAuth().listUsers(1000, nextPageToken);
-      result.users.forEach((u) => users.push(toUserPayload(u)));
-      nextPageToken = result.pageToken;
-    } while (nextPageToken);
+    try {
+      do {
+        const result = await getAuth().listUsers(1000, nextPageToken);
+        result.users.forEach((u) => authRecords.push(u));
+        nextPageToken = result.pageToken;
+      } while (nextPageToken);
+    } catch (e) {
+      // Phase 1 — Auth enumeration. The ONLY fatal phase: without the Auth
+      // list there is no source of truth, so this is a genuine 500.
+      console.error('[admin/users] listUsers failed:',
+        'code=', e.code || '(none)',
+        'message=', e.message || '(none)');
+      return res.status(500).json({ error: 'Failed to list users' });
+    }
 
+    // Bulk-fetch Firestore companions once (logically: for each UID, read
+    // users/{uid} + roles/{uid}). Firestore-only UIDs are ignored here.
+    // Phase 2 — enrichment is best-effort: a Firestore outage must never
+    // turn into a 500; the Auth rows go out unenriched instead.
+    const db = getFirestore();
+    let profileByUid = {};
+    let roleByUid = {};
+    try {
+      const [usersSnap, rolesSnap] = await Promise.all([
+        db.collection('users').get(),
+        db.collection('roles').get(),
+      ]);
+      usersSnap.docs.forEach((d) => { profileByUid[d.id] = d.data() || null; });
+      rolesSnap.docs.forEach((d) => { roleByUid[d.id] = d.data()?.role; });
+    } catch (e) {
+      console.error('[admin/users] companion fetch failed, returning Auth-only rows:',
+        'code=', e.code || '(none)',
+        'message=', e.message || '(none)');
+      profileByUid = {};
+      roleByUid = {};
+    }
+
+    // Phase 3 — per-user combine. A malformed profile/role for ONE user must
+    // never fail the whole list: that row falls back to its Auth payload
+    // (role customer) and the exception is logged with the UID.
+    const users = authRecords.map((u) => {
+      try {
+        return buildCombinedUser(
+          u,
+          Object.prototype.hasOwnProperty.call(profileByUid, u.uid) ? profileByUid[u.uid] : null,
+          roleByUid[u.uid],
+        );
+      } catch (e) {
+        console.error(`[admin/users] combine failed for ${u.uid}, returning Auth-only row:`,
+          'message=', e.message || '(none)');
+        return buildCombinedUser(u, null, undefined);
+      }
+    });
+
+    console.log(`[admin/users] ${req.caller.uid} listed ${users.length} users`);
     res.json({ users, total: users.length });
   } catch (error) {
-    console.error('Error listing users:', error);
+    console.error('[admin/users] unexpected failure:',
+      'code=', error.code || '(none)',
+      'message=', error.message || '(none)',
+      error.stack ? `\n${error.stack}` : '');
     res.status(500).json({ error: 'Failed to list users' });
   }
 });
 
 app.get('/api/admin/users/:uid', adminLimiter, requireAdmin, async (req, res) => {
   try {
-    res.json(toUserPayload(await getAuth().getUser(req.params.uid)));
+    if (!isValidUidParam(req.params.uid)) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+    const userRecord = await getAuth().getUser(req.params.uid);
+    const db = getFirestore();
+    const [profileSnap, roleSnap] = await Promise.all([
+      db.collection('users').doc(req.params.uid).get().catch(() => null),
+      db.collection('roles').doc(req.params.uid).get().catch(() => null),
+    ]);
+    res.json(buildCombinedUser(
+      userRecord,
+      profileSnap && profileSnap.exists ? profileSnap.data() : null,
+      roleSnap && roleSnap.exists ? roleSnap.data()?.role : undefined,
+    ));
   } catch (error) {
-    console.error('Error getting user:', error);
+    console.error('[admin/users/:uid] failed:',
+      'code=', error.code || '(none)',
+      'message=', error.message || '(none)');
     res.status(404).json({ error: 'User not found' });
   }
 });
@@ -543,19 +697,122 @@ app.delete('/api/admin/users/:uid', adminLimiter, requireAdmin, async (req, res)
       return res.status(400).json({ error: 'You cannot delete your own account' });
     }
 
-    await getAuth().deleteUser(req.params.uid);
-    // Clean application data if present — do not fail the whole request if these are missing
-    try { await getFirestore().collection('roles').doc(req.params.uid).delete(); } catch (e) { console.warn('[admin] roles cleanup failed for', req.params.uid, e.message); }
-    try { await getFirestore().collection('users').doc(req.params.uid).delete(); } catch (e) { console.warn('[admin] users cleanup failed for', req.params.uid, e.message); }
-    console.log(`[admin] ${req.caller.uid} deleted ${req.params.uid} (auth + roles/users)`);
+    let authDeleted = false;
+
+    // Attempt to delete the Firebase Auth account
+    try {
+      await getAuth().deleteUser(req.params.uid);
+      authDeleted = true;
+      console.log(`[admin] ${req.caller.uid} deleted auth user ${req.params.uid}`);
+    } catch (authError) {
+      const code = authError.code || '';
+      if (code.includes('user-not-found')) {
+        // Auth account already gone — continue with Firestore cleanup
+        console.log(`[admin] ${req.caller.uid} delete: auth user ${req.params.uid} already missing, cleaning Firestore`);
+      } else if (code.includes('invalid-uid')) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+      } else {
+        // Other auth errors are fatal
+        console.error('Error deleting auth user:', authError.code, authError.message);
+        return res.status(500).json({ error: 'Failed to delete user' });
+      }
+    }
+
+    // Clean up Firestore documents — always attempt, even if auth was already missing
+    let rolesDeleted = false;
+    let usersDeleted = false;
+
+    try {
+      await getFirestore().collection('roles').doc(req.params.uid).delete();
+      rolesDeleted = true;
+    } catch (e) {
+      console.warn('[admin] roles cleanup failed for', req.params.uid, e.message);
+    }
+
+    try {
+      await getFirestore().collection('users').doc(req.params.uid).delete();
+      usersDeleted = true;
+    } catch (e) {
+      console.warn('[admin] users cleanup failed for', req.params.uid, e.message);
+    }
+
+    console.log(`[admin] ${req.caller.uid} deleted ${req.params.uid} (authDeleted=${authDeleted}, rolesDeleted=${rolesDeleted}, usersDeleted=${usersDeleted})`);
     res.json({ success: true, message: 'User deleted successfully' });
   } catch (error) {
     console.error('Error deleting user:', error.code, error.message);
-    // Map known auth errors to safe messages
-    const code = error.code || '';
-    if (code.includes('user-not-found')) return res.status(404).json({ error: 'User not found' });
-    if (code.includes('invalid-uid')) return res.status(400).json({ error: 'Invalid user ID' });
     res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+/**
+ * Reconcile orphaned Firestore user documents.
+ *
+ * Compares Firebase Auth users against Firestore 'users' and 'roles' collections.
+ * Removes Firestore documents that have no corresponding Auth account.
+ * NEVER deletes Auth accounts or order records.
+ * Admin-only, rate-limited, requires valid admin token.
+ */
+app.post('/api/admin/users/reconcile', adminLimiter, requireAdmin, async (req, res) => {
+  try {
+    // 1. Get all Firebase Auth users
+    const authUids = new Set();
+    let nextPageToken;
+    do {
+      const result = await getAuth().listUsers(1000, nextPageToken);
+      result.users.forEach((u) => authUids.add(u.uid));
+      nextPageToken = result.pageToken;
+    } while (nextPageToken);
+
+    // 2. Get all Firestore users
+    const usersSnapshot = await getFirestore().collection('users').get();
+    const rolesSnapshot = await getFirestore().collection('roles').get();
+
+    const firestoreUserUids = new Set();
+    usersSnapshot.docs.forEach((doc) => firestoreUserUids.add(doc.id));
+
+    const firestoreRoleUids = new Set();
+    rolesSnapshot.docs.forEach((doc) => firestoreRoleUids.add(doc.id));
+
+    // 3. Find orphans: Firestore UIDs not in Auth
+    const orphanUserUids = [...firestoreUserUids].filter((uid) => !authUids.has(uid));
+    const orphanRoleUids = [...firestoreRoleUids].filter((uid) => !authUids.has(uid));
+
+    // 4. Delete orphan documents (batched for efficiency)
+    const db = getFirestore();
+    const batch = db.batch();
+
+    let usersCleaned = 0;
+    let rolesCleaned = 0;
+
+    for (const uid of orphanUserUids) {
+      batch.delete(db.collection('users').doc(uid));
+      usersCleaned++;
+    }
+    for (const uid of orphanRoleUids) {
+      batch.delete(db.collection('roles').doc(uid));
+      rolesCleaned++;
+    }
+
+    if (usersCleaned > 0 || rolesCleaned > 0) {
+      await batch.commit();
+    }
+
+    console.log(`[admin] ${req.caller.uid} reconciled users: ${usersCleaned} users, ${rolesCleaned} roles removed`);
+
+    res.json({
+      success: true,
+      message: 'Reconciliation complete',
+      summary: {
+        authUsersChecked: authUids.size,
+        firestoreUsersFound: firestoreUserUids.size,
+        firestoreRolesFound: firestoreRoleUids.size,
+        orphanUsersRemoved: usersCleaned,
+        orphanRolesRemoved: rolesCleaned,
+      },
+    });
+  } catch (error) {
+    console.error('Error during reconciliation:', error.code, error.message);
+    res.status(500).json({ error: 'Failed to reconcile users' });
   }
 });
 
@@ -579,6 +836,240 @@ app.post('/api/admin/users/:uid/update', adminLimiter, requireAdmin, async (req,
   } catch (error) {
     console.error('Error updating user:', error);
     res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+/* Combined Admin edit — PATCH /api/admin/users/:uid.
+   1. requireAdmin (ID token + admin role, server-side).
+   2. Validate UID.
+   3. Update allowed Auth fields via Admin SDK.
+   4. Update allow-listed users/{uid} profile fields with merge (never
+      overwrite: wishlist, createdAt and every non-allow-listed key survive).
+   5. Update roles/{uid} when `role` is supplied (admin|sales|customer only).
+   6. Return the complete combined user object.
+   NEVER touches the orders collection. */
+app.patch('/api/admin/users/:uid', adminLimiter, requireAdmin, async (req, res) => {
+  try {
+    const uid = req.params.uid;
+    if (!isValidUidParam(uid)) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+    const body = req.body || {};
+
+    let current;
+    try {
+      current = await getAuth().getUser(uid);
+    } catch (e) {
+      if ((e.code || '').includes('user-not-found')) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      throw e;
+    }
+
+    // ---- Auth allow-list ----
+    const authUpdate = {};
+    if (body.displayName !== undefined) {
+      if (typeof body.displayName !== 'string') {
+        return res.status(400).json({ error: 'Invalid displayName' });
+      }
+      const v = sanitizeNameField(body.displayName);
+      authUpdate.displayName = v === '' ? null : v;
+    }
+    if (body.email !== undefined) {
+      if (typeof body.email !== 'string' || !isValidEmail(body.email.trim())) {
+        return res.status(400).json({ error: 'Invalid email address' });
+      }
+      authUpdate.email = body.email.trim().slice(0, 254);
+    }
+    if (body.disabled !== undefined) {
+      if (typeof body.disabled !== 'boolean') {
+        return res.status(400).json({ error: 'Invalid disabled flag' });
+      }
+      if (uid === req.caller.uid && body.disabled === true) {
+        return res.status(400).json({ error: 'You cannot disable your own account' });
+      }
+      authUpdate.disabled = body.disabled;
+    }
+    if (body.emailVerified !== undefined) {
+      if (typeof body.emailVerified !== 'boolean') {
+        return res.status(400).json({ error: 'Invalid emailVerified flag' });
+      }
+      authUpdate.emailVerified = body.emailVerified;
+    }
+    if (body.photoURL !== undefined) {
+      if (typeof body.photoURL !== 'string') {
+        return res.status(400).json({ error: 'Invalid photoURL' });
+      }
+      const v = body.photoURL.trim();
+      if (v !== '' && !/^https:\/\//i.test(v)) {
+        return res.status(400).json({ error: 'Invalid photoURL' });
+      }
+      authUpdate.photoURL = v === '' ? null : v.slice(0, 2048);
+    }
+
+    // ---- Firestore profile allow-list (existing schema only) ----
+    const profileUpdate = {};
+    if (body.name !== undefined) {
+      if (typeof body.name !== 'string') return res.status(400).json({ error: 'Invalid name' });
+      profileUpdate.name = sanitizeNameField(body.name);
+    }
+    if (body.firestoreDisplayName !== undefined || body.profileDisplayName !== undefined || body.displayName !== undefined) {
+      // Mirror the Auth displayName into the profile when the admin edited it,
+      // unless an explicit profile displayName override was supplied.
+      const explicit = body.firestoreDisplayName !== undefined ? body.firestoreDisplayName
+        : body.profileDisplayName !== undefined ? body.profileDisplayName
+        : undefined;
+      const raw = explicit !== undefined ? explicit : body.displayName;
+      if (raw !== undefined) {
+        if (typeof raw !== 'string') return res.status(400).json({ error: 'Invalid profile displayName' });
+        profileUpdate.displayName = sanitizeNameField(raw);
+      }
+    }
+    if (body.phone !== undefined) {
+      if (typeof body.phone !== 'string' || !isPlausiblePhone(body.phone.trim())) {
+        return res.status(400).json({ error: 'Invalid phone number' });
+      }
+      profileUpdate.phone = sanitizePhoneField(body.phone);
+    }
+    if (body.phoneNumber !== undefined) {
+      if (typeof body.phoneNumber !== 'string' || !isPlausiblePhone(body.phoneNumber.trim())) {
+        return res.status(400).json({ error: 'Invalid phone number' });
+      }
+      profileUpdate.phoneNumber = sanitizePhoneField(body.phoneNumber);
+    }
+    if (body.profileEmail !== undefined || body.firestoreEmail !== undefined) {
+      const raw = body.profileEmail !== undefined ? body.profileEmail : body.firestoreEmail;
+      if (typeof raw !== 'string') return res.status(400).json({ error: 'Invalid profile email' });
+      const v = raw.trim();
+      if (v !== '' && !isValidEmail(v)) return res.status(400).json({ error: 'Invalid profile email' });
+      profileUpdate.email = v.slice(0, 254);
+    } else if (authUpdate.email) {
+      // Keep the Firestore email mirror in sync when the Auth email changes.
+      profileUpdate.email = authUpdate.email;
+    }
+
+    // ---- Role ----
+    let nextRole = null;
+    if (body.role !== undefined) {
+      nextRole = canonicalRole(body.role);
+      if (!nextRole) {
+        return res.status(400).json({ error: 'Invalid role. Allowed roles: admin, sales, customer' });
+      }
+      if (uid === req.caller.uid && nextRole !== 'admin') {
+        return res.status(400).json({ error: 'You cannot remove your own admin privileges' });
+      }
+    }
+
+    if (Object.keys(authUpdate).length === 0 && Object.keys(profileUpdate).length === 0 && !nextRole) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
+
+    const db = getFirestore();
+    if (Object.keys(authUpdate).length > 0) {
+      try {
+        await getAuth().updateUser(uid, authUpdate);
+      } catch (e) {
+        if ((e.code || '').includes('email-already-exists')) {
+          return res.status(409).json({ error: 'That email is already in use by another account' });
+        }
+        throw e;
+      }
+    }
+    if (Object.keys(profileUpdate).length > 0) {
+      profileUpdate.updatedAt = FieldValue.serverTimestamp();
+      await db.collection('users').doc(uid).set(profileUpdate, { merge: true });
+    }
+    if (nextRole) {
+      await db.collection('roles').doc(uid).set({ role: nextRole }, { merge: true });
+    }
+
+    const [freshAuth, freshProfileSnap, freshRoleSnap] = await Promise.all([
+      getAuth().getUser(uid),
+      db.collection('users').doc(uid).get().catch(() => null),
+      db.collection('roles').doc(uid).get().catch(() => null),
+    ]);
+    console.log(`[admin] ${req.caller.uid} patched ${uid} (auth=${Object.keys(authUpdate).join(',') || '—'}, profile=${Object.keys(profileUpdate).join(',') || '—'}, role=${nextRole || '—'})`);
+    return res.json({
+      success: true,
+      message: 'User updated successfully',
+      user: buildCombinedUser(
+        freshAuth,
+        freshProfileSnap && freshProfileSnap.exists ? freshProfileSnap.data() : null,
+        freshRoleSnap && freshRoleSnap.exists ? freshRoleSnap.data()?.role : undefined,
+      ),
+    });
+  } catch (error) {
+    console.error('Error patching user:', error.code, error.message);
+    // Auth email collision or missing user surface as 4xx above; anything
+    // reaching here is a genuine server failure.
+    if (!res.headersSent) {
+      return res.status(500).json({ error: 'Failed to update user' });
+    }
+  }
+});
+
+/* Create the missing users/{uid} profile for an existing Auth account.
+   Idempotent: when the doc already exists nothing is overwritten. Used by the
+   Admin UI banner for Auth users with hasProfile === false. */
+app.post('/api/admin/users/:uid/profile', adminLimiter, requireAdmin, async (req, res) => {
+  try {
+    const uid = req.params.uid;
+    if (!isValidUidParam(uid)) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+    let authRecord;
+    try {
+      authRecord = await getAuth().getUser(uid);
+    } catch (e) {
+      if ((e.code || '').includes('user-not-found')) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      throw e;
+    }
+    const db = getFirestore();
+    const ref = db.collection('users').doc(uid);
+    const existing = await ref.get();
+    if (existing.exists) {
+      const roleSnap = await db.collection('roles').doc(uid).get().catch(() => null);
+      return res.json({
+        success: true,
+        created: false,
+        message: 'Profile already exists',
+        user: buildCombinedUser(
+          authRecord,
+          existing.data(),
+          roleSnap && roleSnap.exists ? roleSnap.data()?.role : undefined,
+        ),
+      });
+    }
+    const seed = {
+      name: sanitizeNameField(authRecord.displayName || ''),
+      displayName: sanitizeNameField(authRecord.displayName || ''),
+      email: (authRecord.email || '').slice(0, 254),
+      phone: sanitizePhoneField(authRecord.phoneNumber || ''),
+      phoneNumber: sanitizePhoneField(authRecord.phoneNumber || ''),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    await ref.set(seed, { merge: true });
+    const [snap, roleSnap] = await Promise.all([
+      ref.get(),
+      db.collection('roles').doc(uid).get().catch(() => null),
+    ]);
+    console.log(`[admin] ${req.caller.uid} created missing profile for ${uid}`);
+    return res.json({
+      success: true,
+      created: true,
+      message: 'Profile created',
+      user: buildCombinedUser(
+        authRecord,
+        snap.exists ? snap.data() : null,
+        roleSnap && roleSnap.exists ? roleSnap.data()?.role : undefined,
+      ),
+    });
+  } catch (error) {
+    console.error('Error ensuring profile:', error.code, error.message);
+    return res.status(500).json({ error: 'Failed to create profile' });
   }
 });
 
@@ -707,6 +1198,7 @@ app.put('/api/admin/recommendations/config', requireFirebase, requireAdmin, admi
    --------------------------------------------------------------------------- */
 
 const site = require('./lib/siteAnalytics');
+const { commerceSnapshot } = require('./lib/commerceAnalytics');
 
 // A generous ceiling: every SPA navigation posts one pageview, so a customer
 // browsing quickly is normal traffic, not abuse. Still bounded per IP.
@@ -746,6 +1238,26 @@ app.get('/api/admin/analytics/site', requireFirebase, requireAdmin, adminLimiter
 
 app.get('/api/admin/analytics/live', requireFirebase, requireAdmin, adminLimiter, withDb((req, res) =>
   safeSite(() => site.liveVisitors(req.firestore), res)));
+
+/* Aggregated commerce + traffic snapshot for the Admin Analytics dashboard.
+   ONE request returns the traffic snapshot (siteSnapshot) merged with the
+   commerce block (orders/products/Auth), so the page loads with a single
+   fetch plus the lightweight live poll. Same guard chain as the other
+   /api/admin/analytics routes. The legacy /site and /live routes stay. */
+app.get('/api/admin/analytics/commerce', requireFirebase, requireAdmin, adminLimiter, withDb(async (req, res) => {
+  try {
+    const query = { days: req.query.days, from: req.query.from, to: req.query.to };
+    const [traffic, commerce] = await Promise.all([
+      site.siteSnapshot(req.firestore, query),
+      commerceSnapshot(req.firestore, query),
+    ]);
+    if (traffic && traffic.error) return res.status(400).json(traffic);
+    return res.json({ ...traffic, commerce });
+  } catch (error) {
+    console.error('[commerce] handler failed:', error.message);
+    return res.status(500).json({ error: 'Analytics service error' });
+  }
+}));
 
 /* ---------------------------------------------------------------------------
    Deploy endpoint (Hostinger only)

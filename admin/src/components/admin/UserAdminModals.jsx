@@ -370,8 +370,7 @@ export const ConfirmActionModal = ({ action, onCancel, onConfirm }) => {
   );
 };
 
-/** Generated password-reset link. */
-/**
+/** Generated password-reset link.
  * Confirms that a reset email went out.
  *
  * The reset link is a bearer credential for someone else's account, so the
@@ -425,3 +424,283 @@ export const ResetLinkModal = ({ action, onClose }) => (
     )}
   </AnimatePresence>
 );
+
+const INPUT_STYLE = {
+  borderColor: 'var(--hairline)',
+  color: 'var(--text-strong)',
+};
+
+/** Full Admin "Edit User" dialog.
+ * Loads CURRENT values from the combined Auth + Firestore object, edits only
+ * the allow-listed fields that exist in the users/{uid} schema
+ * (name, displayName, phone, phoneNumber, email) plus Auth fields
+ * (displayName, email, disabled) and roles/{uid} (admin|sales|customer).
+ * While `saving` the dialog locks. On failure the parent keeps `user` set so
+ * the modal stays open with the error visible. */
+export const EditUserModal = ({
+  user,
+  onCancel,
+  onSave,
+  onEnsureProfile,
+  saving = false,
+  ensuringProfile = false,
+}) => {
+  const [displayName, setDisplayName] = useState('');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [role, setRole] = useState('customer');
+  const [disabled, setDisabled] = useState(false);
+  const [error, setError] = useState('');
+
+  // Reload current values every time a different user is opened.
+  useEffect(() => {
+    if (user) {
+      setDisplayName(user.displayName || '');
+      setName(user.firestoreName || user.profileName || '');
+      setEmail(user.email || '');
+      setPhone(user.firestorePhone || '');
+      setPhoneNumber(user.firestorePhoneNumber || user.phoneNumber || '');
+      setRole(roleOptions.includes(user.role) ? user.role : 'customer');
+      setDisabled(Boolean(user.disabled));
+      setError('');
+    }
+  }, [user]);
+
+  const close = () => {
+    if (saving || ensuringProfile) return;
+    onCancel();
+  };
+
+  const handleSave = () => {
+    setError('');
+    if (email.trim() === '') {
+      setError('Email address is required.');
+      return;
+    }
+    onSave({
+      displayName: displayName.trim(),
+      name: name.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      phoneNumber: phoneNumber.trim(),
+      role,
+      disabled,
+    });
+  };
+
+  return (
+    <AnimatePresence>
+      {user && (
+        <Shell labelledBy="edit-user-title" onClose={close} width="max-w-lg">
+          <Head id="edit-user-title" title="Edit User" onClose={close} />
+
+          <div className="p-5">
+            <Identity user={user} />
+
+            {user.profileMissing && (
+              <p
+                className="mb-4 flex flex-wrap items-center gap-2 rounded-[var(--r-md)] px-3 py-2.5 text-sm"
+                style={{
+                  background: 'rgba(210, 166, 79, 0.12)',
+                  border: '1px solid rgba(210, 166, 79, 0.4)',
+                  color: 'var(--text-body)',
+                }}
+              >
+                <TriangleAlert
+                  className="h-4 w-4 shrink-0"
+                  style={{ color: 'var(--gold-600)' }}
+                  aria-hidden="true"
+                />
+                <span className="min-w-0 flex-1">
+                  No Firestore profile yet — saving will create it.
+                </span>
+                {onEnsureProfile && (
+                  <button
+                    type="button"
+                    onClick={onEnsureProfile}
+                    disabled={ensuringProfile || saving}
+                    className="btn-outline shrink-0 text-xs"
+                    style={{ minHeight: 32 }}
+                  >
+                    {ensuringProfile ? 'Creating…' : 'Create now'}
+                  </button>
+                )}
+              </p>
+            )}
+
+            {error && (
+              <p
+                role="alert"
+                className="mb-4 rounded-[var(--r-md)] px-3 py-2.5 text-sm font-semibold"
+                style={{
+                  background: 'rgba(203, 42, 42, 0.08)',
+                  border: '1px solid rgba(203, 42, 42, 0.3)',
+                  color: 'var(--crimson-600)',
+                }}
+              >
+                {error}
+              </p>
+            )}
+
+            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="edit-user-display-name" className="label-caps mb-1 block">
+                  Display name (Auth)
+                </label>
+                <input
+                  id="edit-user-display-name"
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  maxLength={120}
+                  className="h-10 w-full rounded-[var(--r-md)] border bg-[var(--surface-card)] px-3 text-sm focus:outline-none"
+                  style={INPUT_STYLE}
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-user-name" className="label-caps mb-1 block">
+                  Profile name
+                </label>
+                <input
+                  id="edit-user-name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  maxLength={120}
+                  className="h-10 w-full rounded-[var(--r-md)] border bg-[var(--surface-card)] px-3 text-sm focus:outline-none"
+                  style={INPUT_STYLE}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="edit-user-email" className="label-caps mb-1 block">
+                  Email (Auth)
+                </label>
+                <input
+                  id="edit-user-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  maxLength={254}
+                  className="h-10 w-full rounded-[var(--r-md)] border bg-[var(--surface-card)] px-3 text-sm focus:outline-none"
+                  style={INPUT_STYLE}
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-user-phone" className="label-caps mb-1 block">
+                  Phone
+                </label>
+                <input
+                  id="edit-user-phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  maxLength={32}
+                  className="h-10 w-full rounded-[var(--r-md)] border bg-[var(--surface-card)] px-3 text-sm tabular focus:outline-none"
+                  style={INPUT_STYLE}
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-user-phone-number" className="label-caps mb-1 block">
+                  Mobile number
+                </label>
+                <input
+                  id="edit-user-phone-number"
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  maxLength={32}
+                  className="h-10 w-full rounded-[var(--r-md)] border bg-[var(--surface-card)] px-3 text-sm tabular focus:outline-none"
+                  style={INPUT_STYLE}
+                />
+              </div>
+            </div>
+
+            <fieldset className="mb-4">
+              <legend className="label-caps mb-2">Role</legend>
+              <div className="space-y-2">
+                {roleOptions.map((option) => {
+                  const config = configFor(option);
+                  const RoleIcon = config.icon;
+                  const active = role === option;
+                  return (
+                    <label
+                      key={option}
+                      className={`flex cursor-pointer items-center gap-3 rounded-[var(--r-md)] border-2 p-3 transition-colors ${
+                        active
+                          ? config.selected
+                          : 'border-ink-200 hover:border-ink-300 dark:border-ink-700 dark:hover:border-ink-600'
+                      }`}
+                      style={{ minHeight: 56 }}
+                    >
+                      <input
+                        type="radio"
+                        name="edit-user-role"
+                        value={option}
+                        checked={active}
+                        onChange={(e) => setRole(e.target.value)}
+                        className="sr-only"
+                      />
+                      <RoleIcon className={`h-5 w-5 shrink-0 ${config.ink}`} aria-hidden="true" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold" style={{ color: 'var(--text-strong)' }}>
+                          {config.label}
+                        </span>
+                        <span className="block text-xs" style={{ color: 'var(--text-muted)' }}>
+                          {config.description}
+                        </span>
+                      </span>
+                      {active && (
+                        <span
+                          aria-hidden="true"
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${config.dot}`}
+                        >
+                          <span className="block h-1.5 w-1.5 rounded-full" style={{ background: '#FFFFFF' }} />
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            <label
+              className="mb-5 flex cursor-pointer items-center gap-3 rounded-[var(--r-md)] border px-3 py-2.5"
+              style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)' }}
+            >
+              <input
+                type="checkbox"
+                checked={!disabled}
+                onChange={(e) => setDisabled(!e.target.checked)}
+                className="h-4 w-4 shrink-0"
+              />
+              <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
+                Account enabled
+              </span>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {disabled ? 'Signed in is blocked' : 'Can sign in'}
+              </span>
+            </label>
+
+            <div className="flex gap-2">
+              <button type="button" onClick={close} disabled={saving} className="btn-outline flex-1 text-sm">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                aria-busy={saving}
+                className="btn-primary flex-1 text-sm"
+              >
+                <Save className="h-4 w-4" aria-hidden="true" />
+                {saving ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </Shell>
+      )}
+    </AnimatePresence>
+  );
+};

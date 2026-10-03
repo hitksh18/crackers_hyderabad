@@ -714,6 +714,97 @@
 }
 
 /* =========================================================================
+   COMMAND-CENTER GRID — 12 columns on desktop, 6-col pairs on tablet,
+   single column on mobile. Spans collapse gracefully, never overflow.
+   ========================================================================= */
+.ana-dash {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.ana-span-4,
+.ana-span-6,
+.ana-span-8,
+.ana-span-12 {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+section.ana-card.ana-span-12 {
+  margin-bottom: 0;
+}
+@media (min-width: 768px) {
+  .ana-dash {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .ana-span-4 {
+    grid-column: span 3;
+  }
+  .ana-span-6,
+  .ana-span-8,
+  .ana-span-12 {
+    grid-column: span 6;
+  }
+}
+@media (min-width: 1280px) {
+  .ana-dash {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+  .ana-span-4 {
+    grid-column: span 4;
+  }
+  .ana-span-6 {
+    grid-column: span 6;
+  }
+  .ana-span-8 {
+    grid-column: span 8;
+  }
+  .ana-span-12 {
+    grid-column: span 12;
+  }
+}
+
+/* Ranked-list share fill (Top Pages / Sources / Location). */
+.ana-rank-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--maroon);
+  opacity: 0.1;
+  border-radius: var(--r-sm);
+  pointer-events: none;
+}
+
+/* Compact stat strip inside the Traffic card. */
+.ana-statrow {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin-bottom: 10px;
+}
+.ana-statrow li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.ana-statrow li strong {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Dense dashboard tables — tighter rows than the legacy register tables. */
+.ana-table-dense tbody td {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+/* =========================================================================
    PORTRAIT DESKTOP (desktop-portrait detector — see src/admin-portrait.css:
    portrait orientation + fine pointer + tall viewport; physical resolution
    is NOT trusted, so no min-width gate).
