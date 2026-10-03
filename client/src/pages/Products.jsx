@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, getDocs, doc, writeBatch } from 'firebase/firestore';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -40,6 +40,74 @@ const SORT_OPTIONS = [
   { key: 'name-asc', label: 'Name: A to Z' },
 ];
 
+/* The price a shopper actually pays, in the same precedence ProductCard uses to
+   render it. Reading `price` alone was the sorting bug: this catalogue stores
+   `onlinePrice` and `discountPrice`, so `price` is usually undefined and every
+   comparison collapsed to 0 — the list looked sorted by price but never moved.
+
+   Coerces numeric strings ("240", "240.00", " ₹240 ") and treats anything
+   unparseable as no price, so one malformed product cannot poison the order. */
+const sellingPrice = (product) => {
+  const candidates = [product?.discountPrice, product?.onlinePrice, product?.price];
+  for (const value of candidates) {
+    if (value === null || value === undefined || value === '') continue;
+    if (typeof value === 'number') {
+      if (Number.isFinite(value)) return value;
+      continue;
+    }
+    const cleaned = String(value).replace(/[^0-9.-]/g, '');
+    // Nothing numeric survived ("abc", "--") — treat it as no price. Number('')
+    // is 0, which would file a broken product as the cheapest thing in the shop.
+    if (!cleaned) continue;
+    const n = Number(cleaned);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+};
+
+/* Case- and number-insensitive name order ("10 Shots" before "9 Shots"), with a
+   stable id tie-break so equal names never shuffle between renders. */
+const byName = (a, b) =>
+  String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base', numeric: true })
+  || String(a?.id || '').localeCompare(String(b?.id || ''));
+
+const byFeaturedOrder = (a, b) => {
+  const orderA = Number.isFinite(Number(a?.sortOrder)) ? Number(a.sortOrder) : 9999;
+  const orderB = Number.isFinite(Number(b?.sortOrder)) ? Number(b.sortOrder) : 9999;
+  return orderA - orderB || byName(a, b);
+};
+
+/* Pure: always returns a new array, never mutates the input. */
+const sortList = (list, key) => {
+  const sorted = [...list];
+  switch (key) {
+    case 'price-asc':
+      // Unpriced products sink to the end rather than masquerading as free.
+      return sorted.sort((a, b) => {
+        const pa = sellingPrice(a);
+        const pb = sellingPrice(b);
+        if (pa === null && pb === null) return byFeaturedOrder(a, b);
+        if (pa === null) return 1;
+        if (pb === null) return -1;
+        return pa - pb || byName(a, b);
+      });
+    case 'price-desc':
+      return sorted.sort((a, b) => {
+        const pa = sellingPrice(a);
+        const pb = sellingPrice(b);
+        if (pa === null && pb === null) return byFeaturedOrder(a, b);
+        if (pa === null) return 1;
+        if (pb === null) return -1;
+        return pb - pa || byName(a, b);
+      });
+    case 'name-asc':
+      return sorted.sort(byName);
+    case 'featured':
+    default:
+      return sorted.sort(byFeaturedOrder);
+  }
+};
+
 /* ---- Category pills ------------------------------------------------
    Compact single-line filter chips. Every value that affects how wide a
    pill gets (font, padding, icon, gaps) lives in CSS and is sized by
@@ -74,7 +142,6 @@ const gridClasses = {
 
 const Products = () => {
   const [products, setProducts] = useState([]);
-  const [filteredProducts, setFilteredProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -104,7 +171,6 @@ const Products = () => {
         const snapshot = await getDocs(collection(db, 'products'));
         const productsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setProducts(productsData);
-        setFilteredProducts(productsData);
       } catch (error) {
         console.error('Error fetching products:', error);
       } finally {
@@ -126,15 +192,16 @@ const Products = () => {
     }
   }, [searchParams]);
 
-  /* Single filter + sort effect. Runs whenever any input changes so the
-     displayed list is always correctly filtered and sorted together. */
-  useEffect(() => {
-    let filtered = products;
+  /* The visible list is derived, not stored: filter (category + search) and
+     sort run together on every render, so the cards can never lag behind the
+     control that was just used. Nothing here mutates `products`. */
+  const filteredProducts = useMemo(() => {
+    let list = products;
 
     if (selectedCategory !== 'All') {
       const wanted = selectedCategory.toLowerCase();
       const aliases = new Set([wanted]);
-      filtered = filtered.filter(p => {
+      list = list.filter(p => {
         if (Array.isArray(p.categories)) {
           return p.categories.some(cat => aliases.has(String(cat).toLowerCase()));
         }
@@ -144,7 +211,7 @@ const Products = () => {
 
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(p => {
+      list = list.filter(p => {
         const nameMatch = (p.name || '').toLowerCase().includes(searchLower);
         const descMatch = String(p.description || '').toLowerCase().includes(searchLower);
         const categoryMatch = Array.isArray(p.categories)
@@ -155,24 +222,8 @@ const Products = () => {
       });
     }
 
-    setFilteredProducts(sortList([...filtered], sortBy));
-  }, [searchTerm, products, selectedCategory, sortBy]);
-
-  const sortList = (list, key) => {
-    switch (key) {
-      case 'price-asc':
-        return list.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
-      case 'price-desc':
-        return list.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
-      case 'name-asc':
-        return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      case 'featured':
-      default:
-        return list.sort(
-          (a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999) || (a.name || '').localeCompare(b.name || '')
-        );
-    }
-  };
+    return sortList(list, sortBy);
+  }, [products, searchTerm, selectedCategory, sortBy]);
 
   const sortByOrder = (list) =>
     [...list].sort((a, b) =>

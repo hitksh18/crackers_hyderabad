@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, getDocs, getDoc, doc, setDoc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import {
+  ExternalLink,
   GripVertical,
   Image as ImageIcon,
   Loader2,
@@ -10,8 +11,10 @@ import {
   Pencil,
   Phone,
   Plus,
+  Save,
   Trash2,
 } from 'lucide-react';
+import AdminHeader from '../components/admin/AdminHeader';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import toast from '../utils/toast';
@@ -37,7 +40,6 @@ import WholesaleSection from '../components/home/WholesaleSection';
 import Footer from '../components/Footer';
 import { TopBannerPreview } from '../components/TopBanner';
 import {
-  CanvasNav,
   SectionTabs,
   WorkspaceHead,
   EditorPane,
@@ -1409,7 +1411,28 @@ export default function HomepageBuilder() {
 
   return (
     <div className="cv cv-app">
-      <CanvasNav dirty={dirty} saving={saving} saveError={saveError} onSave={handleSave} />
+      <AdminHeader
+        title="Canvas"
+        backFallback="/dashboard"
+        controls={(
+          <>
+            <span className="hidden text-xs sm:inline" style={{ color: saveError ? 'var(--crimson-600)' : saving ? 'var(--text-muted)' : dirty ? 'var(--gold-600)' : 'var(--leaf-600)' }}>
+              {saveError || (saving ? 'Saving...' : dirty ? 'Unsaved changes' : 'Saved')}
+            </span>
+            <a href="/" target="_blank" rel="noopener noreferrer" className="ax-btn">
+              <ExternalLink aria-hidden="true" />
+              <span className="hidden sm:inline">Preview</span>
+            </a>
+            <button type="button" onClick={handleSave} disabled={saving || !dirty} className="ax-btn-primary">
+              {saving
+                ? <Loader2 className="animate-spin" aria-hidden="true" />
+                : <Save aria-hidden="true" />}
+              <span className="hidden sm:inline">Save Changes</span>
+              <span className="sm:hidden">Save</span>
+            </button>
+          </>
+        )}
+      />
       <SectionTabs sections={CANVAS_SECTIONS} active={active} onSelect={setActive} />
 
       <div className="cv-workspace">

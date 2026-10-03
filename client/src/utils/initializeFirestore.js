@@ -24,7 +24,7 @@ export const manuallyInitializeHomepageSettings = async () => {
     const defaultSettings = {
       bannerImageUrl: null,
       bannerImageAlt: 'Crackers Hyderabad Banner',
-      promoMessage: 'Free Delivery available above orders of ₹2000 & Cash On Delivery available',
+      promoMessage: 'Free Delivery available above orders of ₹2500 & Cash On Delivery available',
       updatedAt: new Date().toISOString(),
       updatedBy: 'manual-init'
     };

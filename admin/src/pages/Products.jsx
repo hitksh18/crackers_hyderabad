@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { collection, getDocs, deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
-import { ArrowLeft, GripVertical, Package, Plus, RotateCcw, Search, ChevronDown } from 'lucide-react';
+import { GripVertical, Package, Plus, RotateCcw, Search, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from '../utils/toast';
 import CustomModal from '../components/CustomModal';
 import { useModal } from '../hooks/useModal';
 import ProductRegisterRow from '../components/admin/ProductRegisterRow';
-import AccountMenu from '../components/admin/AccountMenu';
+import AdminHeader from '../components/admin/AdminHeader';
 import EmptyState from '../components/ui/EmptyState';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import { deleteTradePricing, fetchTradePricingMap, mergeTradePricing } from '../lib/tradePricing';
@@ -241,7 +241,7 @@ const AllProducts = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[var(--surface-page)]">
+      <div className="admin-page bg-[var(--surface-page)]">
         <div className="mx-auto w-full max-w-[1550px] px-4 py-4 lg:px-8">
           <TableSkeleton rows={8} cols={4} label="Loading products" />
         </div>
@@ -250,135 +250,94 @@ const AllProducts = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--surface-page)] text-[var(--text-body)] transition-colors duration-200 overflow-x-hidden">
+    <div className="admin-page bg-[var(--surface-page)] text-[var(--text-body)] transition-colors duration-200 overflow-x-hidden">
       <CustomModal
+        {...modalConfig}
         isOpen={isOpen}
         onClose={closeModal}
         onConfirm={handleConfirm}
         busy={isConfirming}
         busyText={modalConfig.pendingText}
-        {...modalConfig}
       />
 
-      {/* Dedicated Products Navbar - ONE horizontal row */}
-      <header className="sticky top-0 z-30 flex min-h-[60px] w-full shrink-0 items-center border-b bg-[var(--surface-card)] px-4 py-2 transition-colors duration-200 lg:px-8" style={{ borderColor: 'var(--hairline)' }}>
-        <div className="mx-auto flex w-full max-w-[1550px] flex-wrap items-center gap-3 lg:flex-nowrap lg:gap-3">
-          <Link
-            to="/dashboard"
-            className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold"
-            style={{ color: 'var(--ember-600)' }}
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">Back to Dashboard</span>
-            <span className="sm:hidden">Back</span>
+      {/* Shared Admin navbar: Back | Products | Add + avatar.
+          Search and filters live in the toolbar below, not the navbar. */}
+      <AdminHeader
+        title="Products"
+        backFallback="/dashboard"
+        controls={(
+          <Link to="/products/add" className="ax-btn-primary">
+            <Plus aria-hidden="true" />
+            <span className="hidden sm:inline">Add New Product</span>
+            <span className="sm:hidden">Add</span>
           </Link>
+        )}
+      />
 
-          <div className="relative w-full sm:w-[280px] lg:w-[300px] xl:w-[340px] order-last lg:order-none">
+      <div className="mx-auto w-full max-w-[1550px] px-4 py-3 lg:px-8">
+        {/* Page toolbar: search + filters */}
+        <div className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:w-[280px] lg:w-[300px] xl:w-[340px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
             <input
               type="text"
               placeholder="Search products..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-9 w-full rounded-full border bg-[var(--surface-sunken)] pl-10 pr-4 text-sm placeholder:text-[var(--text-subtle)] focus:outline-none transition-colors duration-200"
+              className="h-10 w-full rounded-[10px] border bg-[var(--surface-sunken)] pl-10 pr-4 text-sm placeholder:text-[var(--text-subtle)] focus:outline-none transition-colors duration-200"
               style={{ borderColor: 'var(--hairline)', color: 'var(--text-strong)' }}
             />
           </div>
 
-          <h1 className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 text-sm font-bold tracking-tight lg:block" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>
-            All Products
-          </h1>
-
-          <div className="ml-auto flex items-center gap-2">
-            <div className="relative">
-              <select
-                value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
-                className="h-9 appearance-none rounded-full border bg-[var(--surface-sunken)] pl-3 pr-8 text-xs font-semibold focus:outline-none"
-                style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
-              >
-                {categories.map(cat => (
-                  <option key={cat} value={cat}>{cat === 'All' ? 'Category: All' : cat}</option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
-            </div>
-
-            <div className="relative hidden sm:block">
-              <select
-                value={filterStock}
-                onChange={(e) => setFilterStock(e.target.value)}
-                className="h-9 appearance-none rounded-full border bg-[var(--surface-sunken)] pl-3 pr-8 text-xs font-semibold focus:outline-none"
-                style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
-              >
-                <option value="All">Stock: All</option>
-                <option value="In Stock">In Stock</option>
-                <option value="Out of Stock">Out of Stock</option>
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
-            </div>
-
-            <div className="relative hidden sm:block">
-              <select
-                value={filterFeatured}
-                onChange={(e) => setFilterFeatured(e.target.value)}
-                className="h-9 appearance-none rounded-full border bg-[var(--surface-sunken)] pl-3 pr-8 text-xs font-semibold focus:outline-none"
-                style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
-              >
-                <option value="All">Featured: All</option>
-                <option value="Featured">Featured</option>
-                <option value="Not Featured">Not Featured</option>
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
-            </div>
-
-            {hasActiveFilters && (
-              <button type="button" onClick={clearFilters} className="hidden h-9 items-center gap-1 rounded-full border px-3 text-xs font-semibold sm:inline-flex" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)', color: 'var(--text-muted)' }}>
-                <RotateCcw className="h-3.5 w-3.5" /> Clear
-              </button>
-            )}
-
-            <Link to="/products/add" className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-xs font-bold text-white transition-colors duration-200" style={{ background: 'var(--grad-ember)' }}>
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add New Product</span>
-              <span className="sm:hidden">Add</span>
-            </Link>
-            <AccountMenu />
+          <div className="relative">
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="h-10 appearance-none rounded-[10px] border bg-[var(--surface-sunken)] pl-3 pr-8 text-sm font-semibold focus:outline-none"
+              style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
+            >
+              {categories.map(cat => (
+                <option key={cat} value={cat}>{cat === 'All' ? 'Category: All' : cat}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
           </div>
 
-          {/* Mobile second row for stock/featured when needed */}
-          <div className="flex w-full gap-2 sm:hidden">
-            <div className="relative flex-1">
-              <select
-                value={filterStock}
-                onChange={(e) => setFilterStock(e.target.value)}
-                className="h-9 w-full appearance-none rounded-full border bg-[var(--surface-sunken)] pl-3 pr-7 text-xs font-semibold"
-                style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
-              >
-                <option value="All">Stock: All</option>
-                <option value="In Stock">In Stock</option>
-                <option value="Out of Stock">Out of Stock</option>
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
-            </div>
-            <div className="relative flex-1">
-              <select
-                value={filterFeatured}
-                onChange={(e) => setFilterFeatured(e.target.value)}
-                className="h-9 w-full appearance-none rounded-full border bg-[var(--surface-sunken)] pl-3 pr-7 text-xs font-semibold"
-                style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
-              >
-                <option value="All">Featured: All</option>
-                <option value="Featured">Featured</option>
-                <option value="Not Featured">Not Featured</option>
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
-            </div>
+          <div className="relative">
+            <select
+              value={filterStock}
+              onChange={(e) => setFilterStock(e.target.value)}
+              className="h-10 appearance-none rounded-[10px] border bg-[var(--surface-sunken)] pl-3 pr-8 text-sm font-semibold focus:outline-none"
+              style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
+            >
+              <option value="All">Stock: All</option>
+              <option value="In Stock">In Stock</option>
+              <option value="Out of Stock">Out of Stock</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
           </div>
+
+          <div className="relative">
+            <select
+              value={filterFeatured}
+              onChange={(e) => setFilterFeatured(e.target.value)}
+              className="h-10 appearance-none rounded-[10px] border bg-[var(--surface-sunken)] pl-3 pr-8 text-sm font-semibold focus:outline-none"
+              style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
+            >
+              <option value="All">Featured: All</option>
+              <option value="Featured">Featured</option>
+              <option value="Not Featured">Not Featured</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
+          </div>
+
+          {hasActiveFilters && (
+            <button type="button" onClick={clearFilters} className="ax-btn">
+              <RotateCcw aria-hidden="true" /> Clear
+            </button>
+          )}
         </div>
-      </header>
 
-      <div className="mx-auto w-full max-w-[1550px] px-4 py-3 lg:px-8">
         {/* Compact toolbar - result count + reorder hint */}
         <div className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>

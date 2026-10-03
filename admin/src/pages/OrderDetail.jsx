@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { doc, getDoc, getDocs, collection, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Eye } from 'lucide-react';
+import { FileText, Eye } from 'lucide-react';
 import toast from '../utils/toast';
 import { sendOrderSMS } from '../utils/sms';
 import { authFetch, readApiError } from '../utils/apiClient';
@@ -18,9 +18,9 @@ import EmptyState from '../components/ui/EmptyState';
 import OrderStatusBadge from '../components/admin/OrderStatusBadge';
 import { getStatusTone } from '../components/admin/orderStatus';
 import OrderActionBar from '../components/admin/OrderActionBar';
+import AdminHeader from '../components/admin/AdminHeader';
 import OrderDetailPanel from '../components/admin/OrderDetailPanel';
 import OrderEditModal from '../components/admin/OrderEditModal';
-import AccountMenu from '../components/admin/AccountMenu';
 
 const statusOptions = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'];
 
@@ -299,7 +299,7 @@ const AdminOrderDetail = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen">
+      <div className="admin-page">
         <div className="shell section-pad-sm">
           <div className="mb-8 space-y-3">
             <Skeleton className="h-3 w-28" />
@@ -316,16 +316,12 @@ const AdminOrderDetail = () => {
 
   if (missing || !order) {
     return (
-      <div className="min-h-screen">
+      <div className="admin-page">
+        <AdminHeader
+          title="Order"
+          backFallback="/orders"
+        />
         <div className="shell section-pad-sm">
-          <Link
-            to="/orders"
-            className="inline-flex min-h-[44px] items-center gap-2 text-sm font-semibold"
-            style={{ color: 'var(--ember-600)' }}
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Back to Orders
-          </Link>
           <div className="mt-8">
             <EmptyState
               icon={FileText}
@@ -348,7 +344,11 @@ const AdminOrderDetail = () => {
   const ToneIcon = tone.Icon;
 
   return (
-    <div className="min-h-screen">
+    <div className="admin-page">
+      <AdminHeader
+        title={`Order #${order ? orderCodeOf(order) : ''}`}
+        backFallback="/orders"
+      />
       <CustomModal
         isOpen={isOpen}
         onClose={closeModal}
@@ -364,15 +364,6 @@ const AdminOrderDetail = () => {
         animate="animate"
         className="shell section-pad-sm"
       >
-        <Link
-          to="/orders"
-          className="inline-flex min-h-[44px] items-center gap-2 text-sm font-semibold"
-          style={{ color: 'var(--ember-600)' }}
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Back to Orders
-        </Link>
-
         <header className="mb-6 mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
             <span className="label-caps">Operations</span>
@@ -431,7 +422,6 @@ const AdminOrderDetail = () => {
               onEdit={startEditingOrder}
               onDelete={handleDeleteOrder}
             />
-            <AccountMenu />
           </div>
         </header>
 

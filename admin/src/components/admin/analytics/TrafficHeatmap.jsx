@@ -42,7 +42,7 @@ export default function TrafficHeatmap({ grid }) {
       </p>
 
       <div className="min-w-[520px]" aria-hidden="true">
-        <div className="mb-1 grid gap-1" style={{ gridTemplateColumns: '2.4rem repeat(24, 1fr)' }}>
+        <div className="mb-1 grid gap-1" style={{ gridTemplateColumns: '2.4rem repeat(24, minmax(20px, 1fr))' }}>
           <span />
           {Array.from({ length: 24 }, (_, h) => (
             <span
@@ -59,7 +59,7 @@ export default function TrafficHeatmap({ grid }) {
           <div
             key={DAYS[dow]}
             className="mb-1 grid items-center gap-1"
-            style={{ gridTemplateColumns: '2.4rem repeat(24, 1fr)' }}
+            style={{ gridTemplateColumns: '2.4rem repeat(24, minmax(20px, 1fr))' }}
           >
             <span
               className="text-[10px] font-semibold"
@@ -108,3 +108,5 @@ export default function TrafficHeatmap({ grid }) {
     </div>
   );
 }
+
+

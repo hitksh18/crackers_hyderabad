@@ -5,7 +5,7 @@ import { Sparkles } from 'lucide-react';
 import { readSiteSettings, announcementTexts } from '../lib/siteSettings';
 
 const DEFAULT_MESSAGES = [
-  'Free Delivery above Rs. 2,000',
+  'Free Delivery above Rs. 2,500',
   '100% Licensed Products',
   'Secure Payments',
   'Festival Offers Live',
@@ -184,7 +184,7 @@ const TopBanner = ({ preview } = {}) => {
   const [bannerSettings, setBannerSettings] = useState({
     topBannerEnabled: true,
     topBannerMessages: [],
-    topBannerText: 'Free Delivery above Rs. 2,000',
+    topBannerText: 'Free Delivery above Rs. 2,500',
     promoMessage: 'SPECIAL FESTIVE OFFERS!',
   });
 

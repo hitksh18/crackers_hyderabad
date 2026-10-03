@@ -37,7 +37,7 @@ const Checkout = () => {
   const [loading, setLoading] = useState(false);
   const [adminSettings, setAdminSettings] = useState({
     // Fallback only — the live adminSettings/main document carries the real
-    // floor. Both resolve to lib/orderThresholds.MINIMUM_ORDER_VALUE (₹2,000).
+    // floor. Both resolve to lib/orderThresholds.MINIMUM_ORDER_VALUE (₹2,500).
     minimumOrderValue: MINIMUM_ORDER_VALUE,
     minimumOrderValueEnabled: true,
     deliveryPinEnabled: true

@@ -18,7 +18,7 @@ const SimpleCopyright = () => {
 
       <div className="shell py-4 text-center">
         <p className="text-xs" style={{ fontFamily: 'var(--font-body)', color: '#9C9488' }}>
-          © <span className="tabular">{currentYear}</span> CrackersHyderabad | All Rights Reserved
+          © <span className="tabular">{currentYear}</span> Crackers Hyderabad | All Rights Reserved
         </p>
       </div>
     </div>

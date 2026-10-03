@@ -1,17 +1,8 @@
-import { createContext, useContext, useEffect, useMemo } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-/**
- * Crackers Hyderabad is DARK THEME ONLY. There is no light theme and no
- * theme switch anywhere in the UI.
- *
- * This module keeps the historical `useTheme()` / `ThemeProvider` API so
- * existing components keep working, but every value is pinned to dark:
- * - `isDark` is always true, `theme` is always 'dark'
- * - `toggleTheme`, `setTheme` and `useSystemTheme` are no-ops kept only so
- *   older call sites do not crash if any remain
- * - any legacy `theme` value left in localStorage by older builds is removed
- *   on boot so a stale "light" preference can never resurface
- */
+const STORAGE_KEY = 'theme';
+const DARK_QUERY = '(prefers-color-scheme: dark)';
+
 const ThemeContext = createContext();
 
 export const useTheme = () => {
@@ -22,49 +13,109 @@ export const useTheme = () => {
   return context;
 };
 
-const DARK_META_COLOR = '#14100E';
-
-export const applyDarkTheme = () => {
-  if (typeof document === 'undefined') return;
-  const root = document.documentElement;
-  root.classList.add('dark');
-  root.style.colorScheme = 'dark';
-
-  // Keep the mobile browser chrome in step with the page.
-  const meta = document.querySelector('meta[name="theme-color"]:not([media])');
-  if (meta) meta.setAttribute('content', DARK_META_COLOR);
-
-  // Drop legacy preferences from when a light theme existed. A stored
-  // "light" value must never be able to bring the light UI back.
+const readStoredChoice = () => {
   try {
-    localStorage.removeItem('theme');
-    localStorage.removeItem('themeMode');
-    localStorage.removeItem('darkMode');
-    localStorage.removeItem('colorMode');
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored === 'dark' || stored === 'light' ? stored : null;
   } catch {
-    // Storage unavailable — nothing to clean up.
+    return null;
   }
 };
 
-// Pin dark as early as module evaluation runs, before first render.
-applyDarkTheme();
+const systemPrefersDark = () => {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  return window.matchMedia(DARK_QUERY).matches;
+};
+
+/**
+ * Resolve the theme exactly the way the inline script in index.html does:
+ * an explicit choice wins, otherwise follow the operating system.
+ */
+const resolveInitial = () => {
+  const stored = readStoredChoice();
+  if (stored) return stored === 'dark';
+  return systemPrefersDark();
+};
+
+const applyTheme = (dark) => {
+  const root = document.documentElement;
+  root.classList.toggle('dark', dark);
+  root.style.colorScheme = dark ? 'dark' : 'light';
+
+  // Keep the mobile browser chrome in step with the page.
+  const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+  if (meta) meta.setAttribute('content', dark ? '#14100E' : '#761713');
+};
+
+const initialDark = resolveInitial();
+applyTheme(initialDark);
 
 export const ThemeProvider = ({ children }) => {
+  const [isDark, setIsDark] = useState(initialDark);
+  // Null means "no explicit choice yet — keep following the OS".
+  const [choice, setChoice] = useState(readStoredChoice);
+
   useEffect(() => {
-    applyDarkTheme();
+    applyTheme(isDark);
+  }, [isDark]);
+
+  // Track the OS only until the visitor picks a side themselves.
+  useEffect(() => {
+    if (choice) return undefined;
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+
+    const mql = window.matchMedia(DARK_QUERY);
+    const onChange = (event) => setIsDark(event.matches);
+
+    setIsDark(mql.matches);
+
+    if (mql.addEventListener) {
+      mql.addEventListener('change', onChange);
+      return () => mql.removeEventListener('change', onChange);
+    }
+
+    // Safari < 14 only has the deprecated listener API.
+    mql.addListener(onChange);
+    return () => mql.removeListener(onChange);
+  }, [choice]);
+
+  const setTheme = useCallback((next) => {
+    const dark = next === 'dark';
+    setIsDark(dark);
+    setChoice(next);
+    try {
+      localStorage.setItem(STORAGE_KEY, next);
+    } catch {
+      // The preference simply will not persist if storage is unavailable.
+    }
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setTheme(isDark ? 'light' : 'dark');
+  }, [isDark, setTheme]);
+
+  /** Drop back to following the operating system. */
+  const useSystemTheme = useCallback(() => {
+    setChoice(null);
+    setIsDark(systemPrefersDark());
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Nothing to clean up if storage is unavailable.
+    }
   }, []);
 
   const value = useMemo(
     () => ({
-      isDark: true,
-      theme: 'dark',
-      /** The site no longer follows the OS — dark is permanent. */
-      followsSystem: false,
-      toggleTheme: () => {},
-      setTheme: () => {},
-      useSystemTheme: () => {},
+      isDark,
+      theme: isDark ? 'dark' : 'light',
+      /** True while the theme tracks the OS rather than an explicit pick. */
+      followsSystem: choice === null,
+      toggleTheme,
+      setTheme,
+      useSystemTheme,
     }),
-    []
+    [isDark, choice, toggleTheme, setTheme, useSystemTheme]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

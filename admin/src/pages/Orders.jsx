@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { collection, getDocs, getDoc, doc, updateDoc, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Eye, FileText, StickyNote, Trash2, Search, ChevronDown } from 'lucide-react';
+import { Eye, FileText, StickyNote, Trash2, Search, ChevronDown } from 'lucide-react';
 import toast from '../utils/toast';
 import { sendOrderSMS } from '../utils/sms';
 import { authFetch, readApiError } from '../utils/apiClient';
@@ -20,7 +20,7 @@ import OrderStatusBadge from '../components/admin/OrderStatusBadge';
 import { getStatusTone } from '../components/admin/orderStatus';
 import OrderActionBar from '../components/admin/OrderActionBar';
 import OrderEditModal from '../components/admin/OrderEditModal';
-import AccountMenu from '../components/admin/AccountMenu';
+import AdminHeader from '../components/admin/AdminHeader';
 
 const statusOptions = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'];
 
@@ -472,7 +472,7 @@ const Orders = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[var(--surface-page)]">
+      <div className="admin-page bg-[var(--surface-page)]">
         <div className="mx-auto w-full max-w-[1550px] px-4 py-4 lg:px-8">
           <Skeleton className="h-3 w-28" />
           <Skeleton className="mt-2 h-6 w-64" />
@@ -485,7 +485,7 @@ const Orders = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--surface-page)] text-[var(--text-body)] transition-colors duration-200 overflow-x-hidden">
+    <div className="admin-page bg-[var(--surface-page)] text-[var(--text-body)] transition-colors duration-200 overflow-x-hidden">
       <CustomModal
         isOpen={isOpen}
         onClose={closeModal}
@@ -495,83 +495,72 @@ const Orders = () => {
         {...modalConfig}
       />
 
-      {/* Dedicated Orders Navbar - ONE navbar: Back, Search, Centered Title, Status, Date, Delete */}
-      <header className="sticky top-0 z-30 flex min-h-[60px] w-full shrink-0 items-center border-b bg-[var(--surface-card)] px-4 py-2 transition-colors duration-200 lg:px-8" style={{ borderColor: 'var(--hairline)' }}>
-        <div className="orders-head mx-auto flex w-full max-w-[1550px] flex-wrap items-center gap-3 lg:flex-nowrap lg:gap-4">
-          <Link
-            to="/dashboard"
-            className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold transition-colors duration-200"
-            style={{ color: 'var(--ember-600)' }}
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">Back to Dashboard</span>
-            <span className="sm:hidden">Back</span>
-          </Link>
+      {/* Shared Admin navbar: Back | Orders | actions + avatar.
+          Search and filters live in the toolbar below, not the navbar. */}
+      <AdminHeader
+        title="Orders"
+        backFallback="/dashboard"
+        controls={(
+          <>
+            {orders.length > 0 && (
+              <button
+                type="button"
+                onClick={handleDeleteAllOrders}
+                className="ax-btn"
+                style={{ borderColor: 'rgba(203, 42, 42, 0.35)', color: 'var(--text-strong)' }}
+              >
+                <Trash2 aria-hidden="true" style={{ color: '#E14848' }} />
+                <span className="hidden sm:inline">Delete All ({orders.length})</span>
+                <span className="sm:hidden">Delete All</span>
+              </button>
+            )}
+          </>
+        )}
+      />
 
+      {/* Page toolbar: search + filters */}
+      <div className="mx-auto w-full max-w-[1550px] px-4 pt-3 lg:px-8">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative w-full sm:w-[300px] shrink lg:w-[320px] xl:w-[360px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search orders... (order #, customer, phone)"
-              className="h-9 w-full rounded-full border bg-[var(--surface-sunken)] pl-10 pr-4 text-sm placeholder:text-[var(--text-subtle)] focus:outline-none transition-colors duration-200"
+              className="h-10 w-full rounded-[10px] border bg-[var(--surface-sunken)] pl-10 pr-4 text-sm placeholder:text-[var(--text-subtle)] focus:outline-none transition-colors duration-200"
               style={{ borderColor: 'var(--hairline)', color: 'var(--text-strong)' }}
             />
           </div>
 
-          <h1 className="orders-title pointer-events-none absolute left-1/2 hidden -translate-x-1/2 text-sm font-bold tracking-tight lg:block" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>
-            Orders Management
-          </h1>
+          <div className="relative">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="h-10 appearance-none rounded-[10px] border bg-[var(--surface-sunken)] pl-3 pr-8 text-sm font-semibold focus:outline-none transition-colors duration-200"
+              style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
+            >
+              <option value="All">Status: All</option>
+              {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
+          </div>
 
-          <div className="ml-auto flex items-center gap-2">
-            <div className="relative">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="h-9 appearance-none rounded-full border bg-[var(--surface-sunken)] pl-3 pr-8 text-xs font-semibold focus:outline-none transition-colors duration-200"
-                style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
-              >
-                <option value="All">Status: All</option>
-                {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
-            </div>
-
-            <div className="relative">
-              <select
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="h-9 appearance-none rounded-full border bg-[var(--surface-sunken)] pl-3 pr-8 text-xs font-semibold focus:outline-none transition-colors duration-200"
-                style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
-              >
-                <option value="All">Date: All dates</option>
-                <option value="Today">Today</option>
-                <option value="This week">This week</option>
-                <option value="This month">This month</option>
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
-            </div>
-
-            {orders.length > 0 && (
-              <button
-                type="button"
-                onClick={handleDeleteAllOrders}
-                className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors duration-200"
-                style={{
-                  borderColor: 'rgba(203, 42, 42, 0.35)',
-                  background: 'rgba(203, 42, 42, 0.08)',
-                  color: 'var(--text-strong)',
-                }}
-              >
-                <Trash2 className="h-4 w-4" aria-hidden="true" style={{ color: '#E14848' }} />
-                <span className="hidden sm:inline">Delete All Orders ({orders.length})</span>
-                <span className="sm:hidden">Delete All</span>
-                </button>
-              )}
-            <AccountMenu />
+          <div className="relative">
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="h-10 appearance-none rounded-[10px] border bg-[var(--surface-sunken)] pl-3 pr-8 text-sm font-semibold focus:outline-none transition-colors duration-200"
+              style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
+            >
+              <option value="All">Date: All dates</option>
+              <option value="Today">Today</option>
+              <option value="This week">This week</option>
+              <option value="This month">This month</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
           </div>
         </div>
-      </header>
+      </div>
 
       <motion.div
         variants={pageVariants(reduced)}

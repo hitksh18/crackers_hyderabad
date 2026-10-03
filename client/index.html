@@ -10,34 +10,45 @@
     <meta name="description" content="Premium fireworks and wholesale crackers in Hyderabad. Gift boxes, sparklers, rockets, flower pots and festival collections at wholesale pricing, with order tracking and doorstep delivery." />
     <meta name="keywords" content="crackers hyderabad, wholesale crackers, fireworks hyderabad, diwali crackers, sparklers, gift boxes, bulk crackers, festival fireworks" />
     <meta name="author" content="Crackers Hyderabad" />
-    <!-- Dark theme only: pinned before first paint so there is no flash of
-         any other palette. Legacy stored preferences are ignored and cleared
-         by the theme module on boot. -->
-    <meta name="theme-color" content="#14100E" />
-    <meta name="color-scheme" content="dark" />
+    <!-- Kept media-free so the theme script below owns it; a media-scoped pair
+         would follow the OS and contradict an explicit user choice. -->
+    <meta name="theme-color" content="#761713" />
+    <meta name="color-scheme" content="light dark" />
     <meta name="robots" content="index, follow" />
 
-    <!-- Critical first-paint shell: the hero is a dark cinematic scene, so the
-         page behind the JS bundle is already that darkness. This paints before
-         React, Firebase, fonts or product data arrive, and reserves the hero
-         height so the first contentful paint does not shift layout. -->
+    <!-- Critical first-paint shell: paints before React, Firebase, fonts or
+         product data arrive, and reserves the hero height so the first
+         contentful paint does not shift layout. The base matches the light
+         default; the theme script below flips it to dark before paint when
+         the resolved theme is dark. -->
     <style>
-      html, body { margin: 0; padding: 0; background: #070505; }
-      #root { min-height: 100svh; background: #070505; }
+      html, body { margin: 0; padding: 0; background: #FDF9F0; }
+      html.dark, html.dark body { background: #14100E; }
+      #root { min-height: 100svh; }
       .hero-stage { min-height: 540px; background: #070505; }
     </style>
 
+    <!-- Resolve the theme before first paint so dark-mode visitors never see a
+         flash of the light palette. Must stay in step with src/contexts/ThemeContext.jsx. -->
     <script>
       (function () {
         try {
-          document.documentElement.classList.add('dark');
-          document.documentElement.style.colorScheme = 'dark';
-          localStorage.removeItem('theme');
-          localStorage.removeItem('themeMode');
-          localStorage.removeItem('darkMode');
-          localStorage.removeItem('colorMode');
+          var stored = localStorage.getItem('theme');
+          var dark =
+            stored === 'dark' ||
+            stored === 'light'
+              ? stored === 'dark'
+              : window.matchMedia &&
+                window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+          if (dark) {
+            document.documentElement.classList.add('dark');
+            document.documentElement.style.colorScheme = 'dark';
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', '#14100E');
+          }
         } catch (e) {
-          /* Storage blocked — dark classes are already applied above. */
+          /* Storage blocked — fall through to the light default. */
         }
       })();
     </script>

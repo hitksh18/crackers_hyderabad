@@ -43,40 +43,39 @@
   /* Period-over-period movement on the analytics dashboard. Separate tokens
      rather than reusing leaf/crimson directly, because these two need to stay
      legible on the dark surface and the brand scales are fixed hexes. */
-  --delta-up: #4FB483;
-  --delta-down: #F2716B;
-  --delta-flat: #A79E92;
+  --delta-up: #2C7A53;
+  --delta-down: #CB2A2A;
+  --delta-flat: #8B8377;
 
-  /* ---- Surfaces (dark only — the site has no light theme) ---- */
-  --surface-page: #14100E;
-  --surface-card: #1E1815;
-  --surface-raised: #251E1A;
-  --surface-sunken: #17120F;
-  --surface-inverse: #FDF9F0;
-  --hairline: rgba(237, 231, 223, 0.10);
-  --hairline-strong: rgba(237, 231, 223, 0.18);
+  /* ---- Surfaces ---- */
+  --surface-page: #FDF9F0;
+  --surface-card: #FFFFFF;
+  --surface-raised: #FFFDF8;
+  --surface-sunken: #F9F1E3;
+  --surface-inverse: #1A1714;
+  --hairline: #EFE3CE;
+  --hairline-strong: #E2D2B7;
 
-  /* ---- Glass surfaces (dark only). Layered translucent fills + top-light
-     + hairline so the effect reads "premium glass" even where
-     backdrop-filter is unsupported or disabled. Readability always wins
-     over glassiness. ---- */
-  --glass-fill: linear-gradient(152deg, rgba(37, 30, 26, 0.8) 0%, rgba(30, 24, 21, 0.55) 100%);
-  --glass-fill-strong: linear-gradient(160deg, rgba(37, 30, 26, 0.94) 0%, rgba(28, 22, 19, 0.88) 100%);
-  --glass-fill-nav: linear-gradient(180deg, rgba(20, 16, 14, 0.92) 0%, rgba(30, 24, 21, 0.72) 100%);
-  --glass-fill-soft: linear-gradient(152deg, rgba(37, 30, 26, 0.66) 0%, rgba(30, 24, 21, 0.4) 100%);
+  /* ---- Glass surfaces. Layered translucent fills + top-light + hairline so
+     the effect reads "premium glass" even where backdrop-filter is unsupported
+     or disabled. Readability always wins over glassiness. ---- */
+  --glass-fill: linear-gradient(152deg, rgba(255, 253, 248, 0.82) 0%, rgba(249, 241, 227, 0.6) 100%);
+  --glass-fill-strong: linear-gradient(160deg, rgba(255, 253, 248, 0.94) 0%, rgba(253, 249, 240, 0.86) 100%);
+  --glass-fill-nav: linear-gradient(180deg, rgba(253, 249, 240, 0.9) 0%, rgba(255, 253, 248, 0.72) 100%);
+  --glass-fill-soft: linear-gradient(152deg, rgba(255, 253, 248, 0.66) 0%, rgba(249, 241, 227, 0.42) 100%);
   --glass-blur: blur(20px) saturate(150%);
   --glass-blur-strong: blur(28px) saturate(165%);
   --glass-blur-soft: blur(14px) saturate(140%);
-  --glass-toplight: inset 0 1px 0 rgba(237, 231, 223, 0.12);
-  --glass-toplight-soft: inset 0 1px 0 rgba(237, 231, 223, 0.08);
+  --glass-toplight: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --glass-toplight-soft: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 
-  /* ---- Text (dark only) ---- */
-  --text-strong: #F2ECE3;
-  --text-body: #D6CEC3;
-  --text-muted: #A79E92;
+  /* ---- Text ---- */
+  --text-strong: #1A1714;
+  --text-body: #433E37;
+  --text-muted: #6B6459;
   --text-subtle: #8B8377;
   --text-on-dark: #EDE7DF;
-  --white-soft: #F2ECE3;
+  --white-soft: #FFFFFF;
 
   /* ---- Gradients ---- */
   --grad-ember: linear-gradient(122deg, #9E2C10 0%, #C33A14 52%, #DF4C21 100%);
@@ -118,14 +117,14 @@
   --ease-in-soft: cubic-bezier(0.55, 0.06, 0.68, 0.19);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-  /* ---- Legacy variable names still referenced by components (dark values) ---- */
-  --maroon: #EC7049;
-  --cream: rgba(237, 231, 223, 0.06);
-  --muted: #A79E92;
-  --avatar-bg: rgba(237, 231, 223, 0.09);
-  --avatar-icon: #D6CEC3;
-  --avatar-border: rgba(237, 231, 223, 0.16);
-  --card-bg: #1E1815;
+  /* ---- Legacy variable names still referenced by components ---- */
+  --maroon: #C33A14;
+  --cream: #FDF9F0;
+  --muted: #6B6459;
+  --avatar-bg: #F9F1E3;
+  --avatar-icon: #6B6459;
+  --avatar-border: #EFE3CE;
+  --card-bg: #FFFFFF;
 }
 
 .dark {
@@ -150,7 +149,7 @@
   --text-body: #D6CEC3;
   --text-muted: #A79E92;
   --text-subtle: #8B8377;
-  --white-soft: #F2ECE3;
+  --white-soft: #FFFFFF;
 
   --maroon: #EC7049;
   --cream: rgba(237, 231, 223, 0.06);
@@ -180,10 +179,13 @@
 html {
   scroll-behavior: smooth;
   background: var(--surface-page);
-  color-scheme: dark;
   -webkit-text-size-adjust: 100%;
   max-width: 100%;
   overflow-x: clip;
+}
+
+html.dark {
+  color-scheme: dark;
 }
 
 body {
@@ -263,12 +265,12 @@ body::after {
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: var(--surface-sunken); }
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, rgba(148, 37, 31, 0.9), rgba(58, 11, 12, 0.95));
+  background: linear-gradient(180deg, #C4A882, #A8865C);
   border-radius: 8px;
   border: 2px solid var(--surface-sunken);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, rgba(195, 58, 20, 0.95), rgba(118, 23, 19, 1));
+  background: linear-gradient(180deg, #A8865C, #8A6A44);
 }
 .dark ::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, rgba(148, 37, 31, 0.9), rgba(58, 11, 12, 0.95));
@@ -625,7 +627,7 @@ img {
   .btn-outline:hover:not(:disabled) {
     transform: translateY(-2px);
     border-color: var(--ember-600);
-    background: #2E241C;
+    background: #FFF4EF;
     box-shadow: 0 10px 24px rgba(195, 58, 20, 0.14);
   }
 
@@ -698,9 +700,9 @@ img {
   }
 
   .btn-quiet:hover:not(:disabled) {
-    background: rgba(236, 112, 73, 0.14);
+    background: #FFF4EF;
     border-color: rgba(195, 58, 20, 0.35);
-    color: var(--saffron-400);
+    color: var(--maroon-700);
   }
 
   /* ---- Eyebrow ---- */
@@ -1404,7 +1406,7 @@ img {
 .product-img-panel {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(165deg, #251E1A 0%, #2E241C 100%);
+  background: linear-gradient(165deg, #FFFDF8 0%, #F7EDD5 100%);
 }
 
 /* Glassy image panel — translucent warm fill + soft top-light; the product
@@ -1471,7 +1473,7 @@ img {
 }
 
 .dark .product-img-panel {
-  background: linear-gradient(165deg, #251E1A 0%, #2E241C 100%);
+  background: linear-gradient(165deg, #FFFDF8 0%, #F7EDD5 100%);
 }
 
 .dark .product-img-panel.glass-img {
@@ -1597,17 +1599,43 @@ img {
    MISC COMPONENT CLASSES CARRIED OVER
    ========================================================================= */
 
+/* Docked purchase bar — phones and tablets only.
+   The desktop buy column keeps its own inline quantity + Add to Cart, so the
+   bar is display:none from 1024px up. It is fixed to the viewport bottom (not
+   sticky, so it never inherits a scroll container), sits above the copyright
+   strip rather than on top of it, and respects the iOS home-indicator inset. */
 .sticky-cart-bar {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   z-index: 20;
-  transform: translateY(110%);
-  transition: transform var(--dur-slow) var(--ease-out-expo);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--glass-fill-nav);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-top: 1px solid var(--hairline-strong);
+  box-shadow: 0 -8px 28px rgba(58, 11, 12, 0.18);
 }
 
-.sticky-cart-bar.visible { transform: translateY(0); }
+.dark .sticky-cart-bar {
+  border-top-color: rgba(210, 166, 79, 0.24);
+}
+
+.sticky-cart-bar-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: min(100%, 1800px);
+  margin-inline: auto;
+  padding: 0.625rem var(--gutter);
+}
+
+@media (min-width: 1024px) {
+  .sticky-cart-bar {
+    display: none;
+  }
+}
 
 .search-expand input {
   transition: box-shadow var(--dur-base) var(--ease-out-soft),
@@ -1659,7 +1687,7 @@ img {
 .arrow-btn:hover {
   color: var(--ember-600);
   border-color: var(--ember-600);
-  background: #2E241C;
+  background: #FFF4EF;
   transform: scale(1.06);
 }
 
@@ -2175,24 +2203,62 @@ img {
   white-space: nowrap;
 }
 
+/* Sort control. A native <select>, deliberately: the browser renders its list
+   in its own top-layer popup, so it cannot be clipped by a scrolling parent and
+   cannot overflow the viewport on a phone. `position/z-index` are here so the
+   focus ring is never overlapped by a card, not to layer the list.
+   `color-scheme` keeps that native popup dark instead of a white OS sheet. */
 .sort-select {
   appearance: none;
   -webkit-appearance: none;
+  position: relative;
+  z-index: 1;
   background: var(--surface-card);
   border: 1px solid var(--hairline-strong);
   border-radius: var(--r-pill);
-  padding: 0.4rem 2rem 0.4rem 0.75rem;
+  padding: 0.4rem 2rem 0.4rem 0.85rem;
   font-size: 0.8125rem;
   font-weight: 600;
   font-family: var(--font-body);
-  color: var(--text-body);
+  color: var(--text-strong);
   cursor: pointer;
+  color-scheme: light;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B6459' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 0.5rem center;
-  min-height: 34px;
+  background-position: right 0.6rem center;
+  min-height: 40px;
+  max-width: 100%;
   box-shadow: var(--shadow-xs);
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.dark .sort-select {
+  color-scheme: dark;
+}
+
+.sort-select:hover {
+  border-color: var(--ember-600);
+}
+
+.sort-select:focus-visible {
+  outline: none;
+  border-color: var(--ember-600);
+  box-shadow: 0 0 0 4px rgba(195, 58, 20, 0.16), var(--shadow-sm);
+}
+
+/* Comfortable touch target, and it takes the full row on the narrowest phones
+   so the control never fights the label and the view toggle for space. */
+@media (hover: none) {
+  .sort-select {
+    min-height: 44px;
+    font-size: 0.875rem;
+  }
+}
+
+@media (max-width: 359px) {
+  .sort-select {
+    flex: 1 1 100%;
+  }
 }
 
 .sort-select:focus {
@@ -2269,8 +2335,8 @@ img {
 
 .admin-reorder:not(.active):hover {
   border-color: var(--ember-600);
-  color: var(--ember-400);
-  background: rgba(195, 58, 20, 0.12);
+  color: var(--maroon-700);
+  background: #FFF4EF;
 }
 
 .admin-reorder-hint {
@@ -3325,4 +3391,1121 @@ img {
   .wa-halo {
     animation: none;
   }
+}
+
+/* =========================================================================
+   PRODUCT CATALOGUE WARMTH — scoped to product display only.
+   Light theme keeps its original cream surfaces; these rules add festive
+   depth in dark mode plus a faint ambient wash behind the catalogue shell
+   in both themes. No global backgrounds or tokens are altered here.
+   ========================================================================= */
+.shell.products-page {
+  background-image: radial-gradient(
+    60% 22rem at 50% 0%,
+    rgba(195, 58, 20, 0.07),
+    transparent 70%
+  );
+}
+/* =========================================================================
+   PRODUCT DETAIL PAGE
+   -------------------------------------------------------------------------
+   Order: announcement bar -> navbar -> hero (image | buy column, which carries
+   the highlights and the COD/premium strip) -> safety card -> description ->
+   "More Like This" -> the site copyright strip.
+
+   Every rule is scoped to .pd-* and reads from the shared design tokens, so
+   the page inherits the black/brown dark theme and the cream light theme
+   without a second set of colours, and no palette value is altered here.
+
+   Spacing is a fixed scale, not a mood: 22px from the navbar, 10-22px inside
+   the buy column, then 28-40px between the full-width sections. Nothing
+   reserves height it does not use.
+   ========================================================================= */
+
+.pd-page {
+  position: relative;
+  /* A faint ember wash behind the hero plus a barely-there warm lift at the
+     very top. Both use colours already in the palette — this is a brightness
+     pass on the existing dark theme, not a new palette. */
+  background-image:
+    radial-gradient(60% 20rem at 50% 0%, rgba(247, 174, 44, 0.05), transparent 70%),
+    radial-gradient(58% 22rem at 50% 0%, rgba(195, 58, 20, 0.07), transparent 72%);
+}
+
+/* Fluid container — identical maths to .shell, because the storefront only
+   ever uses one column system. */
+.pd-shell {
+  width: min(92vw, 1800px);
+  max-width: 100%;
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+  box-sizing: border-box;
+}
+
+/* ---- Hero -------------------------------------------------------------- */
+
+/* Starts directly under the navbar: 22px of air, no breadcrumb band. The gap
+   down to the sections below is owned by those sections instead. */
+.pd-hero {
+  padding-top: 1.375rem;
+}
+
+.pd-hero-grid {
+  display: grid;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+/* Desktop: image 45%, information 55%, and the remaining ~4% is the gap
+   between them. The columns are top-aligned so the buy column starts near the
+   upper third of the image instead of floating centred against it. */
+@media (min-width: 1024px) {
+  .pd-hero-grid {
+    grid-template-columns: minmax(0, 45fr) minmax(0, 55fr);
+    align-items: start;
+    gap: clamp(1.25rem, 0.7rem + 2vw, 2.5rem);
+  }
+}
+
+.pd-media-col {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Layered frame, no ornament: a gold hairline edge, an inset inner rule and
+   four corner ticks. All flat 1px lines at low opacity, so the panel reads as
+   finished framing rather than an empty box. */
+.pd-media {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: clamp(0.75rem, 0.5rem + 0.7vw, 1.25rem);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-2xl);
+  background: linear-gradient(
+    160deg,
+    var(--surface-raised) 0%,
+    var(--surface-card) 55%,
+    var(--surface-sunken) 100%
+  );
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.dark .pd-media {
+  border-color: rgba(210, 166, 79, 0.28);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+/* Inset inner rule. */
+.pd-media::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  z-index: 1;
+  border: 1px solid rgba(210, 166, 79, 0.16);
+  border-radius: calc(var(--r-2xl) - 7px);
+  pointer-events: none;
+}
+
+/* Corner ticks — two opposite corners only, so it reads as an intentional
+   detail rather than a border pattern. */
+.pd-media::after {
+  content: '';
+  position: absolute;
+  inset: 14px;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.55;
+  background:
+    linear-gradient(var(--gold-400), var(--gold-400)) left 0 top 0 / 20px 1px no-repeat,
+    linear-gradient(var(--gold-400), var(--gold-400)) left 0 top 0 / 1px 20px no-repeat,
+    linear-gradient(var(--ember-500), var(--ember-500)) right 0 bottom 0 / 20px 1px no-repeat,
+    linear-gradient(var(--ember-500), var(--ember-500)) right 0 bottom 0 / 1px 20px no-repeat;
+}
+
+/* Square well, matching the catalogue card ratio. object-contain inside it
+   means the product is never cropped and never stretched. */
+/* Landscape well rather than a square: the panel ends up roughly the height
+   of the information column beside it, so the image showcases the product
+   without swallowing the first screen.
+
+   Both children are taken out of flow on purpose. Left in flow, a square
+   product photo reports its own intrinsic height as the grid row's minimum and
+   stretches the well past its aspect ratio — which is exactly the tall, empty
+   image box this ratio exists to avoid. Absolute + object-contain keeps the
+   well at its ratio and the product whole: never cropped, never stretched. */
+.pd-media-inner {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+}
+
+@media (min-width: 1024px) {
+  .pd-media-inner {
+    aspect-ratio: 3 / 2;
+  }
+}
+
+.pd-media-inner > img,
+.pd-media-inner > div {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.pd-media-oos {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(20, 16, 14, 0.55);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+.pd-media-oos-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.95rem;
+  border-radius: var(--r-pill);
+  background: rgba(203, 42, 42, 0.94);
+  color: #FFFFFF;
+  font-size: var(--font-small);
+  font-weight: 700;
+  box-shadow: var(--shadow-md);
+}
+
+/* Bottom badge row: brand, store stamp, zoom hint. */
+.pd-media-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.pd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  padding: 0.28rem 0.6rem;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface-card);
+  color: var(--text-body);
+  font-size: var(--font-micro);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+/* Only the badges clamp — a long brand name loses its tail, never the layout.
+   The product title is never truncated. */
+.pd-chip-text {
+  min-width: 0;
+  max-width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pd-chip img {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex: 0 0 auto;
+  border-radius: var(--r-pill);
+  object-fit: contain;
+  background: #FFFFFF;
+}
+
+.pd-chip--stamp {
+  color: var(--gold-600);
+  border-color: rgba(210, 166, 79, 0.34);
+  background: rgba(210, 166, 79, 0.08);
+}
+
+.dark .pd-chip--stamp {
+  color: var(--gold-400);
+}
+
+.pd-media-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+  padding: 0.28rem 0.6rem;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--hairline);
+  background: var(--surface-card);
+  color: var(--text-body);
+  font-size: var(--font-micro);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Full-panel zoom target: a transparent button with no children, so the whole
+   panel is one 44px-minimum tap area without nesting interactive elements. */
+.pd-media-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: transparent;
+  border: none;
+  cursor: zoom-in;
+}
+
+/* ---- Buy column -------------------------------------------------------- */
+
+/* A query container so the title can size itself against the real column
+   width (see .pd-title). No absolutely positioned descendants, so the
+   containment is safe here. */
+.pd-info {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.pd-brandrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  width: 100%;
+}
+
+.pd-brandlogo {
+  width: auto;
+  height: 1.75rem;
+  max-width: 6rem;
+  object-fit: contain;
+  border-radius: var(--r-sm);
+  background: var(--surface-card);
+}
+
+.pd-brandname {
+  font-family: var(--font-body);
+  font-size: var(--font-small);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold-600);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dark .pd-brandname {
+  color: var(--gold-400);
+}
+
+.pd-licensed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.26rem 0.6rem;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(44, 122, 83, 0.3);
+  background: rgba(44, 122, 83, 0.1);
+  color: var(--leaf-600);
+  font-size: var(--font-micro);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dark .pd-licensed {
+  color: #4FB483;
+  border-color: rgba(79, 180, 131, 0.34);
+  background: rgba(79, 180, 131, 0.12);
+}
+
+/* Wishlist and share stay available but sit quiet at the end of the row. */
+.pd-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.pd-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.375rem;
+  height: 2.375rem;
+  border-radius: var(--r-pill);
+  transition:
+    transform var(--dur-fast) var(--ease-out-soft),
+    border-color var(--dur-fast) var(--ease-out-soft),
+    background var(--dur-fast) var(--ease-out-soft);
+}
+
+.pd-iconbtn:hover {
+  transform: translateY(-1px);
+  border-color: var(--ember-600) !important;
+}
+
+/* Title. Below 1024px the length tiers step the size down — wrapping is
+   expected on a phone. From 1024px up the tiers are overridden by the
+   container-query rule further down, which is what holds one line. */
+.pd-title {
+  font-size: clamp(1.75rem, 1.4rem + 2.4vw, 2.125rem);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  color: var(--text-strong);
+  overflow-wrap: break-word;
+  text-wrap: balance;
+}
+
+.pd-title--mid {
+  font-size: clamp(1.5rem, 1.2rem + 2vw, 1.875rem);
+}
+
+.pd-title--long {
+  font-size: clamp(1.375rem, 1.1rem + 1.8vw, 1.75rem);
+}
+
+.pd-title--xlong {
+  font-size: clamp(1.25rem, 1rem + 1.5vw, 1.5rem);
+}
+
+/* Desktop one-line title. --pd-chars is the product name's length, set
+   inline by the page. 0.575em is the measured average advance of an
+   upper-case Inter 800 heading, so dividing the column by the character count
+   lands the name just inside the column: it shrinks for longer names instead
+   of wrapping, and only falls back to two lines at the 20px floor. */
+@media (min-width: 1024px) {
+  .pd-title {
+    font-size: clamp(1.25rem, calc(156cqw / var(--pd-chars, 30)), 2.5rem);
+  }
+}
+
+.pd-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 0.75rem;
+}
+
+.pd-price-now {
+  font-family: var(--font-money);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(1.875rem, 1.5rem + 1.5vw, 2.5rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: var(--ember-600);
+}
+
+.dark .pd-price-now {
+  color: var(--ember-400);
+}
+
+.pd-price-was {
+  font-family: var(--font-money);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(0.95rem, 0.9rem + 0.3vw, 1.15rem);
+  color: var(--text-subtle);
+  text-decoration: line-through;
+}
+
+.pd-off {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.26rem 0.55rem;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(195, 58, 20, 0.28);
+  background: rgba(195, 58, 20, 0.1);
+  color: var(--ember-600);
+  font-size: var(--font-micro);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.dark .pd-off {
+  color: var(--ember-400);
+  border-color: rgba(236, 112, 73, 0.32);
+  background: rgba(236, 112, 73, 0.12);
+}
+
+.pd-stock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pd-pill {
+  padding: 0.32rem 0.7rem;
+}
+
+.dark .pd-stock .badge-leaf {
+  background: rgba(79, 180, 131, 0.12);
+  color: #4FB483;
+  border-color: rgba(79, 180, 131, 0.3);
+}
+
+.pd-buy {
+  display: flex;
+  align-items: stretch;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.pd-qty {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  border: 1.5px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-card);
+  overflow: hidden;
+}
+
+.pd-qty-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  min-height: 3rem;
+  color: var(--text-strong);
+  transition:
+    background var(--dur-fast) var(--ease-out-soft),
+    color var(--dur-fast) var(--ease-out-soft);
+}
+
+.pd-qty-btn:hover {
+  background: var(--surface-sunken);
+  color: var(--ember-600);
+}
+
+.pd-qty-input {
+  width: 3rem;
+  border: none;
+  background: transparent;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.pd-qty-input:focus {
+  outline: none;
+}
+
+.pd-atc {
+  flex: 1 1 auto;
+  min-height: 3rem;
+  /* The shared button carries a wide ember halo; across a full-width hero CTA
+     that reads as a glow rather than depth, so it is pulled back here only. */
+  box-shadow: 0 6px 18px rgba(195, 58, 20, 0.22);
+}
+
+.pd-atc:hover:not(:disabled) {
+  box-shadow: 0 12px 28px rgba(195, 58, 20, 0.28);
+}
+
+/* Buy-column rhythm. The title leads, so it carries no top margin:
+   10 / 14 / 11 / 16 / 22 / 22px down the column. The two blocks that own a
+   grid or a strip claim the full column width; .pd-info is a flex column with
+   align-items: flex-start, so they would otherwise shrink-wrap. */
+.pd-brandrow { margin-top: 0.625rem; }
+.pd-price { margin-top: 0.875rem; }
+.pd-stock { margin-top: 0.6875rem; }
+.pd-buy { margin-top: 1rem; }
+.pd-info-hl { margin-top: 1.375rem; width: 100%; }
+.pd-info-trust { margin-top: 1.375rem; }
+
+/* Phones and tablets: the docked bar owns quantity + Add to Cart, so the
+   inline pair is dropped rather than duplicated. Desktop is untouched. */
+@media (max-width: 1023px) {
+  .pd-buy {
+    display: none;
+  }
+
+  /* Reserve exactly the bar's footprint (controls + safe-area) so the last
+     row of the page — the copyright strip — can always be scrolled clear. */
+  .pd-page {
+    padding-bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Bar variants of the shared controls: same look, sized for a 320px screen. */
+.pd-qty--bar {
+  flex: 0 0 auto;
+}
+
+.pd-qty--bar .pd-qty-btn {
+  width: 2.5rem;
+  min-height: 2.75rem;
+}
+
+.pd-qty--bar .pd-qty-input {
+  width: 2.5rem;
+}
+
+.pd-atc--bar {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 2.75rem;
+  gap: 0.5rem;
+  padding-inline: 0.875rem;
+}
+
+/* A flex item will not shrink below its content unless told to, so without
+   this the label refuses to truncate and pushes the bar past a 320px screen. */
+.pd-atc--bar > .truncate {
+  min-width: 0;
+}
+
+/* Below 400px the price is the first thing to go — the quantity and the CTA
+   are what the bar exists for. */
+@media (max-width: 399px) {
+  .pd-atc--bar .price {
+    display: none;
+  }
+
+  .pd-qty--bar .pd-qty-btn,
+  .pd-qty--bar .pd-qty-input {
+    width: 2.375rem;
+  }
+}
+
+/* Very narrow phones: the stepper and the CTA each take a full row so
+   neither is squeezed into an un-tappable sliver. Scoped to .pd-buy, because
+   .pd-atc is also used by the docked bar — where it must share the row at
+   every width, or it would claim 100% of the track and push the stepper off. */
+@media (max-width: 359px) {
+  .pd-buy {
+    flex-wrap: wrap;
+  }
+
+  .pd-buy .pd-atc {
+    flex: 1 0 100%;
+  }
+}
+
+/* ---- Section labels ---------------------------------------------------- */
+
+.pd-label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+  font-family: var(--font-body);
+  font-size: var(--font-micro);
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold-600);
+}
+
+.dark .pd-label {
+  color: var(--gold-400);
+}
+
+.pd-label::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(210, 166, 79, 0.5), transparent);
+}
+
+/* Inside the buy column the rule is short — a full-width line would fight
+   the compact spec cards. */
+.pd-info-hl .pd-label::after {
+  flex: 0 0 2.25rem;
+}
+
+/* ---- Product highlights: four spec cards ------------------------------- */
+
+.pd-hl-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  width: 100%;
+}
+
+/* Three wide spec cards across the buy column (Brand, Quantity, Category).
+   A fixed three-slot track (rather than auto-fill) keeps all three the same
+   comfortable width at every desktop size and lines the row up with the trust
+   strip below it. A product missing Quantity leaves a slot empty instead of
+   stretching two cards across the row. */
+@media (min-width: 1024px) {
+  .pd-hl-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Two columns on a phone: an odd last card spans the row rather than leaving
+   a hole beside it. */
+@media (max-width: 1023px) {
+  .pd-hl-grid > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+.pd-hl {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.625rem 0.7rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.dark .pd-hl {
+  border-color: rgba(210, 166, 79, 0.16);
+  background: linear-gradient(165deg, rgba(37, 30, 26, 0.5) 0%, rgba(30, 24, 21, 0.3) 100%);
+}
+
+.pd-hl-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(195, 58, 20, 0.18);
+  background: rgba(195, 58, 20, 0.1);
+  color: var(--ember-600);
+}
+
+.dark .pd-hl-icon {
+  color: var(--ember-400);
+  border-color: rgba(236, 112, 73, 0.22);
+  background: rgba(236, 112, 73, 0.12);
+}
+
+/* The real brand mark replaces the generic icon in the Brand card. */
+.pd-hl-logo {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: var(--r-pill);
+  object-fit: contain;
+  background: #FFFFFF;
+}
+
+.pd-hl-body {
+  min-width: 0;
+}
+
+.pd-hl-label {
+  font-size: var(--font-micro);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-body);
+}
+
+.pd-hl-value {
+  margin-top: 0.15rem;
+  font-size: var(--font-small);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+/* The category card keeps catalogue routing without a second, separate pill. */
+.pd-hl-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(195, 58, 20, 0.35);
+  transition: color var(--dur-fast) var(--ease-out-soft);
+}
+
+.pd-hl-link:hover {
+  color: var(--ember-600);
+  border-bottom-color: var(--ember-600);
+}
+
+/* ---- Full-width sections below the hero -------------------------------- */
+
+.pd-sec--desc {
+  padding-top: clamp(1.75rem, 1.4rem + 1.4vw, 2.5rem);
+  padding-bottom: clamp(1.75rem, 1.4rem + 1.4vw, 2.5rem);
+}
+
+.pd-sec--similar {
+  padding-bottom: clamp(2.25rem, 1.7rem + 2vw, 3.5rem);
+}
+
+/* ---- Safety First ------------------------------------------------------ */
+
+/* One compact dark card: a fixed label column and a responsive list of care
+   notes. Flat surface, one hairline edge, gold accent — no light panel, no
+   oversized illustration. */
+.pd-safety {
+  padding-top: clamp(1.75rem, 1.4rem + 1.4vw, 2.5rem);
+}
+
+.pd-safety-card {
+  display: grid;
+  gap: clamp(0.875rem, 0.7rem + 0.8vw, 1.5rem);
+  align-items: center;
+  padding: clamp(0.875rem, 0.75rem + 0.5vw, 1.25rem) clamp(1rem, 0.85rem + 0.6vw, 1.5rem);
+  border: 1px solid var(--hairline-strong);
+  border-left: 2px solid var(--gold-500);
+  border-radius: var(--r-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.dark .pd-safety-card {
+  border-color: rgba(210, 166, 79, 0.2);
+  background: linear-gradient(120deg, rgba(37, 30, 26, 0.6) 0%, rgba(30, 24, 21, 0.35) 100%);
+}
+
+@media (min-width: 900px) {
+  .pd-safety-card {
+    grid-template-columns: minmax(11rem, 15rem) minmax(0, 1fr);
+  }
+}
+
+.pd-safety-head {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+.pd-safety-ico {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(210, 166, 79, 0.32);
+  background: rgba(210, 166, 79, 0.12);
+  color: var(--gold-600);
+}
+
+.dark .pd-safety-ico {
+  color: var(--gold-400);
+}
+
+.pd-safety-title {
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-strong);
+}
+
+.pd-safety-sub {
+  margin-top: 0.1rem;
+  font-size: var(--font-micro);
+  color: var(--text-body);
+}
+
+.pd-safety-list {
+  display: grid;
+  gap: 0.5rem clamp(1rem, 0.8rem + 1vw, 2rem);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+@media (min-width: 560px) {
+  .pd-safety-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .pd-safety-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.pd-safety-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  min-width: 0;
+  font-size: var(--font-small);
+  line-height: 1.45;
+  color: var(--text-body);
+}
+
+.pd-safety-item svg {
+  margin-top: 0.2rem;
+  color: var(--gold-500);
+}
+
+/* ---- Product details ---------------------------------------------------- */
+
+/* Label-over-value cards, the same visual register as the highlight row but
+   a step quieter, for the specifications the hero did not show. */
+.pd-sec--details {
+  padding-top: 0;
+  padding-bottom: clamp(1.75rem, 1.4rem + 1.4vw, 2.5rem);
+}
+
+.pd-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
+  gap: 0.5rem;
+  max-width: 62rem;
+}
+
+.pd-detail {
+  min-width: 0;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.dark .pd-detail {
+  border-color: rgba(210, 166, 79, 0.16);
+  background: linear-gradient(165deg, rgba(37, 30, 26, 0.5) 0%, rgba(30, 24, 21, 0.3) 100%);
+}
+
+.pd-detail-label {
+  font-size: var(--font-micro);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-body);
+}
+
+.pd-detail-value {
+  margin-top: 0.2rem;
+  font-size: var(--font-small);
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+/* ---- Description ------------------------------------------------------- */
+
+/* Full container width by design. The shell already bounds the measure, so
+   there is deliberately no max-width here — the section spans everything the
+   page container offers and no more. */
+.pd-desc-inner {
+  width: 100%;
+}
+
+.pd-desc-title {
+  margin-bottom: 0.75rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 1.1rem + 0.6vw, 1.5rem);
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text-strong);
+}
+
+/* Justified across the full measure. `inter-word` keeps the justification
+   spreading through spaces only (Firefox honours it; other engines already
+   default to it) and `break-word` stops a long unbroken token — a URL, a
+   tracking code in a description — from opening a gap or overflowing.
+   The last line of each paragraph stays ragged, as justification should. */
+.pd-desc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  font-size: clamp(1rem, 0.97rem + 0.15vw, 1.0625rem);
+  line-height: 1.78;
+  color: var(--text-strong);
+  text-align: justify;
+  text-justify: inter-word;
+  overflow-wrap: break-word;
+}
+
+/* A narrower measure justifies more aggressively, so the phone gets a slightly
+   tighter rhythm rather than the same one squeezed into a third of the width. */
+@media (max-width: 639px) {
+  .pd-desc-body {
+    gap: 0.8rem;
+  }
+}
+
+/* ---- COD + premium quality: one reassurance strip ---------------------- */
+
+/* Equal halves split by a hairline divider. auto-flow/auto-columns means a
+   single assurance still spans the full width instead of hugging one half.
+   Inside the buy column it stays a horizontal strip; below 1024px the halves
+   stack so neither one is squeezed. */
+.pd-info-trust {
+  width: 100%;
+}
+
+.pd-trust {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  border: 1px solid rgba(210, 166, 79, 0.22);
+  border-radius: var(--r-lg);
+  background: linear-gradient(
+    120deg,
+    rgba(210, 166, 79, 0.09) 0%,
+    rgba(195, 58, 20, 0.05) 60%,
+    transparent 100%
+  );
+  overflow: hidden;
+}
+
+.pd-trust-side {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.875rem clamp(0.75rem, 0.6rem + 0.5vw, 1.25rem);
+}
+
+.pd-trust-side + .pd-trust-side {
+  border-left: 1px solid rgba(210, 166, 79, 0.18);
+}
+
+.pd-trust-ico {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--r-pill);
+}
+
+.pd-trust-ico--cod {
+  border: 1px solid rgba(44, 122, 83, 0.3);
+  background: rgba(44, 122, 83, 0.14);
+  color: var(--leaf-600);
+}
+
+.dark .pd-trust-ico--cod {
+  color: #4FB483;
+  border-color: rgba(79, 180, 131, 0.32);
+  background: rgba(79, 180, 131, 0.14);
+}
+
+.pd-trust-ico--gold {
+  border: 1px solid rgba(210, 166, 79, 0.32);
+  background: rgba(210, 166, 79, 0.14);
+  color: var(--gold-600);
+}
+
+.dark .pd-trust-ico--gold {
+  color: var(--gold-400);
+}
+
+.pd-trust-body {
+  min-width: 0;
+}
+
+.pd-trust-title {
+  display: block;
+  font-size: var(--font-small);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-strong);
+}
+
+.pd-trust-sub {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: var(--font-micro);
+  color: var(--text-body);
+}
+
+@media (max-width: 1023px) {
+  .pd-trust {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+  }
+
+  .pd-trust-side + .pd-trust-side {
+    border-left: 0;
+    border-top: 1px solid rgba(210, 166, 79, 0.18);
+  }
+}
+
+/* ---- "More Like This" carousel ---------------------------------------- */
+
+/* A real carousel, not a marquee: cards render once, the track is a
+   scroll-snap container, and the arrows page through it. */
+.pd-rail {
+  padding-bottom: 0;
+}
+
+/* ~1.25 cards on a phone so the next one peeks, 2 on a small tablet, and
+   exactly 4 across on desktop — 4 cards + 3 gaps always fill the track. */
+.pd-rail-item {
+  width: calc(84% - var(--rail-gap));
+}
+
+@media (min-width: 640px) {
+  .pd-rail-item {
+    width: calc((100% - var(--rail-gap)) / 2);
+  }
+}
+
+@media (min-width: 900px) {
+  .pd-rail-item {
+    width: calc((100% - var(--rail-gap) * 3) / 4);
+  }
+}
+
+/* On phones the rail is a swipe target, so the arrows would only crowd the
+   heading; they return from tablet up. */
+@media (max-width: 639px) {
+  .pd-rail-arrows {
+    display: none;
+  }
+
+  .pd-sec--similar .section-title {
+    font-size: clamp(1.5rem, 1.2rem + 1.6vw, 2rem);
+  }
+}
+
+/* Carousel mode disables an arrow at the end of the track. */
+.pd-rail-arrows .arrow-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  transform: none;
+}
+
+.pd-rail-arrows .arrow-btn:disabled:hover {
+  border-color: var(--hairline-strong);
+  background: var(--surface-card);
+  color: var(--text-muted);
+  transform: none;
+}
+
+.dark .product-card.card-premium {
+  background:
+    linear-gradient(165deg, #211914 0%, #1E1815 70%),
+    var(--glass-fill);
+  border-color: rgba(210, 166, 79, 0.22);
+}
+
+.dark .product-card.card-premium:hover {
+  border-color: rgba(210, 166, 79, 0.45);
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.6),
+    0 8px 32px rgba(195, 58, 20, 0.12);
+}
+
+.dark .product-img-panel {
+  background: linear-gradient(165deg, #2A2018 0%, #211914 60%, #1E1815 100%);
 }

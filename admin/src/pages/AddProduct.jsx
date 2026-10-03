@@ -38,6 +38,12 @@ const AddProduct = () => {
     isFeatured: false,
     sortOrder: '',
     brand: '',
+    highlightBrand: '',
+    highlightQuantity: '',
+    highlightEffect: '',
+    highlightIdealFor: '',
+    highlightCod: true,
+    highlightPremium: true,
   });
   const [seoData, setSeoData] = useState({
     title: '',
@@ -259,6 +265,14 @@ const AddProduct = () => {
         isFeatured: formData.isFeatured,
         ...(formData.sortOrder !== '' ? { sortOrder: parseInt(formData.sortOrder, 10) } : {}),
         brand: formData.brand || null,
+        highlights: {
+          brand: (formData.highlightBrand || '').trim(),
+          quantity: (formData.highlightQuantity || '').trim(),
+          effect: (formData.highlightEffect || '').trim(),
+          idealFor: (formData.highlightIdealFor || '').trim(),
+          codAvailable: formData.highlightCod !== false,
+          premiumQuality: formData.highlightPremium !== false,
+        },
         seo: seoObject,
         slug,
         oldSlugs: [],
@@ -360,3 +374,4 @@ const AddProduct = () => {
 };
 
 export default AddProduct;
+

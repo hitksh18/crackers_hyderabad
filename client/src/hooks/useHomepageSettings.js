@@ -5,7 +5,7 @@ import { db } from '../firebase';
 const DEFAULT_SETTINGS = {
   bannerImageUrl: null,
   bannerImageAlt: 'Crackers Hyderabad Banner',
-  promoMessage: 'Free Delivery available above orders of ₹2000 & Cash On Delivery available',
+  promoMessage: 'Free Delivery available above orders of ₹2500 & Cash On Delivery available',
   updatedAt: null,
   updatedBy: null
 };

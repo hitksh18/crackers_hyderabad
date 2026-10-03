@@ -1,7 +1,7 @@
 import { useId, useMemo, useRef, useState } from 'react';
 
 const VIEW_W = 720;
-const VIEW_H = 260;
+const VIEW_H_DEFAULT = 260;
 const PAD = { top: 16, right: 52, bottom: 28, left: 48 };
 
 /* Round the axis top up to something a person would choose. */
@@ -29,10 +29,11 @@ const shortDay = (key) => {
  * orders vs revenue, whose magnitudes differ by orders of magnitude. Zero
  * series render as flat lines at the baseline; nothing is fabricated.
  */
-export default function DualTrendChart({ series, lines, dualAxis = false }) {
+export default function DualTrendChart({ series, lines, dualAxis = false, viewH = VIEW_H_DEFAULT }) {
   const gid = useId();
   const frameRef = useRef(null);
   const [hover, setHover] = useState(null);
+  const VIEW_H = viewH > 0 ? viewH : VIEW_H_DEFAULT;
 
   const model = useMemo(() => {
     if (!series?.length || !lines?.length) return null;
@@ -67,7 +68,7 @@ export default function DualTrendChart({ series, lines, dualAxis = false }) {
       leftGrid: [0, 0.25, 0.5, 0.75, 1].map((f) => ({ value: maxA * f, y: PAD.top + plotH - f * plotH })),
       rightGrid: [0, 0.25, 0.5, 0.75, 1].map((f) => ({ value: (dualAxis ? maxB : maxA) * f, y: PAD.top + plotH - f * plotH })),
     };
-  }, [series, lines, dualAxis]);
+  }, [series, lines, dualAxis, VIEW_H]);
 
   if (!model) return <p className="ana-empty">No data for this period.</p>;
 
@@ -168,7 +169,7 @@ export default function DualTrendChart({ series, lines, dualAxis = false }) {
             boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
           }}
         >
-          <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{hover.day}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--text-subtle)' }}>{hover.day}</p>
           <p className="tabular flex items-center gap-1.5 text-sm font-bold" style={{ color: 'var(--text-strong)' }}>
             <i className="inline-block h-2 w-2 rounded-full" style={{ background: first.color }} />
             {first.format ? first.format(hover.a) : hover.a}

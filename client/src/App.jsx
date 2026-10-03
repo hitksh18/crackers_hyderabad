@@ -52,7 +52,11 @@ function AppContent() {
   const isProductsPage = location.pathname === '/products';
   const isCheckoutPage = location.pathname === '/checkout';
   const isCartPage = location.pathname === '/cart';
-  const showTopBanner = ['/', '/products', '/cart', '/profile'].includes(location.pathname);
+  /* The scrolling announcement bar sits above the navbar on the storefront
+     routes that show it. Product detail is one of them, so it gets the exact
+     same TopBanner instance as the home page. */
+  const showTopBanner = ['/', '/products', '/cart', '/profile'].includes(location.pathname)
+    || location.pathname.startsWith('/product/');
 
   /* Two independent pageview channels, deliberately not merged.
 

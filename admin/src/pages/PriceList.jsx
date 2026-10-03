@@ -11,7 +11,7 @@ import { TableSkeleton } from '../components/ui/Skeleton';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { pageVariants, revealVariants } from '../lib/motion';
 import { fetchTradePricingMap, mergeTradePricing } from '../lib/tradePricing';
-import AccountMenu from '../components/admin/AccountMenu';
+import AdminHeader from '../components/admin/AdminHeader';
 
 const categories = ['All', 'Rockets', 'Sparkles', 'Ground Chakkars', 'Sky Shots', 'Gift Boxes', 'Flower Pots', 'Bombs', 'Garlands', 'Kids Special', 'Guns, Rolls & Pop Pop', 'Threads and Novelties'];
 
@@ -177,7 +177,7 @@ const PriceList = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen" style={{ background: 'var(--surface-page)' }}>
+      <div className="admin-page" style={{ background: 'var(--surface-page)' }}>
         <div className="shell py-8">
           <span className="label-caps">Wholesale</span>
           <h1 className="section-title mt-1 mb-6">Price List</h1>
@@ -190,12 +190,27 @@ const PriceList = () => {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--surface-page)' }}>
+    <div className="admin-page" style={{ background: 'var(--surface-page)' }}>
+      <AdminHeader
+        title="Price List"
+        backFallback="/dashboard"
+        controls={(
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="ax-btn no-print"
+          >
+            <Printer aria-hidden="true" />
+            <span className="hidden sm:inline">Print price list</span>
+            <span className="sm:hidden">Print</span>
+          </button>
+        )}
+      />
       <motion.div
-        className="pricelist-print-area"
+        variants={pageVariants(reduced)}
         initial="initial"
         animate="animate"
-        variants={pageVariants(reduced)}
+        className="pricelist-print-area"
       >
         <div className="shell py-6 md:py-8">
           {/* Print-only masthead. Screen users already have the page header. */}
@@ -208,7 +223,7 @@ const PriceList = () => {
           </div>
 
           <header
-            className="no-print mb-5 flex flex-col gap-4 border-b pb-5 md:flex-row md:items-end md:justify-between"
+            className="no-print mb-5 flex flex-col gap-1 border-b pb-5"
             style={{ borderColor: 'var(--hairline)' }}
           >
             <div className="min-w-0">
@@ -217,18 +232,6 @@ const PriceList = () => {
               <p className="tabular mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
                 Showing {filteredProducts.length} of {products.length} products
               </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="btn-outline no-print text-sm"
-              >
-                <Printer className="h-4 w-4" aria-hidden="true" />
-                Print price list
-              </button>
-              <span className="no-print"><AccountMenu /></span>
             </div>
           </header>
 

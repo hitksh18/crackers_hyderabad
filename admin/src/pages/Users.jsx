@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
 import '../admin-portrait.css';
-import { Link } from 'react-router-dom';
-import { ArrowLeft, Search, Users, RefreshCw, Mail, User, Check, Ban, Trash2, Key, Pencil, Clock, Calendar, CircleCheck, CircleX, AlertTriangle } from 'lucide-react';
+import { Search, Users, RefreshCw, Mail, User, Check, Ban, Trash2, Key, Pencil, Clock, Calendar, CircleCheck, CircleX, AlertTriangle } from 'lucide-react';
 import toast from '../utils/toast';
 import { authFetch, readApiError } from '../utils/apiClient';
 import { useAuth } from '../context/AuthContext';
 import { roleOptions, roleConfig, configFor, normalizeRole } from '../components/admin/userRoles';
-import AccountMenu from '../components/admin/AccountMenu';
+import AdminHeader from '../components/admin/AdminHeader';
 import {
   EditUserModal,
   ConfirmActionModal,
@@ -295,7 +294,7 @@ const UserManagement = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[var(--surface-page)]">
+      <div className="admin-page bg-[var(--surface-page)]">
         <div className="mx-auto w-full max-w-[1600px] px-4 py-6 lg:px-8">
           <div className="h-10 w-64 animate-pulse rounded-full" style={{ background: 'var(--surface-sunken)' }} />
         </div>
@@ -304,29 +303,16 @@ const UserManagement = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--surface-page)] text-[var(--text-body)] transition-colors duration-200 overflow-x-hidden">
-      {/* Dedicated Navbar: 3-column grid (1fr auto 1fr) so the title is
-          truly centered in normal flow and can never overlap the actions.
-          Left = back link, center = title, right = refresh + account menu. */}
-      <header className="sticky top-0 z-30 flex h-[60px] w-full shrink-0 items-center border-b bg-[var(--surface-card)] px-4 lg:px-8" style={{ borderColor: 'var(--hairline)' }}>
-        <div className="mx-auto grid w-full max-w-[1600px] items-center gap-2 sm:gap-4" style={{ gridTemplateColumns: '1fr auto 1fr' }}>
-          <div className="flex min-w-0 justify-start">
-            <Link to="/dashboard" className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold" style={{ color: 'var(--ember-600)' }}>
-              <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Back to Dashboard</span><span className="sm:hidden">Back</span>
-            </Link>
-          </div>
-          <div className="min-w-0 text-center">
-            <h1 className="hidden truncate text-sm font-bold tracking-tight sm:block" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>User Management</h1>
-            <span className="block truncate text-sm font-bold sm:hidden" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>Users</span>
-          </div>
-          <div className="flex min-w-0 items-center justify-end gap-2">
-            <button type="button" onClick={() => { fetchAuthUsers(); }} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)', color: 'var(--text-body)' }}>
-              <RefreshCw className="h-4 w-4" /> <span className="hidden sm:inline">Refresh</span>
-            </button>
-            <AccountMenu />
-          </div>
-        </div>
-      </header>
+    <div className="admin-page bg-[var(--surface-page)] text-[var(--text-body)] transition-colors duration-200 overflow-x-hidden">
+      <AdminHeader
+        title="User Management"
+        backFallback="/dashboard"
+        controls={(
+          <button type="button" onClick={() => { fetchAuthUsers(); }} className="ax-btn">
+            <RefreshCw aria-hidden="true" /> <span className="hidden sm:inline">Refresh</span>
+          </button>
+        )}
+      />
 
       <div className="mx-auto w-full max-w-[1600px] px-4 py-3 lg:px-8">
         {/* Role filters - compact pills */}

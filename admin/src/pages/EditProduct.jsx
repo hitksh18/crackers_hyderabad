@@ -48,6 +48,12 @@ const EditProduct = () => {
     isFeatured: false,
     sortOrder: '',
     brand: '',
+    highlightBrand: '',
+    highlightQuantity: '',
+    highlightEffect: '',
+    highlightIdealFor: '',
+    highlightCod: true,
+    highlightPremium: true,
   });
   const [seoData, setSeoData] = useState({
     title: '',
@@ -88,6 +94,12 @@ const EditProduct = () => {
           isFeatured: data.isFeatured || false,
           sortOrder: data.sortOrder != null ? String(data.sortOrder) : '',
           brand: typeof data.brand === 'string' ? data.brand : (data.brand?.name || ''),
+          highlightBrand: data.highlights?.brand || '',
+          highlightQuantity: data.highlights?.quantity || '',
+          highlightEffect: data.highlights?.effect || '',
+          highlightIdealFor: data.highlights?.idealFor || '',
+          highlightCod: data.highlights?.codAvailable !== false,
+          highlightPremium: data.highlights?.premiumQuality !== false,
         });
         setImagePreview(data.imageURL || '');
         setImageURL(data.imageURL || '');
@@ -312,6 +324,14 @@ const EditProduct = () => {
         isFeatured: formData.isFeatured,
         ...(formData.sortOrder !== '' ? { sortOrder: parseInt(formData.sortOrder, 10) } : {}),
         brand: formData.brand || null,
+        highlights: {
+          brand: (formData.highlightBrand || '').trim(),
+          quantity: (formData.highlightQuantity || '').trim(),
+          effect: (formData.highlightEffect || '').trim(),
+          idealFor: (formData.highlightIdealFor || '').trim(),
+          codAvailable: formData.highlightCod !== false,
+          premiumQuality: formData.highlightPremium !== false,
+        },
         seo: seoObject,
         slug,
         oldSlugs,
@@ -416,3 +436,4 @@ const EditProduct = () => {
 };
 
 export default EditProduct;
+

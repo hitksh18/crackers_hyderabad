@@ -42,7 +42,7 @@ export const categoryDefs = [
 
 export const promoBanners = [
   { title: '20% OFF', subtitle: 'On selected premium gift boxes', tag: 'FLAT DEAL', icon: BadgeCheck, gradient: 'linear-gradient(120deg, #CB2A2A 0%, #94251F 100%)', link: '/products?category=Gift Boxes' },
-  { title: 'Free Delivery', subtitle: 'On orders above Rs. 2,000', tag: 'HYDERABAD WIDE', icon: Truck, gradient: 'linear-gradient(120deg, #C33A14 0%, #DF4C21 100%)', link: '/products' },
+  { title: 'Free Delivery', subtitle: 'On orders above Rs. 2,500', tag: 'HYDERABAD WIDE', icon: Truck, gradient: 'linear-gradient(120deg, #C33A14 0%, #DF4C21 100%)', link: '/products' },
   { title: 'Festival Sale', subtitle: 'Big savings on multi-colour packs', tag: 'LIMITED TIME', icon: Flame, gradient: 'linear-gradient(120deg, #7C5622 0%, #BE8C36 100%)', link: '/products' },
   { title: 'Premium Gift Boxes', subtitle: 'Safely packed, ready to gift', tag: 'BEST SELLERS', icon: Gift, gradient: 'linear-gradient(120deg, #7A2410 0%, #9E2C10 100%)', link: '/products?category=Gift Boxes' },
 ];

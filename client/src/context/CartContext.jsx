@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import { trackFunnel } from '../utils/siteTracker';
 
@@ -69,9 +71,37 @@ export const CartProvider = ({ children }) => {
     }
 
     storageKeyRef.current = key;
-    setCart(readStoredCart(key));
+    const stored = readStoredCart(key);
+    setCart(stored);
     setHydrated(true);
-    return undefined;
+
+    // Revalidate against the live catalogue once per hydrate: a product
+    // deleted in Admin no longer exists in Firestore, so silently drop it
+    // from the cart (and persist the cleaned cart) instead of rendering a
+    // stale deleted product after refresh. Fail-open: if the catalogue read
+    // itself fails, keep the cart untouched — checkout re-prices from live
+    // products server-side regardless.
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDocs(collection(db, 'products'));
+        if (cancelled) return;
+        const liveIds = new Set(snap.docs.map((d) => d.id));
+        setCart((prev) => {
+          if (prev.every((item) => !item || liveIds.has(item.id))) return prev;
+          const cleaned = prev.filter((item) => item && liveIds.has(item.id));
+          try {
+            localStorage.setItem(key, JSON.stringify(cleaned));
+          } catch {
+            // Storage unavailable — in-memory cart still updates.
+          }
+          return cleaned;
+        });
+      } catch (error) {
+        console.warn('Cart catalogue revalidation skipped:', error?.message || error);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [authReady, storageKey]);
 
   useEffect(() => {

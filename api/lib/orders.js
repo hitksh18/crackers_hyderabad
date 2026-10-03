@@ -420,7 +420,7 @@ async function readCheckoutSettings(db) {
   /* Fail closed on the default floor rather than letting a read error waive it.
      The pin defaults on, because the failure mode there is a map nobody asked
      for — not money left on the table. */
-  const fallback = { minimum: { enabled: true, value: 2000 }, deliveryPinEnabled: true };
+  const fallback = { minimum: { enabled: true, value: 2500 }, deliveryPinEnabled: true };
 
   try {
     const snap = await db.collection('adminSettings').doc('main').get();
@@ -433,7 +433,7 @@ async function readCheckoutSettings(db) {
         : data.minimumOrderValueLocked !== false;
 
     return {
-      minimum: { enabled, value: Number(data.minimumOrderValue) || 2000 },
+      minimum: { enabled, value: Number(data.minimumOrderValue) || 2500 },
       deliveryPinEnabled: data.deliveryPinEnabled !== false,
     };
   } catch {

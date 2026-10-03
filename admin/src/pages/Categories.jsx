@@ -1,9 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import AccountMenu from '../components/admin/AccountMenu';
 import { motion } from 'framer-motion';
 import {
-  ArrowLeft,
   ChevronRight,
   Package,
   Search,
@@ -11,6 +8,7 @@ import {
   X,
   RotateCcw,
 } from 'lucide-react';
+import AdminHeader from '../components/admin/AdminHeader';
 import {
   collection,
   getDocs,
@@ -190,12 +188,12 @@ const AdminCategories = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[var(--surface-page)]">
+      <div className="admin-page bg-[var(--surface-page)]">
         <div className="mx-auto w-full max-w-[1600px] px-4 py-6 lg:px-8">
           <div className="h-9 w-44 animate-pulse rounded-full" style={{ background: 'var(--surface-sunken)' }} />
           <div className="cat-grid mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-[72px] w-full" rounded="var(--r-md)" />
+              <Skeleton key={i} className="h-[100px] w-full" rounded="var(--r-md)" />
             ))}
           </div>
         </div>
@@ -205,7 +203,7 @@ const AdminCategories = () => {
 
   if (loadError && products.length === 0) {
     return (
-      <div className="min-h-screen bg-[var(--surface-page)]">
+      <div className="admin-page bg-[var(--surface-page)]">
         <div className="mx-auto w-full max-w-[1600px] px-4 py-6 lg:px-8">
           <EmptyState icon={Package} title="Unable to load categories" description={loadError} tone="alert" action={<button type="button" onClick={() => { setLoading(true); loadProducts(); }} className="btn-primary"><RotateCcw className="h-4 w-4" /> Retry</button>} />
         </div>
@@ -216,28 +214,19 @@ const AdminCategories = () => {
   // Detail view — compact admin list, matches User Management density
   if (selectedCategory) {
     return (
-      <div className="min-h-screen bg-[var(--surface-page)] text-[var(--text-body)] transition-colors duration-200 overflow-x-hidden">
+      <div className="admin-page bg-[var(--surface-page)] text-[var(--text-body)] transition-colors duration-200 overflow-x-hidden">
         {/* Header: identical to User Management / All Products */}
-        <header className="sticky top-0 z-30 flex h-[60px] w-full shrink-0 items-center border-b bg-[var(--surface-card)] px-4 lg:px-8" style={{ borderColor: 'var(--hairline)' }}>
-          <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-4">
-            <button type="button" onClick={() => setSelectedCategory(null)} className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold" style={{ color: 'var(--ember-600)' }}>
-              <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Back to Categories</span><span className="sm:hidden">Back</span>
-            </button>
-            <h1 className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 items-center gap-2 text-sm font-bold tracking-tight sm:inline-flex" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>
-              <span className="flex h-7 w-7 items-center justify-center rounded-full border" style={{ background: 'var(--surface-sunken)', borderColor: 'var(--hairline)' }}>
-                <span className="h-5 w-5"><CategoryIcon category={selectedCategory.slug} noCrop /></span>
-              </span>
-              {selectedCategory.name}
-            </h1>
-            <span className="absolute left-1/2 -translate-x-1/2 text-sm font-bold sm:hidden" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>{selectedCategory.name}</span>
-            <div className="ml-auto flex items-center gap-2">
-              <span className="hidden text-xs sm:inline" style={{ color: hasChanges ? 'var(--ember-600)' : 'var(--text-muted)' }}>{hasChanges ? `${pendingAddCount + pendingRemoveCount} pending` : 'All saved'}</span>
-              <button type="button" onClick={handleReset} disabled={!hasChanges || saving} className="hidden h-8 items-center rounded-full border px-3 text-xs font-semibold sm:inline-flex disabled:opacity-40" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)', color: 'var(--text-body)' }}>Discard</button>
-              <button type="button" onClick={saveCategoryProducts} disabled={!hasChanges || saving} className="inline-flex h-8 items-center rounded-full px-4 text-xs font-bold text-white disabled:opacity-50" style={{ background: hasChanges ? 'var(--grad-ember)' : 'linear-gradient(122deg, #A9A29A, #8B8377)' }}>{saving ? 'Saving...' : 'Save Changes'}</button>
-              <AccountMenu />
-            </div>
-          </div>
-        </header>
+      <AdminHeader
+        title={selectedCategory.name}
+        backFallback="/categories"
+        controls={(
+          <>
+            <span className="hidden text-xs sm:inline" style={{ color: hasChanges ? 'var(--ember-600)' : 'var(--text-muted)' }}>{hasChanges ? `${pendingAddCount + pendingRemoveCount} pending` : 'All saved'}</span>
+            <button type="button" onClick={handleReset} disabled={!hasChanges || saving} className="ax-btn hidden sm:inline-flex">Discard</button>
+            <button type="button" onClick={saveCategoryProducts} disabled={!hasChanges || saving} className="ax-btn-primary">{saving ? 'Saving...' : 'Save Changes'}</button>
+          </>
+        )}
+      />
 
         <motion.div variants={pageVariants} initial="initial" animate="animate" className="mx-auto w-full max-w-[1600px] px-4 py-3 lg:px-8">
           {/* Compact subheader: mirrors Ana intro / Orders subline */}
@@ -363,24 +352,20 @@ const AdminCategories = () => {
 
   // List view — same shell/margins as User Management & All Products
   return (
-    <div className="min-h-screen bg-[var(--surface-page)] text-[var(--text-body)] transition-colors duration-200 overflow-x-hidden">
-      <header className="sticky top-0 z-30 flex h-[60px] w-full shrink-0 items-center border-b bg-[var(--surface-card)] px-4 lg:px-8" style={{ borderColor: 'var(--hairline)' }}>
-        <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-4">
-          <Link to="/dashboard" className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold" style={{ color: 'var(--ember-600)' }}>
-            <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Back to Dashboard</span><span className="sm:hidden">Back</span>
-          </Link>
-          <h1 className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 text-sm font-bold tracking-tight sm:block" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>Categories</h1>
-          <span className="absolute left-1/2 -translate-x-1/2 text-sm font-bold sm:hidden" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>Categories</span>
-          <span className="hidden text-xs tabular sm:inline" style={{ color: 'var(--text-muted)' }}>{categories.length} · {products.length} products</span>
-          <span className="text-xs tabular sm:hidden" style={{ color: 'var(--text-muted)' }}>{products.length} products</span>
-          <AccountMenu />
-        </div>
-      </header>
+    <div className="admin-page bg-[var(--surface-page)] text-[var(--text-body)] transition-colors duration-200 overflow-x-hidden">
+      <AdminHeader
+        title="Categories"
+        backFallback="/dashboard"
+      />
 
       <motion.div variants={pageVariants} initial="initial" animate="animate" className="mx-auto w-full max-w-[1600px] px-4 py-3 lg:px-8">
-        <div className="py-2">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>Manage your product categories and assign products easily.</h2>
-          <p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>{categories.length} categories · {products.length} total products</p>
+        <div className="py-4">
+          <h2 className="text-base font-bold leading-snug" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>Manage your product categories and assign products easily.</h2>
+          <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+            <span className="tabular">{categories.length} categor{categories.length === 1 ? 'y' : 'ies'}</span>
+            <span aria-hidden="true" style={{ color: 'var(--text-subtle)' }}>·</span>
+            <span className="tabular">{products.length} total products</span>
+          </p>
         </div>
 
         {categories.length === 0 ? (
@@ -388,19 +373,19 @@ const AdminCategories = () => {
             <div className="px-6 py-12 text-center"><Package className="mx-auto h-7 w-7" style={{ color: 'var(--text-subtle)' }} /><p className="mt-2 text-sm font-semibold" style={{ color: 'var(--text-body)' }}>No categories found.</p></div>
           </div>
         ) : (
-          <div className="cat-grid mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="cat-grid mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {categories.map((cat) => {
               const count = countInCategory(cat);
               return (
-                <button key={cat.name} type="button" onClick={() => openCategory(cat)} className="group flex w-full items-center gap-3 rounded-[var(--r-md)] border px-3 py-3 text-left transition-colors hover:bg-[var(--surface-sunken)]/60" style={{ background: 'var(--surface-card)', borderColor: 'var(--hairline)' }}>
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[8px] border" style={{ background: 'var(--surface-sunken)', borderColor: 'var(--hairline)' }} aria-hidden="true">
-                    <span className="h-7 w-7"><CategoryIcon category={cat.slug} noCrop /></span>
+                <button key={cat.name} type="button" onClick={() => openCategory(cat)} className="group flex min-h-[92px] w-full items-center gap-4 rounded-[var(--r-md)] border border-[var(--hairline)] px-4 py-4 text-left transition-colors duration-200 hover:border-[rgba(195,58,20,0.45)] hover:bg-[var(--surface-sunken)]/60 lg:min-h-[104px] lg:px-5" style={{ background: 'var(--surface-card)' }}>
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[10px] border" style={{ background: 'var(--surface-sunken)', borderColor: 'var(--hairline)' }} aria-hidden="true">
+                    <span className="h-9 w-9"><CategoryIcon category={cat.slug} noCrop /></span>
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold leading-tight" style={{ color: 'var(--text-strong)' }}>{cat.name}</span>
-                    <span className="mt-0.5 block text-xs" style={{ color: 'var(--text-muted)' }}>{count} product{count !== 1 ? 's' : ''}</span>
+                    <span className="block text-[15px] font-semibold leading-snug [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden" style={{ color: 'var(--text-strong)' }}>{cat.name}</span>
+                    <span className="mt-1 block text-[13px] tabular" style={{ color: 'var(--text-muted)' }}>{count} product{count !== 1 ? 's' : ''}</span>
                   </span>
-                  <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5" style={{ color: 'var(--text-subtle)' }} />
+                  <ChevronRight className="h-5 w-5 shrink-0 transition-transform duration-200 group-hover:translate-x-1" style={{ color: 'var(--text-subtle)' }} />
                 </button>
               );
             })}

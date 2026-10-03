@@ -84,9 +84,9 @@ export default function RangePicker({ range, onChange, disabled = false, compact
             style={{
               minHeight: btnHeight,
               padding: btnPad,
-              borderColor: active ? 'transparent' : 'var(--hairline)',
-              background: active ? 'var(--grad-ember)' : 'var(--surface-card)',
-              color: active ? 'var(--text-on-dark)' : 'var(--text-body)',
+              borderColor: active ? 'transparent' : 'var(--admin-border)',
+              background: active ? 'var(--admin-accent)' : 'rgba(255,255,255,0.025)',
+              color: active ? '#FFF' : 'var(--admin-text)',
             }}
           >
             {preset.label}
@@ -104,9 +104,9 @@ export default function RangePicker({ range, onChange, disabled = false, compact
           style={{
             minHeight: btnHeight,
             padding: btnPad,
-            borderColor: isCustom ? 'transparent' : 'var(--hairline)',
-            background: isCustom ? 'var(--grad-ember)' : 'var(--surface-card)',
-            color: isCustom ? 'var(--text-on-dark)' : 'var(--text-body)',
+            borderColor: isCustom ? 'transparent' : 'var(--admin-border)',
+            background: isCustom ? 'var(--admin-accent)' : 'rgba(255,255,255,0.025)',
+            color: isCustom ? '#FFF' : 'var(--admin-text)',
           }}
         >
           <CalendarRange className="h-3.5 w-3.5" aria-hidden="true" />
@@ -179,3 +179,6 @@ export default function RangePicker({ range, onChange, disabled = false, compact
     </div>
   );
 }
+
+
+

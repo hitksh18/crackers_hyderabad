@@ -17,10 +17,10 @@ const AdminTopBar = ({ searchValue = '', onSearchChange, showSearch = true, onNo
 
   return (
     <>
-      <header className="admin-topbar sticky top-0 z-40 flex h-[64px] w-full shrink-0 items-center gap-3 border-b bg-[var(--surface-card)] px-4 transition-colors duration-200 lg:px-8 xl:px-10" style={{ borderColor: 'var(--hairline)' }}>
+      <header className="admin-topbar sticky top-0 z-40 flex h-[68px] w-full shrink-0 items-center gap-3 border-b px-4 transition-colors duration-200 lg:px-8 xl:px-10" style={{ borderColor: 'var(--admin-border)', background: 'var(--admin-bg)' }}>
         <Link to="/" className="flex shrink-0 items-center gap-2.5">
           <img src="/images/website/nav-logo.png" alt="Crackers Hyderabad" width={36} height={36} className="h-9 w-9 rounded-full" />
-          <span className="admin-topbar-name hidden text-[15px] font-bold tracking-tight sm:block" style={{ fontFamily: 'var(--font-display)', color: 'var(--text-strong)' }}>
+          <span className="admin-topbar-name hidden text-[16px] font-semibold tracking-tight sm:block" style={{ fontFamily: 'var(--admin-font)', color: 'var(--text-strong)' }}>
             Crackers <span style={{ color: 'var(--gold-500)' }}>Hyderabad</span>
           </span>
         </Link>

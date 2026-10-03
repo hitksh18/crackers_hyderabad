@@ -7,10 +7,10 @@ const DONUT_COLORS = [
   '#ec7049',
   '#d2a64f',
   '#a33b2e',
-  '#7c5a2a',
   '#c97e5d',
   '#8a8f98',
   '#5d4037',
+  '#7c5a2a',
   '#b0a08a',
 ];
 
@@ -42,9 +42,10 @@ function timeAgo(ms) {
  * as DeviceDonut. Renders nothing when every value is zero — callers show an
  * honest empty state instead of a fake 0% chart.
  */
-export function DonutChart({ slices, centerValue, centerLabel, formatValue = (v) => nf.format(v) }) {
+export function DonutChart({ slices, centerValue, centerLabel, formatValue = (v) => nf.format(v), size = 'md' }) {
   const total = slices.reduce((sum, s) => sum + (Number(s.value) || 0), 0);
   if (total <= 0) return null;
+  const svgClass = size === 'lg' ? 'h-52 w-52' : 'h-36 w-36';
   let offset = 0;
   const parts = slices.map((slice, i) => {
     const share = Number(slice.value) / total;
@@ -55,7 +56,7 @@ export function DonutChart({ slices, centerValue, centerLabel, formatValue = (v)
   return (
     <div className="flex flex-col items-center gap-5 sm:flex-row sm:gap-6">
       <div className="relative shrink-0">
-        <svg viewBox="0 0 140 140" className="h-36 w-36" role="img" aria-label="Breakdown chart">
+        <svg viewBox="0 0 140 140" className={svgClass} role="img" aria-label="Breakdown chart">
           <circle cx="70" cy="70" r={RADIUS} fill="none" stroke="var(--surface-sunken)" strokeWidth="22" />
           <g transform="rotate(-90 70 70)">
             {parts.map((part) => (

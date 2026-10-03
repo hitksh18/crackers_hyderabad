@@ -169,7 +169,7 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
      cart action right. No new data, colors, or actions — only layout. */
   if (viewMode === 'list' && !compact) {
     return (
-      <div className="group relative flex min-w-0 flex-col overflow-hidden card-premium glass-card sm:flex-row">
+      <div className="product-card group relative flex min-w-0 flex-col overflow-hidden card-premium glass-card sm:flex-row">
         {/* Image — left on sm+, top on mobile */}
         <div className="product-img-panel glass-img relative aspect-[16/10] w-full flex-shrink-0 sm:aspect-auto sm:min-h-[180px] sm:w-44 md:w-52 lg:w-56">
           <Link
@@ -327,7 +327,7 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
 
   return (
     <div
-      className={`group relative flex h-full flex-col overflow-hidden card-premium glass-card ${
+      className={`product-card group relative flex h-full flex-col overflow-hidden card-premium glass-card ${
         compact ? 'card-compact' : ''
       }`}
     >

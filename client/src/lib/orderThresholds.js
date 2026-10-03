@@ -6,4 +6,4 @@
  * can never disagree. The live Firestore `adminSettings/main` document still
  * wins wherever it is read — keep its `minimumOrderValue` at this same value.
  */
-export const MINIMUM_ORDER_VALUE = 2000;
+export const MINIMUM_ORDER_VALUE = 2500;

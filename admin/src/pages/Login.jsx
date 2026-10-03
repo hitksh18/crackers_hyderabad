@@ -198,9 +198,9 @@ const Login = () => {
       : 'Login';
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden" style={{ background: 'var(--surface-page)' }}>
+    <div className="admin-page relative w-full overflow-hidden" style={{ background: 'var(--surface-page)' }}>
       <Seo title="Sign In | Crackers Hyderabad" noindex />
-      <div className="grid min-h-screen lg:grid-cols-[1.04fr_1fr]">
+      <div className="grid lg:grid-cols-[1.04fr_1fr]">
         {/* ---------------------------------------------------------------
             Editorial panel — maroon, one ornament, brand story.
             --------------------------------------------------------------- */}

@@ -87,20 +87,11 @@ function BillingMoved() {
 
 function AdminShell() {
   const location = useLocation();
-  const isDashboardPath = location.pathname === '/dashboard';
-  // The dashboard overview owns the whole viewport on desktop (app-viewport,
-  // no page scroll). Below lg it behaves like a normal page: content
-  // determines the height and the document scrolls — otherwise
-  // taller-than-viewport content on phones would be clipped with no way to
-  // reach it.
-  const shellClass = isDashboardPath
-    ? 'flex min-h-screen flex-col lg:h-screen lg:overflow-hidden'
-    : 'flex min-h-screen flex-col';
 
   return (
-    <div className={shellClass}>
+    <div className="admin-viewport">
       <ScrollToTop />
-      <main className="flex min-h-0 flex-1 flex-col">
+      <main className="admin-main">
         <Suspense fallback={<RouteFallback />}>
           <Routes location={location}>
             <Route

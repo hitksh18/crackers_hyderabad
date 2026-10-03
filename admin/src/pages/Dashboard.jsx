@@ -278,7 +278,7 @@ const AdminDashboard = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-[calc(100dvh-64px)] flex-col bg-[var(--surface-page)] p-6 transition-colors duration-200">
+      <div className="admin-page flex flex-col bg-[var(--surface-page)] p-6 transition-colors duration-200">
         <div className="mx-auto w-full max-w-[1800px] space-y-4">
           <StatCardSkeleton count={4} />
         </div>
@@ -287,11 +287,11 @@ const AdminDashboard = () => {
   }
 
   return (
-    <div className="admin-dashboard flex flex-1 flex-col bg-[var(--surface-page)] text-[var(--text-body)] transition-colors duration-200 lg:min-h-0 lg:overflow-hidden">
+    <div className="admin-dashboard admin-page bg-[var(--surface-page)] text-[var(--text-body)] transition-colors duration-200">
       <AdminTopBar searchValue={globalSearch} onSearchChange={setGlobalSearch} onNotificationClick={() => setNotificationOpen(true)} />
 
       {/* Dashboard Content - viewport fit: header(68) + content(remaining) grid auto/auto/auto/1fr */}
-      <div className="dash-content mx-auto flex w-full max-w-[1800px] flex-col gap-3 px-4 py-3 lg:flex-1 lg:min-h-0 lg:px-8 xl:px-10 lg:py-4">
+      <div className="dash-content mx-auto flex w-full max-w-[1800px] flex-col gap-3 px-4 py-3 lg:flex-1 lg:px-8 xl:px-10 lg:py-4">
         {/* Header + Banner - 65-80px compact */}
         <div className="dash-topgrid grid shrink-0 gap-3 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="flex min-h-[72px] flex-col justify-center">
