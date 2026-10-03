@@ -23,11 +23,17 @@ jobs:
           KVM_HOST: ${{ secrets.KVM_HOST }}
           KVM_USER: ${{ secrets.KVM_USER }}
         run: |
+          set -e
+
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          printf '%s' "$SSH_PRIVATE_KEY_B64" | base64 --decode > ~/.ssh/kvm_deploy_key
+          KEY_B64="$(printf '%s' "$SSH_PRIVATE_KEY_B64" | tr -d '[:space:]')"
+
+          printf '%s' "$KEY_B64" | base64 --decode > ~/.ssh/kvm_deploy_key
           chmod 600 ~/.ssh/kvm_deploy_key
+
+          ssh-keygen -y -f ~/.ssh/kvm_deploy_key > /dev/null
 
           printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
