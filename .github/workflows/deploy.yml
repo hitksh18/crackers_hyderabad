@@ -38,8 +38,9 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
-                    echo "Testing TCP 22..."
-          timeout 15 bash -c "</dev/tcp/$KVM_HOST/22" && echo "PORT 22: OPEN" || echo "PORT 22: BLOCKED"
-
-          echo "Testing TCP 443..."
-          timeout 15 bash -c "</dev/tcp/$KVM_HOST/443" && echo "PORT 443: OPEN" || echo "PORT 443: BLOCKED"
+          ssh \
+            -i ~/.ssh/kvm_deploy_key \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "$KVM_USER@$KVM_HOST" \
+            '/root/crackershyderabad/deploy.sh'
