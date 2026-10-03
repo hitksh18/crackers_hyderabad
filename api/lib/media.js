@@ -102,13 +102,29 @@ function uniqueFilePath(dirFull, filename) {
 }
 
 async function storeMedia(buffer, dir, filename, contentType) {
-  if (process.env.NODE_ENV !== 'production') {
-    throw new Error('Local media persistence is disabled. Use the KVM API for uploads during development.');
-  }
+  /* Persistence is gated on the media directory actually being writable —
+     never on the NODE_ENV string. A KVM process started without
+     `--env production` previously threw here even though
+     /var/www/crackershyderabad-media existed and was writable, which broke
+     every production upload with "Local media persistence is disabled".
+     On a machine without a writable media root (e.g. Windows dev with no
+     MEDIA_ROOT set) this still refuses, with an actionable message. */
   const normalized = normalizeDir(dir);
   const root = getMediaRoot();
   const dirFull = path.join(root, ...normalized.split('/'));
-  await fs.promises.mkdir(dirFull, { recursive: true });
+  let writable = false;
+  try {
+    await fs.promises.mkdir(dirFull, { recursive: true });
+    await fs.promises.access(dirFull, fs.constants.W_OK);
+    writable = true;
+  } catch (_) {
+    writable = false;
+  }
+  if (!writable) {
+    throw new Error(
+      `Media storage is not writable at ${root}. On the KVM this directory must exist and be writable by the API process; in development set MEDIA_ROOT to a writable local folder.`
+    );
+  }
   const safePath = uniqueFilePath(dirFull, filename);
   const finalName = path.basename(safePath);
   await fs.promises.writeFile(safePath, buffer);

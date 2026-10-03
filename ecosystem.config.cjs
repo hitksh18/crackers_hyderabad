@@ -10,7 +10,11 @@ module.exports = {
       instances: 1, // single process: rate limiters + notify tokens are in-memory
       exec_mode: 'fork',
       env: {
-        NODE_ENV: 'development',
+        // This file IS the production config (KVM only; local dev uses
+        // `npm run dev --prefix api`). The default must be production-safe:
+        // a fallback of 'development' here previously disabled media
+        // persistence on any start/restart without `--env production`.
+        NODE_ENV: 'production',
         PORT: 3001,
       },
       env_production: {
