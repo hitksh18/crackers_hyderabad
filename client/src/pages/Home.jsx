@@ -27,6 +27,7 @@ import { categoryDefs } from '../components/home/homeData';
 import { useHomepageSettings } from '../hooks/useHomepageSettings';
 import { readHomepageConfig, DEFAULT_HERO_BANNERS, DEFAULT_PROMO_CARDS } from '../lib/homepage';
 import { readBuilderConfig } from '../lib/homepageBuilder';
+import { readCategoryShowcaseConfig, applyShowcaseOrder } from '../lib/categoryShowcase';
 import { readSiteSettings, firstAnnouncementText } from '../lib/siteSettings';
 import { resolveTrustCards } from '../lib/trustIcons';
 import Seo from '../components/Seo';
@@ -81,13 +82,9 @@ const Home = () => {
     const fetchConfig = async () => {
       try {
         const [catSnap, builder, site, homepage, stripSnap] = await Promise.all([
-          (async () => {
-            try {
-              const { getDoc, doc } = await import('firebase/firestore');
-              const cfg = await getDoc(doc(db, 'settings', 'categoryShowcase'));
-              return cfg.exists() ? cfg.data() : null;
-            } catch { return null; }
-          })(),
+          // Canonical category order (settings/categoryShowcase); null falls
+          // back to the base categoryDefs order below.
+          readCategoryShowcaseConfig(),
           readBuilderConfig().catch(() => null),
           readSiteSettings().catch(() => null),
           readHomepageConfig().catch(() => null),
@@ -201,16 +198,9 @@ const Home = () => {
     }).length;
   };
 
-  const visibleCategories = (() => {
-    const cfg = categoryShowcaseConfig || {};
-    const hidden = new Set(cfg.hidden || []);
-    let list = categoryDefs.filter(cat => !hidden.has(cat.slug));
-    if (Array.isArray(cfg.order) && cfg.order.length > 0) {
-      const rank = new Map(cfg.order.map((slug, i) => [slug, i]));
-      list = [...list].sort((a, b) => (rank.get(a.slug) ?? 999) - (rank.get(b.slug) ?? 999));
-    }
-    return list;
-  })();
+  // Canonical ordering shared with /products: base categoryDefs filtered
+  // by the showcase `hidden` slugs and sorted by its `order` slugs.
+  const visibleCategories = applyShowcaseOrder(categoryDefs, categoryShowcaseConfig);
 
   const handleSubscribe = (e) => {
     e.preventDefault();

@@ -47,25 +47,85 @@ const { readEmailConfig, createSmtpTransporter, orderPaymentNote, maybeSendOrder
 const { orderConfirmationHtml, orderConfirmationText } = require('./lib/emailTemplates');
 const { handleReverseGeocode, handleSearchPlaces, handleGeocodeConfig } = require('./lib/geocode');
 
-if (process.env.NODE_ENV === 'production') try {
-  const envPath = path.join(__dirname, '..', '.env');
-  if (fs.existsSync(envPath)) {
-    process.loadEnvFile(envPath);
+/**
+ * Environment loading — one place, one documented precedence.
+ *
+ *   1. Variables already present in the process environment (PM2/systemd)
+ *      always win and are never overwritten.
+ *   2. <repo>/.env        THE SINGLE SOURCE OF TRUTH for production secrets.
+ *      On KVM: /root/crackers-deploy/.env — created by
+ *      deploy/kvm/setup-and-deploy.sh and preserved by deploy/kvm/update.sh.
+ *      It lives OUTSIDE the API directory on purpose: update.sh does
+ *      `rm -rf $DEPLOY_DIR/api`, so a secret inside that directory is one
+ *      deploy away from being destroyed.
+ *   3. <repo>/.env.email  LEGACY FALLBACK ONLY (local-dev convenience).
+ *      Supplies any key that .env does not define. Production must NOT depend
+ *      on this file: it is git-ignored, no deploy script creates it, and it is
+ *      invisible to `pm2 env`. If production email config lives only here it is
+ *      one redeploy from silently losing every customer email — which is exactly
+ *      the failure this ordering exists to prevent.
+ *
+ * process.loadEnvFile() never overwrites a variable that is already set, so
+ * loading .env BEFORE .env.email gives .env precedence automatically. That
+ * behaviour is load-bearing: reversing these two calls would silently invert
+ * precedence, so keep .env first.
+ */
+function loadEnvFileKeys(file) {
+  if (!fs.existsSync(file)) return null;
+  try {
+    process.loadEnvFile(file);
+  } catch (e) {
+    console.warn(`Could not load ${path.basename(file)}: ${e.message}`);
+    return null;
   }
-} catch (e) {
-  console.warn('Could not load .env file:', e.message);
+  try {
+    return new Set(
+      fs
+        .readFileSync(file, 'utf8')
+        .split(/\r?\n/)
+        .map((line) => line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/))
+        .filter(Boolean)
+        .map((m) => m[1])
+    );
+  } catch {
+    return new Set();
+  }
 }
 
-// Email-only env (server, git-ignored). Loaded in ALL environments so local
-// dev picks up SMTP without exporting vars by hand. Root .env still wins
-// when both set the same key (loaded second in production).
-try {
-  const emailEnvPath = path.join(__dirname, '..', '.env.email');
-  if (fs.existsSync(emailEnvPath)) {
-    process.loadEnvFile(emailEnvPath);
+const primaryEnvKeys = loadEnvFileKeys(path.join(__dirname, '..', '.env'));
+const legacyEmailEnvKeys = loadEnvFileKeys(path.join(__dirname, '..', '.env.email'));
+
+// Loud, value-free warning: production must get its email config from .env.
+if (process.env.NODE_ENV === 'production' && primaryEnvKeys) {
+  const EMAIL_KEYS = [
+    'EMAIL_ENABLED',
+    'SMTP_HOST',
+    'SMTP_PORT',
+    'SMTP_SECURE',
+    'SMTP_USER',
+    'SMTP_PASSWORD',
+    'EMAIL_FROM_NAME',
+    'EMAIL_FROM_ADDRESS',
+    'ADMIN_NOTIFICATION_EMAIL',
+    'TRACK_BASE_URL',
+  ];
+  const missingEverywhere = EMAIL_KEYS.filter((k) => !process.env[k]);
+  const onlyInLegacy = EMAIL_KEYS.filter(
+    (k) => process.env[k] && !primaryEnvKeys.has(k) && legacyEmailEnvKeys && legacyEmailEnvKeys.has(k)
+  );
+  if (onlyInLegacy.length) {
+    console.warn(
+      `[env] WARNING: ${onlyInLegacy.join(', ')} resolved from .env.email, not .env. ` +
+        'Move them into the primary .env (KVM: /root/crackers-deploy/.env) — ' +
+        '.env.email is not preserved by the deployment scripts.'
+    );
   }
-} catch (e) {
-  console.warn('Could not load .env.email file:', e.message);
+  if (missingEverywhere.length) {
+    console.warn(
+      `[env] WARNING: email not configured, missing ${missingEverywhere.join(', ')}. ` +
+        'Order emails will be skipped. See KVM_DEPLOYMENT.md.'
+    );
+  }
 }
 
 const app = express();

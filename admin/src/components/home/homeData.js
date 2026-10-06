@@ -25,20 +25,9 @@ import {
   CalendarDays,
 } from 'lucide-react';
 
-export const categoryDefs = [
-  { name: 'Sparkles', slug: 'sparkles', match: ['Sparkles'], link: 'Sparkles' },
-  { name: 'Ground Chakkars', slug: 'ground-chakkars', match: ['Ground Chakkars'], link: 'Ground Chakkars' },
-  { name: 'Flower Pots', slug: 'flower-pots', match: ['Flower Pots'], link: 'Flower Pots' },
-  { name: 'Bombs', slug: 'bombs', match: ['Bombs'], link: 'Bombs' },
-  { name: 'Garlands', slug: 'garlands', match: ['Garlands'], link: 'Garlands' },
-  { name: 'Rockets', slug: 'rockets', match: ['Rockets'], link: 'Rockets' },
-  { name: 'Sky Shots', slug: 'fancy', match: ['Sky Shots'], link: 'Sky Shots' },
-  { name: 'Guns, Rolls & Pop Pop', slug: 'guns-rolls-pop-pop', match: ['Guns, Rolls & Pop Pop'], link: 'Guns, Rolls & Pop Pop' },
-  { name: 'Threads & Pencils', slug: 'threads-novelties', match: ['Threads and Novelties', 'Threads & Pencils'], link: 'Threads and Novelties' },
-  { name: 'Fancy Fireworks', slug: 'fancy-fireworks', match: ['Fancy Fireworks'], link: 'Fancy Fireworks' },
-  { name: 'Kids Special', slug: 'kids', match: ['Kids Special'], link: 'Kids Special' },
-  { name: 'Gift Boxes', slug: 'gift-boxes', match: ['Gift Boxes'], link: 'Gift Boxes' },
-];
+import { toCategoryDefs } from '../../config/categories';
+
+export const categoryDefs = toCategoryDefs();
 
 export const promoBanners = [
   { title: '20% OFF', subtitle: 'On selected premium gift boxes', tag: 'FLAT DEAL', icon: BadgeCheck, gradient: 'linear-gradient(120deg, #CB2A2A 0%, #94251F 100%)', link: '/products?category=Gift Boxes' },

@@ -13,22 +13,26 @@ import { ProductGridSkeleton } from '../components/ui/Skeleton';
 import { useAuth } from '../context/AuthContext';
 import Seo from '../components/Seo';
 import toast from '../utils/toast';
+import { PRODUCT_CATEGORIES, isProductInCategory, resolveCategory, categoryDisplayName } from '../config/categories';
+import { readCategoryShowcaseConfig, applyShowcaseOrder } from '../lib/categoryShowcase';
 
-/* Category order is unchanged — customers navigate by position. */
-const categories = [
-  { name: 'Rockets', slug: 'rockets' },
-  { name: 'Sparkles', slug: 'sparkles' },
-  { name: 'Ground Chakkars', slug: 'ground-chakkars' },
-  { name: 'Sky Shots', slug: 'fancy' },
-  { name: 'Fancy Fireworks', slug: 'fancy-fireworks' },
-  { name: 'Gift Boxes', slug: 'gift-boxes' },
-  { name: 'Flower Pots', slug: 'flower-pots' },
-  { name: 'Bombs', slug: 'bombs' },
-  { name: 'Garlands', slug: 'garlands' },
-  { name: 'Kids Special', slug: 'kids' },
-  { name: 'Guns, Rolls & Pop Pop', slug: 'guns-rolls-pop-pop' },
-  { name: 'Threads and Novelties', slug: 'threads-novelties' },
-];
+/* Categories come from the single source of truth (config/categories.js),
+   ordered by the canonical Canvas showcase config (settings/categoryShowcase)
+   — the exact same ordering Home uses. Falls back to base order until the
+   config arrives or when it is unavailable. */
+const useOrderedCategories = () => {
+  const [categories, setCategories] = useState(PRODUCT_CATEGORIES);
+  useEffect(() => {
+    let cancelled = false;
+    readCategoryShowcaseConfig()
+      .then((cfg) => {
+        if (!cancelled && cfg) setCategories(applyShowcaseOrder(PRODUCT_CATEGORIES, cfg));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  return categories;
+};
 
 /* Search entry points: the navbar's search (single search bar) writes the
    ?q= param, which the page reads into searchTerm. */
@@ -149,6 +153,7 @@ const Products = () => {
   const [viewMode, setViewMode] = useState('grid');
   const [searchParams, setSearchParams] = useSearchParams();
   const { isAdmin } = useAuth();
+  const categories = useOrderedCategories();
   const [reorderMode, setReorderMode] = useState(false);
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
@@ -184,7 +189,9 @@ const Products = () => {
   useEffect(() => {
     const categoryParam = searchParams.get('category');
     if (categoryParam) {
-      setSelectedCategory(categoryParam);
+      // Normalise legacy spellings/casing (?category=threads & pencils) to
+      // the canonical stored value so pills highlight and filters match.
+      setSelectedCategory(resolveCategory(categoryParam)?.value || categoryParam);
     }
     const qParam = searchParams.get('q');
     if (qParam) {
@@ -199,14 +206,7 @@ const Products = () => {
     let list = products;
 
     if (selectedCategory !== 'All') {
-      const wanted = selectedCategory.toLowerCase();
-      const aliases = new Set([wanted]);
-      list = list.filter(p => {
-        if (Array.isArray(p.categories)) {
-          return p.categories.some(cat => aliases.has(String(cat).toLowerCase()));
-        }
-        return aliases.has(String(p.category || '').toLowerCase());
-      });
+      list = list.filter(p => isProductInCategory(p, selectedCategory));
     }
 
     if (searchTerm) {
@@ -308,9 +308,10 @@ const Products = () => {
     emptyDescription =
       selectedCategory === 'All'
         ? `Nothing matched “${searchTerm}”. Try a shorter word, or reset the filters to browse the whole range.`
-        : `Nothing matched “${searchTerm}” in ${selectedCategory}. Try a shorter word, or reset the filters to browse the whole range.`;
+        : `Nothing matched “${searchTerm}” in ${categoryDisplayName(selectedCategory)}. Try a shorter word, or reset the filters to browse the whole range.`;
   } else if (selectedCategory !== 'All') {
-    emptyTitle = `Nothing in ${selectedCategory} right now`;
+    const label = categoryDisplayName(selectedCategory);
+    emptyTitle = `Nothing in ${label} right now`;
     emptyDescription = 'This category has no products listed at the moment. Reset the filters to browse the full catalogue.';
   }
 
@@ -347,12 +348,12 @@ const Products = () => {
             className="catalogue-pills category-list"
           >
             {categories.map((category) => {
-              const isSelected = selectedCategory === category.name;
+              const isSelected = resolveCategory(selectedCategory)?.value === category.value;
               return (
                 <button
-                  key={category.name}
+                  key={category.value}
                   type="button"
-                  onClick={() => selectCategory(category.name)}
+                  onClick={() => selectCategory(category.value)}
                   aria-pressed={isSelected}
                   className={`${pillBase} category-pill`}
                   style={pillStyle(isSelected)}

@@ -11,6 +11,7 @@ import AdminHeader from '../components/admin/AdminHeader';
 import EmptyState from '../components/ui/EmptyState';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import { deleteTradePricing, fetchTradePricingMap, mergeTradePricing } from '../lib/tradePricing';
+import { PRODUCT_CATEGORIES, isProductInCategory } from '../config/categories';
 
 const AllProducts = () => {
   const [products, setProducts] = useState([]);
@@ -215,7 +216,7 @@ const AllProducts = () => {
 
   const filteredProducts = products.filter(p => {
     const matchesSearch = (p.name || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = filterCategory === 'All' || (p.categories && Array.isArray(p.categories) ? p.categories.includes(filterCategory) : p.category === filterCategory);
+    const matchesCategory = filterCategory === 'All' || isProductInCategory(p, filterCategory);
     const matchesStock = filterStock === 'All' ||
       (filterStock === 'In Stock' && !p.outOfStock) ||
       (filterStock === 'Out of Stock' && p.outOfStock);
@@ -225,7 +226,8 @@ const AllProducts = () => {
     return matchesSearch && matchesCategory && matchesStock && matchesFeatured;
   });
 
-  const categories = ['All', 'Rockets', 'Sparkles', 'Ground Chakkars', 'Sky Shots', 'Gift Boxes', 'Flower Pots', 'Bombs', 'Garlands', 'Kids Special', 'Guns, Rolls & Pop Pop', 'Threads and Novelties'];
+  // Single source of truth — admin/src/config/categories.js (canonical order).
+  const categories = PRODUCT_CATEGORIES;
 
   const sortedAll = sortProductsByOrder(products);
   const sortedFiltered = sortProductsByOrder(filteredProducts);
@@ -296,8 +298,9 @@ const AllProducts = () => {
               className="h-10 appearance-none rounded-[10px] border bg-[var(--surface-sunken)] pl-3 pr-8 text-sm font-semibold focus:outline-none"
               style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
             >
+              <option value="All">Category: All</option>
               {categories.map(cat => (
-                <option key={cat} value={cat}>{cat === 'All' ? 'Category: All' : cat}</option>
+                <option key={cat.value} value={cat.value}>{cat.name}</option>
               ))}
             </select>
             <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />

@@ -1,4 +1,6 @@
 import { forwardRef } from 'react';
+import { BRAND_NAME_UPPER, BRAND_TAGLINE } from '../../lib/branding';
+import BrandLogo from './BrandLogo';
 
 /**
  * The printed counter invoice.
@@ -55,13 +57,16 @@ const BillPrintSheet = forwardRef(function BillPrintSheet(
             marginBottom: '14px',
           }}
         >
-          <div>
-            <h1 style={{ fontSize: '22px', fontWeight: 700, margin: 0, letterSpacing: '-0.01em' }}>
-              Crackers Hyderabad
-            </h1>
-            <p style={{ fontSize: '11px', margin: '2px 0 0 0', color: '#444444' }}>
-              Premium Quality Fireworks
-            </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+            <BrandLogo size={40} variant="print" showName={false} />
+            <div style={{ minWidth: 0 }}>
+              <h1 style={{ fontSize: '22px', fontWeight: 700, margin: 0, letterSpacing: '-0.01em' }}>
+                {BRAND_NAME_UPPER}
+              </h1>
+              <p style={{ fontSize: '11px', margin: '2px 0 0 0', color: '#444444' }}>
+                {BRAND_TAGLINE}
+              </p>
+            </div>
           </div>
           <div style={{ textAlign: 'right', fontSize: '11px', color: '#444444' }}>
             <p style={{ margin: 0, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' }}>

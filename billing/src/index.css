@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* =========================================================================
-   CRACKERS HYDERABAD — FESTIVE EDITORIAL LUXURY
+   AYYAPA FIREWORKS — FESTIVE EDITORIAL LUXURY
    Design tokens. Everything downstream reads from here.
    ========================================================================= */
 
@@ -2837,6 +2837,228 @@ img {
   letter-spacing: -0.01em;
 }
 
+/* ---------------------------------------------------------------------------
+   POS shell - two columns from the very top of the viewport.
+
+   There is NO full-width navbar. One grid declares the split and it governs
+   the whole application:
+
+     +--------------------+  +--------------------+
+     | .pos-col-left      |  | .pos-col-right     |
+     |   left header      |  |   right header     |  <- Items / Total
+     |   products         |  |   Current Bill     |
+     |   status bar       |  |                    |
+     +--------------------+  +--------------------+
+
+   Both columns are direct grid children, so they start at Y=0 together: the
+   Current Bill is NOT pushed below a global navbar, and the left header stops
+   exactly at the column boundary. The vertical rule comes from one
+   `border-right` on .pos-col-left, so it is continuous from the top edge to
+   the bottom — it cannot break across an internal row boundary the way
+   per-cell borders can.
+
+   Height: the shell already fills its parent (h-screen), so `height: 100%`
+   plus the flex children below need no magic numbers and no calc(). Only the
+   product grid and the bill's line-item list scroll.
+
+   Below md the shell returns to a single stacked column.
+   --------------------------------------------------------------------------- */
+
+.pos-shell {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+/* ---------------------------------------------------------------------------
+   LEFT HEADER - one compact POS toolbar, grouped at the far left.
+
+   [Back] [Brand block] [Hold] [Held] [New Bill] [Sign Out] ......(empty)
+
+   The header is a single flex row with justify-content: flex-start and a fixed
+   8px gap. The brand block is a fixed 145px, so the action buttons always begin
+   at the same X no matter how wide the left panel is. Nothing is distributed
+   with space-between and nothing is centred, which is what previously made the
+   buttons look like they were floating independently across the bar.
+
+   Everything is shrink-0 and the trailing spacer takes the remainder, so the
+   group never stretches and never encroaches on the Products row below or the
+   Current Bill divider to its right.
+   --------------------------------------------------------------------------- */
+
+.pos-left-head,
+.left-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  height: 46px;
+  min-height: 46px;
+  max-height: 46px;
+  padding: 5px 10px;
+  overflow: hidden;
+  /* Never wrap: the toolbar is one row, and a narrower panel clips the far end
+     rather than reflowing the group onto a second line. */
+  flex-wrap: nowrap;
+}
+
+.pos-brand-block,
+.brand-block {
+  flex: 0 0 145px;
+  width: 145px;
+  min-width: 145px;
+  max-width: 145px;
+  flex-shrink: 0;
+}
+
+.pos-brand-text {
+  width: 145px;
+  min-width: 145px;
+  max-width: 145px;
+  flex-shrink: 0;
+}
+
+.pos-brand-text .brand-name {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.pos-brand-text .counter {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.pos-header-actions,
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  flex-shrink: 0;
+}
+
+/* Back button: square icon-only control. */
+.pos-back-btn,
+.back-button {
+  flex: 0 0 30px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+/* Navbar controls only: compact POS utility buttons in the left header.
+   Scoped to .pos-navbar so buttons elsewhere (popover, empty state, actions)
+   keep their existing size. */
+.pos-navbar .pos-tool-btn {
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 10px;
+  gap: 5px;
+  font-size: 11px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Items / Total — far right of the LEFT navbar only. Compact indicators,
+   never buttons, never part of Current Bill. Clipped by the header's
+   overflow:hidden on very narrow panels, never overlapping the divider. */
+.pos-nav-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pos-nav-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 7px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pos-nav-total {
+  color: var(--text-strong);
+  border-color: var(--hairline-strong);
+}
+
+/* Narrower left panel: shave button/chip padding first — never the brand. */
+@media (max-width: 1100px) {
+  .pos-left-head,
+  .left-header {
+    gap: 6px;
+  }
+  .pos-navbar .pos-tool-btn {
+    padding: 0 6px;
+    gap: 4px;
+  }
+  .pos-nav-summary {
+    gap: 4px;
+  }
+  .pos-nav-chip {
+    padding: 0 6px;
+    font-size: 10px;
+  }
+}
+
+@media (min-width: 768px) {
+  /* Two panels, each a flex column. The left panel takes the remaining width
+     and the Current Bill takes 30% (never below 360px) — expressed as
+     1fr + minmax(360px, 30%) rather than a literal 70%/30% so a narrow window
+     clamps the bill to its floor instead of overflowing the grid. */
+  .pos-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 30%);
+    grid-template-rows: minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  /* Panel containers: own vertical stacks, own overflow. */
+  .pos-col-left,
+  .pos-col-right {
+    display: flex;
+    min-width: 0;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* One unbroken rule: left panel top to bottom. */
+  .pos-col-left { border-right: 1px solid var(--hairline); }
+
+  /* Current Bill fills the right panel from Y=0 — its own header is the top
+     of the column, so there is no separate bar above it. */
+  .pos-col-right-body { min-height: 0; flex: 1 1 auto; }
+}
+
+@media (min-width: 1280px) {
+  .pos-shell {
+    /* Desktop POS: catalogue ~70%, Current Bill ~30%. */
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 30%);
+  }
+}
 .pos-root .input-premium {
   border-radius: var(--pos-r-md);
   min-height: 2.5rem;

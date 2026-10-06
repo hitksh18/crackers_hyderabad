@@ -7,6 +7,10 @@
 # (customer / admin / billing) -> restarts API -> reloads Nginx if the site
 # config changed -> health check.
 # NEVER touches: $DEPLOY_DIR/.env, /var/www/crackershyderabad-media, Firestore data.
+#
+# $DEPLOY_DIR/.env is the single source of truth for production secrets
+# (including the Gmail app password) and is the file api/server.js loads as
+# <api>/../.env. It is never created or rewritten here — only verified.
 set -euo pipefail
 
 DEPLOY_DIR="${DEPLOY_DIR:-/root/crackers-deploy}"
@@ -61,15 +65,40 @@ publish_app "$SRC_DIR/client/dist"  "$APP_DIR"
 publish_app "$SRC_DIR/admin/dist"   "$ADMIN_APP_DIR"
 publish_app "$SRC_DIR/billing/dist" "$BILLING_APP_DIR"
 rm -rf "$DEPLOY_DIR/api" && cp -a "$SRC_DIR/api" "$DEPLOY_DIR/api"
-ln -sfn "$DEPLOY_DIR/.env" "$DEPLOY_DIR/api/.env" 2>/dev/null || cp "$DEPLOY_DIR/.env" "$DEPLOY_DIR/api/.env"
+
+# The API reads its environment as <api>/../.env, i.e. $DEPLOY_DIR/.env — which
+# sits OUTSIDE the directory we just recreated above. Never keep a copy or a
+# symlink of the secret file inside $DEPLOY_DIR/api: this line proves the
+# directory we just rebuilt holds no credentials.
+rm -f "$DEPLOY_DIR/api/.env" "$DEPLOY_DIR/api/.env.email"
+if [ ! -f "$DEPLOY_DIR/.env" ]; then
+  echo "ERROR: $DEPLOY_DIR/.env is missing."
+  echo "       It is the single source of truth for production secrets and is"
+  echo "       never created by this script. Restore it from backup, e.g."
+  echo "         ls -1t $DEPLOY_DIR/.env.bak-* | head -1"
+  exit 1
+fi
+chmod 600 "$DEPLOY_DIR/.env"
+
+# Report email config as set/missing only. Never echoes a value.
+echo "    Email configuration in $DEPLOY_DIR/.env:"
+for key in EMAIL_ENABLED SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD \
+           EMAIL_FROM_NAME EMAIL_FROM_ADDRESS ADMIN_NOTIFICATION_EMAIL TRACK_BASE_URL; do
+  if grep -qE "^${key}=.+" "$DEPLOY_DIR/.env" 2>/dev/null; then
+    printf '      %-26s set\n' "$key"
+  else
+    printf '      %-26s MISSING\n' "$key"
+  fi
+done
 
 echo "==> 5/6 Restart backend + reload Nginx if site config changed"
 cd "$DEPLOY_DIR"
 if [ -f ecosystem.config.cjs ]; then
-  pm2 startOrRestart ecosystem.config.cjs --env production
+  pm2 startOrRestart ecosystem.config.cjs --env production --update-env
 else
-  pm2 restart crackers-api || PORT=3001 NODE_ENV=production pm2 start "$DEPLOY_DIR/api/server.js" --name crackers-api
+  pm2 restart crackers-api --update-env || PORT=3001 NODE_ENV=production pm2 start "$DEPLOY_DIR/api/server.js" --name crackers-api
 fi
+pm2 save
 if ! cmp -s "$SRC_DIR/deploy/nginx/crackershyderabad.conf" /etc/nginx/sites-available/crackershyderabad 2>/dev/null; then
   echo "    Nginx site config differs — review manually, NOT auto-overwritten (domain is baked in)."
   echo "    Diff: diff $SRC_DIR/deploy/nginx/crackershyderabad.conf /etc/nginx/sites-available/crackershyderabad"

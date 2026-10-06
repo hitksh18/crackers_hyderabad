@@ -8,6 +8,7 @@ import BrandDialog from '../components/admin/BrandDialog';
 import ProductForm from '../components/admin/ProductForm';
 import { saveTradePricing, stripTradeFields } from '../lib/tradePricing';
 import { slugify, ensureUniqueSlug } from '../lib/productLinks';
+import { toggleCategoryValue } from '../config/categories';
 
 const AddProduct = () => {
   const navigate = useNavigate();
@@ -148,12 +149,12 @@ const AddProduct = () => {
     setSeoData({ ...seoData, [e.target.name]: e.target.value });
   };
 
-  const handleCategoryToggle = (category) => {
+  const handleCategoryToggle = (entry) => {
+    // Canonical toggle — stores the canonical value and collapses legacy
+    // alias spellings, so the saved array always matches the shared config.
     setFormData(prev => ({
       ...prev,
-      categories: prev.categories.includes(category)
-        ? prev.categories.filter(c => c !== category)
-        : [...prev.categories, category]
+      categories: toggleCategoryValue(prev.categories, entry)
     }));
   };
 

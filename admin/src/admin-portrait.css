@@ -218,19 +218,6 @@
     row-gap: 0.375rem;
   }
 
-  /* --------------------- ADD PRODUCT (ProductForm) ------------------- */
-  .pf-idmedia {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .pf-trio {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .pf-trio > :last-child {
-    grid-column: span 2;
-  }
-
   /* ------------------- CATEGORIES (/admin/categories) ---------------- */
   .cat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

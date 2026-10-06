@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { BRAND_NAME_UPPER } from '../lib/branding';
 
 /**
  * Route guard.
@@ -118,7 +119,7 @@ const ProtectedRoute = ({
           </button>
 
           <p className="auth-loader__foot" aria-hidden="true">
-            Crackers Hyderabad
+            {BRAND_NAME_UPPER}
           </p>
         </div>
       </div>

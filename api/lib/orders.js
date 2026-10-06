@@ -364,7 +364,10 @@ async function priceCart(db, rawItems) {
     const id = typeof raw?.id === 'string' ? raw.id.slice(0, 128) : null;
     const quantity = Number.parseInt(raw?.quantity, 10);
 
-    if (!id) return { ok: false, error: 'One of the cart items is invalid' };
+    // A '/' (or empty) id is not a document id at all — collection.doc(id)
+    // below would throw and turn a bad cart line into a generic HTTP 500.
+    // Reject it here so the customer gets a precise 400 instead.
+    if (!id || id.includes('/')) return { ok: false, error: 'One of the cart items is invalid' };
     if (!Number.isFinite(quantity) || quantity < 1 || quantity > MAX_QUANTITY_PER_ITEM) {
       return { ok: false, error: 'One of the cart quantities is invalid' };
     }
@@ -624,7 +627,9 @@ async function pricePosCart(db, rawItems) {
     const id = typeof raw?.id === 'string' ? raw.id.slice(0, 128) : null;
     const quantity = Number.parseInt(raw?.quantity, 10);
 
-    if (!id) return { ok: false, error: 'One of the bill items is invalid' };
+    // Same guard as priceCart: a '/' id would make collection.doc(id) throw
+    // and turn a bad bill line into a generic HTTP 500 instead of a 400.
+    if (!id || id.includes('/')) return { ok: false, error: 'One of the bill items is invalid' };
     if (!Number.isFinite(quantity) || quantity < 1 || quantity > MAX_QUANTITY_PER_ITEM) {
       return { ok: false, error: 'One of the bill quantities is invalid' };
     }

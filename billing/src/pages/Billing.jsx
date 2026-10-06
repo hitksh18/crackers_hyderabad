@@ -15,7 +15,6 @@ import {
   PauseCircle,
   Printer,
   Receipt,
-  Search,
   ShoppingBag,
   Smartphone,
 } from 'lucide-react';
@@ -26,6 +25,7 @@ import BillPrintSheet from '../components/billing/BillPrintSheet';
 import ProductPickerPanel from '../components/billing/ProductPickerPanel';
 import BillLineRow from '../components/billing/BillLineRow';
 import { REGISTER_PANEL } from '../components/billing/surfaces';
+import { BRAND_NAME_UPPER } from '../lib/branding';
 import { fetchTradePricingMap, mergeTradePricing } from '../lib/tradePricing';
 
 const MAX_HELD_BILLS = 2;
@@ -35,8 +35,6 @@ const PAYMENT_MODES = [
   { mode: 'UPI', icon: Smartphone },
   { mode: 'Card', icon: CreditCard },
 ];
-
-const LOGO_URL = '/crackerhyderabadlogo.png';
 
 const unitPriceOf = (item) =>
   item.offlineDiscountPrice || item.offlineMRP || item.offlinePrice || item.onlinePrice || 0;
@@ -395,7 +393,7 @@ const Billing = () => {
       })
       .join('\n');
 
-    const message = `*Crackers Hyderabad - Invoice*
+    const message = `*${BRAND_NAME_UPPER} - Invoice*
 
 *CUSTOMER DETAILS:*
 Name: ${customerName}
@@ -491,9 +489,27 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
         return;
       }
 
-      // Ctrl/Cmd + N → New bill (guarded when the bill has items).
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'n') {
+      /* New bill (guarded when the bill already has items).
+
+         Ctrl+N is reserved by Chrome/Edge/Firefox for "new browser window" and
+         is handled ABOVE the page: the keydown still reaches us and runs the
+         New Bill action, but no web page can cancel the browser's own response
+         to it, so the window will still open. preventDefault() and
+         stopPropagation() are both called because they suppress every
+         page-level default (including Firefox's non-reserved builds and any
+         in-page handler), but they cannot suppress the browser chrome action.
+
+         Alt+N is bound to the identical handler so New Bill has a shortcut
+         that is guaranteed not to collide with a reserved key. The button in
+         the header and Ctrl+Enter-adjacent flows remain available too.
+         event.code is matched alongside event.key so the shortcut survives
+         non-QWERTY layouts. */
+      const newBillCombo =
+        (event.ctrlKey || event.metaKey) && !event.altKey && event.code === 'KeyN';
+      const newBillAltCombo = event.altKey && !event.ctrlKey && !event.metaKey && event.code === 'KeyN';
+      if (newBillCombo || newBillAltCombo) {
         event.preventDefault();
+        event.stopPropagation();
         newBillRef.current();
         return;
       }
@@ -554,84 +570,66 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
       style={{ background: 'var(--surface-page)' }}
     >
       <motion.div
-        className="no-print flex min-h-0 flex-1 flex-col"
+        className="no-print pos-shell min-h-0 min-w-0 flex-1"
         initial="initial"
         animate="animate"
         variants={pageVariants(reduced)}
       >
-        {/* ---- Top bar ------------------------------------------------------ */}
-        <header
-          className="relative z-30 flex h-14 shrink-0 items-center gap-2 border-b px-3 lg:gap-3 lg:px-4"
-          style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)' }}
-        >
-          {/* Brand */}
-          <div className="flex min-w-0 shrink-0 items-center gap-2">
+        {/* ==================================================================
+             TWO COLUMNS FROM THE VERY TOP OF THE VIEWPORT.
+
+             pos-shell is the single grid that declares the split; everything
+             below is placed inside it. There is no full-width navbar: the left
+             column owns its own header (brand + billing actions) and the right
+             column owns its own header (Items / Total). The divider is the
+             grid's column boundary plus one border-right on the left column,
+             so it runs unbroken from Y=0 to the bottom edge.
+             ================================================================== */}
+
+        {/* ---- LEFT COLUMN: header + products + status ---------------------- */}
+        <div className="pos-col-left">
+          {/* ---- LEFT HEADER ------------------------------------------------
+              One compact POS toolbar, packed at the far left:
+              [Back] [Brand] [Hold] [Held] [New Bill] [Sign Out] ...empty.
+
+              justify-content:flex-start with fixed gaps — NOT space-between —
+              so the actions sit immediately after the wordmark and the trailing
+              space is left empty instead of the buttons drifting toward the
+              Current Bill divider. The brand block has a fixed width so the
+              buttons always start at the same X, and nothing here competes with
+              the Products row below. */}
+          <header
+            className="pos-navbar pos-col-left-head pos-left-head left-header relative z-30 flex shrink-0 items-center border-b"
+            style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)' }}
+          >
+            {/* BACK → BRAND → BUTTONS. flex-start only, never space-between. */}
             <button
               type="button"
               onClick={handleBack}
-              className="pos-tool-btn shrink-0"
-              style={{ paddingInline: '0.5rem' }}
+              className="pos-tool-btn pos-back-btn back-button"
               aria-label="Back"
               title="Back"
             >
-              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
-            <img
-              src={LOGO_URL}
-              alt="Crackers Hyderabad"
-              width={32}
-              height={32}
-              className="h-8 w-8 shrink-0 rounded-full object-cover"
-              draggable={false}
-            />
-            <div className="hidden min-w-0 sm:block" style={{ maxWidth: '11rem' }}>
-              <p className="truncate text-[0.8125rem] font-bold leading-tight" style={{ color: 'var(--text-strong)' }}>
-                Crackers Hyderabad
-              </p>
-              <p className="truncate text-[0.625rem] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--text-muted)' }}>
-                Counter · {todayLabel}
-              </p>
+            <div className="pos-brand-block brand-block">
+              <div className="pos-brand-text">
+                <p
+                  className="brand-name text-[0.75rem] font-bold uppercase leading-tight"
+                  style={{ color: 'var(--text-strong)' }}
+                >
+                  {BRAND_NAME_UPPER}
+                </p>
+                <p className="counter text-[0.5625rem] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>
+                  Counter · {todayLabel}
+                </p>
+              </div>
             </div>
-          </div>
 
-          {/* Search — the most important element in the header */}
-          <div className="relative min-w-0 flex-1" style={{ maxWidth: '38rem' }}>
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
-              style={{ color: 'var(--text-subtle)' }}
-              aria-hidden="true"
-            />
-            <label htmlFor="pos-global-search" className="sr-only">
-              Search products by name, category or barcode
-            </label>
-            <input
-              id="pos-global-search"
-              ref={searchRef}
-              type="text"
-              placeholder="Search products by name, category or barcode…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pos-search-input input-premium h-10 w-full pl-9 pr-16 text-sm"
-              autoComplete="off"
-            />
-            <span className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 items-center gap-1 md:flex" aria-hidden="true">
-              <kbd
-                className="flex h-5 items-center rounded border border-[color:var(--hairline-strong)] px-1.5 text-[0.625rem] font-bold"
-                style={{ color: 'var(--text-subtle)', background: 'var(--surface-raised)' }}
-              >
-                /
-              </kbd>
-              <kbd
-                className="flex h-5 items-center rounded border border-[color:var(--hairline-strong)] px-1.5 text-[0.625rem] font-bold"
-                style={{ color: 'var(--text-subtle)', background: 'var(--surface-raised)' }}
-              >
-                Ctrl K
-              </kbd>
-            </span>
-          </div>
-
-          {/* Actions + live stats */}
-          <div className="relative ml-auto flex shrink-0 items-center gap-1.5">
+            {/* Actions begin directly after the brand block and occupy only the
+                width they need. The popover lives in here because this wrapper
+                is its positioning context. */}
+            <div className="pos-header-actions header-actions relative flex items-center">
             <button
               type="button"
               onClick={holdBill}
@@ -640,8 +638,8 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
               aria-label="Hold current bill"
               className="pos-tool-btn"
             >
-              <PauseCircle className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden xl:inline">Hold</span>
+              <PauseCircle className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Hold</span>
             </button>
 
             <button
@@ -651,14 +649,20 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
               aria-label="Held bills"
               className={`pos-tool-btn ${heldOpen ? 'is-active' : ''}`}
             >
-              <Receipt className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden xl:inline">Held</span>
+              <Receipt className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Held</span>
               <span className="tabular">{heldBills.length}/{MAX_HELD_BILLS}</span>
             </button>
 
-            <button type="button" onClick={handleNewBill} className="pos-tool-btn" aria-label="Start a new bill" title="New bill (Ctrl+N)">
-              <FilePlus2 className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden xl:inline">New Bill</span>
+            <button
+              type="button"
+              onClick={handleNewBill}
+              className="pos-tool-btn"
+              aria-label="Start a new bill"
+              title="New bill (Alt+N)"
+            >
+              <FilePlus2 className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>New Bill</span>
             </button>
 
             <button
@@ -668,31 +672,9 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
               aria-label="Sign out of billing"
               title="Sign out"
             >
-              <LogOut className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden xl:inline">Sign Out</span>
+              <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Sign Out</span>
             </button>
-
-            <dl
-              className="hidden items-center gap-3 px-3 py-1 lg:flex"
-              style={{
-                background: 'var(--surface-sunken)',
-                border: '1px solid var(--hairline)',
-                borderRadius: '8px',
-              }}
-            >
-              <div>
-                <dt className="text-[0.625rem] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--text-muted)' }}>Items</dt>
-                <dd className="tabular text-sm font-bold" style={{ color: 'var(--text-strong)' }}>
-                  {itemCount}
-                </dd>
-              </div>
-              <div className="border-l pl-3" style={{ borderColor: 'var(--hairline)' }}>
-                <dt className="text-[0.625rem] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--text-muted)' }}>Total</dt>
-                <dd className="tabular price text-sm font-bold" style={{ color: 'var(--ember-400)' }}>
-                  ₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </dd>
-              </div>
-            </dl>
 
             {/* Held bills popover */}
             <AnimatePresence>
@@ -767,17 +749,33 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
               )}
             </AnimatePresence>
           </div>
+
+          {/* Flexible space: keeps BACK→BRAND→BUTTONS pinned left while the
+              Items/Total summary below stays at the far right of the LEFT
+              column only. Never overlaps Current Bill — header has
+              overflow:hidden and lives inside .pos-col-left. */}
+          <div className="min-w-0 flex-1" aria-hidden="true" />
+
+          {/* Items / Total — far right of LEFT navbar, still inside left column. */}
+          <div className="pos-nav-summary" aria-live="polite" aria-label="Current bill summary">
+            <span className="pos-nav-chip tabular">
+              Items {itemCount}
+            </span>
+            <span className="pos-nav-chip pos-nav-total tabular price">
+              Total ₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
         </header>
 
-        {/* ---- Workspace: products 68% / bill 32% (desktop) ------------------ */}
-        <div className={`flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden ${canIssue ? 'pb-24 md:pb-0' : ''}`}>
-          {/* Product area */}
-          <div className="w-full shrink-0 p-2 md:h-full md:w-[60%] md:shrink md:p-3 lg:w-[68%]">
-            <div className="flex h-full flex-col max-md:min-h-[70vh]">
+        {/* Product area — the rest of the left column, directly under its header. */}
+          <div className="pos-col-left-body flex min-h-0 min-w-0 flex-1 flex-col p-2 pt-0 md:p-3">
+            <div className="flex h-full min-h-0 flex-col max-md:min-h-[70vh]">
               <ProductPickerPanel
                 products={filteredProducts}
                 loading={loading}
                 searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                searchInputRef={searchRef}
                 onAdd={addToBill}
                 reduced={reduced}
                 totalCount={products.length}
@@ -785,18 +783,47 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
             </div>
           </div>
 
-          {/* Current bill */}
+          {/* ---- Status bar: the last cell of the LEFT column ------------------ */}
+          <footer
+            className="pos-col-left-foot hidden h-[26px] shrink-0 items-center justify-between gap-4 border-t px-4 md:flex"
+            style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)' }}
+          >
+            <p className="tabular flex min-w-0 items-center gap-2 text-[0.6875rem] font-medium" style={{ color: 'var(--text-muted)' }}>
+              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: 'var(--leaf-600)' }} aria-hidden="true" />
+              <span className="truncate">
+                Ready · {loading ? '…' : `${products.length} products`}
+              </span>
+            </p>
+            <p className="hidden shrink-0 items-center gap-3 text-[0.6875rem] font-semibold lg:flex" style={{ color: 'var(--text-subtle)' }} aria-label="Keyboard shortcuts">
+              <span><kbd className="font-bold">Ctrl+K</kbd> Search</span>
+              <span><kbd className="font-bold">Alt N</kbd> New Bill</span>
+              <span><kbd className="font-bold">Ctrl+H</kbd> Hold</span>
+              <span><kbd className="font-bold">Ctrl+Enter</kbd> Generate</span>
+            </p>
+          </footer>
+        </div>
+
+        {/* ---- RIGHT PANEL ----------------------------------------------------
+             A cell in grid column 2, so it starts at Y=0 — level with the left
+             header, not below it.
+
+             There is deliberately NO separate bar above the Current Bill: the
+             live count and total live inside the Current Bill header itself
+             (the "N Items" chip) and in its pinned summary at the bottom, so
+             nothing is stranded above the panel it describes. */}
           <motion.section
             ref={billSectionRef}
             aria-labelledby="bill-heading"
             initial="hidden"
             animate="visible"
             variants={pageVariants(reduced)}
-            className="flex w-full shrink-0 scroll-mt-2 flex-col p-2 pt-0 md:h-full md:w-[40%] md:overflow-hidden md:p-3 md:pl-0 lg:w-[32%]"
+            className={`pos-col-right flex min-h-0 w-full flex-col overflow-hidden p-2 pt-2 md:p-3 md:pl-3 ${canIssue ? 'pb-24 md:pb-0' : ''}`}
           >
             <div className="flex h-full min-h-0 flex-col max-md:min-h-[80vh]" style={REGISTER_PANEL}>
+              {/* Bill header: identity, live item count and — as the wireframe
+                  asks — the two customer fields immediately beneath it. */}
               <div
-                className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3"
+                className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-2"
                 style={{ borderColor: 'var(--hairline)' }}
               >
                 <div className="min-w-0">
@@ -825,7 +852,7 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
 
               {/* Customer — compact, optional until billing */}
               <div
-                className="grid shrink-0 grid-cols-2 gap-2 border-b px-4 py-2.5"
+                className="grid shrink-0 grid-cols-2 gap-2 border-b px-4 py-2"
                 style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)' }}
               >
                 <div className="min-w-0">
@@ -859,9 +886,9 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
               </div>
 
               {/* Line items — the only scrollable area of the bill panel */}
-              <div className="pos-pane min-h-0 flex-1 overflow-y-auto px-4 py-1 md:flex-1">
+              <div className="pos-pane flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-1 md:flex-1">
                 {billItems.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 py-12 text-center">
+                  <div className="flex h-full min-h-[9rem] flex-col items-center justify-center gap-1.5 py-4 text-center">
                     <span
                       className="flex h-12 w-12 items-center justify-center rounded-full"
                       style={{ background: 'var(--surface-raised)', border: '1px solid var(--hairline)' }}
@@ -879,7 +906,7 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
                     <p className="max-w-[16rem] text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                       Add products from the catalogue to start billing.
                     </p>
-                    <button type="button" onClick={focusSearch} className="pos-tool-btn mt-2">
+                    <button type="button" onClick={focusSearch} className="pos-tool-btn mt-1">
                       Browse Products
                     </button>
                   </div>
@@ -906,7 +933,7 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
               </div>
 
               {/* Summary — pinned, never scrolls away */}
-              <div className="shrink-0 border-t px-4 py-3" style={{ borderColor: 'var(--hairline)' }}>
+              <div className="shrink-0 border-t px-4 py-2.5" style={{ borderColor: 'var(--hairline)' }}>
                 <div className="flex items-baseline justify-between gap-4">
                   <span className="text-[0.8125rem] font-semibold" style={{ color: 'var(--text-body)' }}>
                     Subtotal
@@ -998,7 +1025,7 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
               </div>
 
               {/* Actions */}
-              <div className="shrink-0 border-t px-4 py-3" style={{ borderColor: 'var(--hairline)' }}>
+              <div className="shrink-0 border-t px-4 py-2.5" style={{ borderColor: 'var(--hairline)' }}>
                 <button
                   type="button"
                   onClick={saveBill}
@@ -1013,7 +1040,7 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
                   type="button"
                   onClick={sendToWhatsApp}
                   disabled={!canIssue}
-                  className="pos-tool-btn mt-2 w-full"
+                  className="pos-tool-btn mt-1.5 w-full"
                   title="WhatsApp bill (Ctrl+Shift+W)"
                 >
                   <MessageCircle className="h-4 w-4" aria-hidden="true" />
@@ -1022,26 +1049,6 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
               </div>
             </div>
           </motion.section>
-        </div>
-
-        {/* ---- Status bar ----------------------------------------------------- */}
-        <footer
-          className="hidden h-8 shrink-0 items-center justify-between gap-4 border-t px-4 md:flex"
-          style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)' }}
-        >
-          <p className="tabular flex min-w-0 items-center gap-2 text-[0.6875rem] font-medium" style={{ color: 'var(--text-muted)' }}>
-            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: 'var(--leaf-600)' }} aria-hidden="true" />
-            <span className="truncate">
-              Ready · {loading ? '…' : `${products.length} products`}
-            </span>
-          </p>
-          <p className="hidden shrink-0 items-center gap-3 text-[0.6875rem] font-semibold lg:flex" style={{ color: 'var(--text-subtle)' }} aria-label="Keyboard shortcuts">
-            <span><kbd className="font-bold">Ctrl+K</kbd> Search</span>
-            <span><kbd className="font-bold">Ctrl+N</kbd> New Bill</span>
-            <span><kbd className="font-bold">Ctrl+H</kbd> Hold</span>
-            <span><kbd className="font-bold">Ctrl+Enter</kbd> Generate</span>
-          </p>
-        </footer>
 
         {/* ---- Mobile sticky cart bar ------------------------------------------ */}
         {canIssue && (

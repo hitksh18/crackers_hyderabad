@@ -12,15 +12,16 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { pageVariants, revealVariants } from '../lib/motion';
 import { fetchTradePricingMap, mergeTradePricing } from '../lib/tradePricing';
 import AdminHeader from '../components/admin/AdminHeader';
+import { CATEGORY_VALUES, isProductInCategory, categoryDisplayName } from '../config/categories';
 
-const categories = ['All', 'Rockets', 'Sparkles', 'Ground Chakkars', 'Sky Shots', 'Gift Boxes', 'Flower Pots', 'Bombs', 'Garlands', 'Kids Special', 'Guns, Rolls & Pop Pop', 'Threads and Novelties'];
+// Single source of truth — admin/src/config/categories.js (canonical order).
+// State holds canonical stored values; labels render display names.
+const categories = ['All', ...CATEGORY_VALUES];
 
-/** Same membership rule the list has always used — array form first, single field second. */
+/** Alias-aware membership — array form first, legacy single field second. */
 const inCategory = (product, category) => {
-  if (product.categories && Array.isArray(product.categories)) {
-    return product.categories.includes(category);
-  }
-  return product.category === category;
+  if (category === 'All') return true;
+  return isProductInCategory(product, category);
 };
 
 const PANEL = {
@@ -218,7 +219,7 @@ const PriceList = () => {
             <p className="pl-print-brand">Crackers Hyderabad</p>
             <p className="pl-print-meta">
               Price List
-              {selectedCategory !== 'All' ? ` — ${selectedCategory}` : ''} · {new Date().toLocaleDateString()}
+              {selectedCategory !== 'All' ? ` — ${categoryDisplayName(selectedCategory)}` : ''} · {new Date().toLocaleDateString()}
             </p>
           </div>
 
@@ -274,7 +275,7 @@ const PriceList = () => {
                       }`}
                       style={{ minHeight: 44 }}
                     >
-                      {cat}
+                      {cat === 'All' ? 'All' : categoryDisplayName(cat)}
                       <span
                         className={`tabular text-xs font-bold ${
                           active ? 'opacity-80' : 'opacity-70'
@@ -306,7 +307,7 @@ const PriceList = () => {
               >
                 <h2 className="flex items-center gap-2 text-sm font-bold" style={{ color: 'var(--text-strong)' }}>
                   <Layers className="h-4 w-4" style={{ color: 'var(--ember-600)' }} aria-hidden="true" />
-                  {selectedCategory === 'All' ? 'Search results' : selectedCategory}
+                  {selectedCategory === 'All' ? 'Search results' : categoryDisplayName(selectedCategory)}
                 </h2>
                 <span className="badge badge-neutral tabular">{filteredProducts.length} products</span>
               </div>

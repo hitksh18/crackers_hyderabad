@@ -70,6 +70,9 @@ const UserManagement = () => {
       }
     } catch (error) {
       console.error('Error fetching auth users:', error);
+      // Network-level failure (API unreachable, aborted request): the table
+      // must not silently pose as an empty user base — surface it.
+      toast.error('Failed to load users. Check your connection and try again.');
       setAuthUsers([]);
       setRoles({});
     } finally {

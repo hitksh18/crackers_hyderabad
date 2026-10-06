@@ -59,6 +59,10 @@ cd /root/crackers-deploy/repo/billing && npm ci --no-audit --no-fund
 
 ## 5. Configure .env
 
+**`/root/crackers-deploy/.env` is the single source of truth for every production
+secret, including the Gmail app password.** `api/server.js` loads it as
+`<api>/../.env`, i.e. `/root/crackers-deploy/.env`.
+
 ```bash
 cp /root/crackers-deploy/repo/.env.example /root/crackers-deploy/.env
 chmod 600 /root/crackers-deploy/.env
@@ -71,11 +75,69 @@ Required values:
 |---|---|
 | `FIREBASE_SERVICE_ACCOUNT_KEY` | Firebase Console → Project Settings → Service accounts → Generate new private key → paste the **whole JSON on one line**. Keep the `\n` inside `private_key` as literal backslash-n. |
 | `FIREBASE_PROJECT_ID` | `standard-crackers-store` (already the default) |
-| `EMAIL_HOST/PORT/USER/PASS` | Gmail: 2-Step Verification → App Password (16 chars). |
-| `MSG91_AUTH_KEY/SENDER_ID/ROUTE` | https://control.msg91.com → API key. Optional — orders work without it; SMS endpoint returns `setupRequired: true`. |
+| `EMAIL_*` + `MSG91_*` | see the email section below, and `MSG91_AUTH_KEY/SENDER_ID/ROUTE` from https://control.msg91.com (optional — orders work without it). |
 | `ALLOWED_ORIGINS` | Only if you serve a preview domain too. Production apex+www and localhost are already allowed. |
 | `MEDIA_ROOT` / `MEDIA_PUBLIC_BASE` | Leave empty — defaults (`/var/www/crackershyderabad-media`, `https://crackershyderabad.com/uploads`) are correct. |
 | `GOOGLE_GEOCODING_API_KEY` | Optional — empty = OpenStreetMap Nominatim for the checkout picker. |
+
+### 5a. Production email configuration
+
+Set these **in `/root/crackers-deploy/.env`**:
+
+| Variable | Value |
+|---|---|
+| `EMAIL_ENABLED` | `true` |
+| `SMTP_HOST` | `smtp.gmail.com` |
+| `SMTP_PORT` | `465` |
+| `SMTP_SECURE` | `true` |
+| `SMTP_USER` | `crackershyderabad@gmail.com` |
+| `SMTP_PASSWORD` | the Gmail **App Password** — never the account password |
+| `EMAIL_FROM_NAME` | `Crackers Hyderabad` |
+| `EMAIL_FROM_ADDRESS` | `crackershyderabad@gmail.com` |
+| `ADMIN_NOTIFICATION_EMAIL` | `admin.crackershyderabad@gmail.com` |
+| `TRACK_BASE_URL` | `https://crackershyderabad.com` |
+
+> **The real Gmail App Password must never be committed.** `.env*` is covered by
+> `.gitignore`, and `.env.example` ships with `SMTP_PASSWORD=` empty. Never paste
+> a real value into `.env.example`, into source, or into a script.
+
+**Why `.env` and not `.env.email`.** `api/server.js` also reads a legacy
+`.env.email`, but that file is git-ignored, created by no deploy script, and
+both `setup-and-deploy.sh` and `update.sh` do `rm -rf $DEPLOY_DIR/api`. It is a
+local-dev convenience only. Precedence, implemented in `api/server.js`:
+
+1. variables already in the process environment (PM2/systemd) — always win
+2. `<repo>/.env` — **primary**; on KVM `/root/crackers-deploy/.env`
+3. `<repo>/.env.email` — **legacy fallback**, fills only keys `.env` omits
+
+If a value is ever found solely in `.env.email` on a production start, the API
+logs a `[env] WARNING:` naming the keys. Treat that warning as a bug to fix, not
+noise.
+
+Migrate values that are still sitting in `.env.email`:
+
+```bash
+node /root/crackers-deploy/repo/scripts/migrate-email-env-to-primary.js           # dry run
+node /root/crackers-deploy/repo/scripts/migrate-email-env-to-primary.js --write   # apply
+```
+
+It backs up `.env` first, never prints a value, and is idempotent.
+
+Verify without exposing anything (prints `set`/`missing` only, and can test the
+Gmail handshake without sending mail):
+
+```bash
+node /root/crackers-deploy/repo/scripts/email-config-diagnostic.js --auth
+```
+
+After changing `.env`, PM2 must be restarted so the process picks it up:
+
+```bash
+pm2 restart crackers-api --update-env
+pm2 save
+```
+
+Do **not** use `pm2 env 0` for checking — it prints `SMTP_PASSWORD` in full.
 
 Browser build vars (`VITE_FIREBASE_*`) are baked in at build time from the
 committed public web config (`client/.env.production`, `admin/.env`,
@@ -289,7 +351,10 @@ Nginx config is never auto-overwritten (the script diffs and tells you to review
 ## 19. What must still be configured manually (not in git)
 
 1. `FIREBASE_SERVICE_ACCOUNT_KEY` in `/root/crackers-deploy/.env` (secret).
-2. `EMAIL_*` + `MSG91_*` in the same file (secrets).
+2. `SMTP_*` / `EMAIL_FROM_*` / `ADMIN_NOTIFICATION_EMAIL` / `TRACK_BASE_URL` in
+   that same file (see §5a). `SMTP_PASSWORD` is the Gmail App Password and must
+   never be committed. If these values still live in `.env.email`, migrate them
+   with `scripts/migrate-email-env-to-primary.js --write`.
 3. DNS A records for all four hostnames (`apex`, `www`, `admin`, `billing`) + `certbot --nginx`.
 4. Firestore rules deploy + first admin `roles/{uid}` document.
 5. `DOMAIN=` value when running the setup script (no domain is hardcoded in deploy scripts; `crackershyderabad.com` defaults inside code comments/CORS allow-list are safe).

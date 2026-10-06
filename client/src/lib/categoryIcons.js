@@ -15,16 +15,27 @@ const NAME_SLUGS = {
   'Kids Special': 'kids',
   'Guns, Rolls & Pop Pop': 'guns-rolls-pop-pop',
   'Threads and Novelties': 'threads-novelties',
+  // Display-label alias for the same category (see config/categories.js).
+  'Threads & Pencils': 'threads-novelties',
 };
+
+import { resolveCategory } from '../config/categories';
 
 export const slugForCategory = (name) =>
   NAME_SLUGS[String(name || '').trim()] || 'rockets';
 
-/* Legacy category names still stored on older product documents, mapped to
-   the current storefront labels. Values that already match are returned as-is. */
-const LEGACY_DISPLAY = {};
+/* Stored strings that predate the current storefront labels. Values that
+   already match are returned as-is; everything else resolves through the
+   single source of truth (config/categories.js) so the display label always
+   matches the storefront showcase and the admin Categories page. */
+const LEGACY_DISPLAY = {
+  'Threads and Novelties': 'Threads & Pencils',
+};
 
 /** Display name for a category string — normalises legacy DB names to the
     current storefront label without duplicating the category. */
-export const displayNameForCategory = (name) =>
-  LEGACY_DISPLAY[String(name || '').trim()] || String(name || '');
+export const displayNameForCategory = (name) => {
+  const key = String(name || '').trim();
+  if (LEGACY_DISPLAY[key]) return LEGACY_DISPLAY[key];
+  return resolveCategory(key)?.name || String(name || '');
+};

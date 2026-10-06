@@ -82,13 +82,13 @@ function emailSubject(orderCode, status) {
     key === 'delivered' || key === 'completed' ? 'has been delivered' :
     key === 'cancelled' ? 'has been cancelled' :
     'is confirmed';
-  return `Your Crackers Hyderabad order #${code} ${verb}`;
+  return `Your Crackers Hyderabad Order #${code} ${verb}`;
 }
 
 /** Inbox preview line. Rendered hidden at the top of the HTML body. */
 function emailPreheader(orderCode) {
   const code = String(orderCode || 'N/A').toUpperCase();
-  return `Your Crackers Hyderabad order #${code} has been confirmed.`;
+  return `Your Crackers Hyderabad Order #${code} has been confirmed.`;
 }
 
 /* ---- Horizontal progress tracker --------------------------------------
@@ -324,7 +324,7 @@ function internalNewOrderSubject(orderCode) {
   return `New Order Placed — #${String(orderCode || 'N/A').toUpperCase()}`;
 }
 
-function internalNewOrderHtml({ orderCode, customerName, customerEmail, customerPhone, quantity, total, paymentMethod, deliveryLines, viewOrderUrl }) {
+function internalNewOrderHtml({ orderCode, customerName, customerEmail, customerPhone, quantity, total, paymentMethod, orderDate, deliveryLines, viewOrderUrl }) {
   const code = escapeHtml(String(orderCode || 'N/A').toUpperCase());
   const year = new Date().getFullYear();
   const row = (label, value) => `
@@ -348,20 +348,21 @@ function internalNewOrderHtml({ orderCode, customerName, customerEmail, customer
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:#FFFFFF;border-radius:14px;overflow:hidden;border:1px solid #E7DCC8;">
         <tr>
           <td style="padding:16px 28px;border-bottom:1px solid #EFE7D6;">
-            <div style="font-size:19px;color:#211A15;font-weight:bold;font-family:Georgia,'Times New Roman',serif;">Crackers Hyderabad — New Order</div>
-            <div style="padding-top:2px;font-size:11px;letter-spacing:2px;color:#9E7029;font-family:Arial,Helvetica,sans-serif;">STAFF NOTIFICATION</div>
+            <div style="font-size:19px;color:#211A15;font-weight:bold;font-family:Georgia,'Times New Roman',serif;">Crackers Hyderabad</div>
+            <div style="padding-top:2px;font-size:11px;letter-spacing:2px;color:#9E7029;font-family:Arial,Helvetica,sans-serif;">NEW ORDER PLACED</div>
           </td>
         </tr>
         <tr>
           <td style="padding:20px 28px 0;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-              ${row('Order', `#${code}`)}
+              ${row('Order ID', `#${code}`)}
               ${row('Customer', escapeHtml(customerName || 'N/A'))}
-              ${row('Email', escapeHtml(customerEmail || 'N/A'))}
+              ${row('Customer Email', escapeHtml(customerEmail || 'N/A'))}
               ${row('Phone', escapeHtml(customerPhone || 'N/A'))}
               ${row('Quantity', `${Number(quantity) || 0} item${Number(quantity) === 1 ? '' : 's'}`)}
               ${row('Order Total', formatINR(total))}
-              ${row('Payment', escapeHtml(paymentMethod || 'Cash on Delivery'))}
+              ${row('Payment Method', escapeHtml(paymentMethod || 'Cash on Delivery'))}
+              ${orderDate ? row('Order Date', escapeHtml(orderDate)) : ''}
             </table>
           </td>
         </tr>
@@ -393,24 +394,23 @@ function internalNewOrderHtml({ orderCode, customerName, customerEmail, customer
 </html>`;
 }
 
-function internalNewOrderText({ orderCode, customerName, customerEmail, customerPhone, quantity, total, paymentMethod, deliveryText, viewOrderUrl }) {
+function internalNewOrderText({ orderCode, customerName, customerEmail, customerPhone, quantity, total, paymentMethod, orderDate, deliveryText, viewOrderUrl }) {
   const code = String(orderCode || 'N/A').toUpperCase();
   const lines = [
-    'Crackers Hyderabad — STAFF NOTIFICATION',
+    'Crackers Hyderabad — NEW ORDER PLACED',
     `New order placed: #${code}`,
     '',
     `Customer: ${customerName || 'N/A'}`,
-    `Email: ${customerEmail || 'N/A'}`,
+    `Customer Email: ${customerEmail || 'N/A'}`,
     `Phone: ${customerPhone || 'N/A'}`,
     `Quantity: ${Number(quantity) || 0} items`,
     `Order Total: ${formatINR(total)}`,
-    `Payment: ${paymentMethod || 'Cash on Delivery'}`,
-    '',
-    `Delivery: ${deliveryText || 'N/A'}`,
-    '',
+    `Payment Method: ${paymentMethod || 'Cash on Delivery'}`,
   ];
+  if (orderDate) lines.push(`Order Date: ${orderDate}`);
+  lines.push('', `Delivery: ${deliveryText || 'N/A'}`, '');
   if (viewOrderUrl) lines.push(`View order: ${viewOrderUrl}`, '');
-  lines.push(`Internal notification for order #${code}.`);
+  lines.push(`Admin notification for order #${code}.`);
   return lines.join('\n');
 }
 

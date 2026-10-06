@@ -23,6 +23,7 @@ import { revealVariants, staggerParent } from '../lib/motion';
 import { Diya } from '../components/ui/Ornaments';
 import GoogleMark from '../components/ui/GoogleMark';
 import { BILLING_ROLES } from '../lib/roles';
+import { BRAND_NAME, BRAND_NAME_UPPER } from '../lib/branding';
 
 /** Firebase auth codes are not sentences. Turn them into ones. */
 const AUTH_MESSAGES = {
@@ -194,7 +195,7 @@ const Login = () => {
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden" style={{ background: 'var(--surface-page)' }}>
-      <Seo title="Sign In | Crackers Hyderabad" noindex />
+      <Seo title={`Sign In | ${BRAND_NAME}`} noindex />
       <div className="grid min-h-screen lg:grid-cols-[1.04fr_1fr]">
         {/* ---------------------------------------------------------------
             Editorial panel — maroon, one ornament, brand story.
@@ -230,7 +231,7 @@ const Login = () => {
                 className="label-caps"
                 style={{ color: 'var(--gold-400)', letterSpacing: '0.24em' }}
               >
-                Crackers Hyderabad
+                {BRAND_NAME_UPPER}
               </p>
 
               <h1

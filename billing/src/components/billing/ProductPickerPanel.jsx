@@ -1,23 +1,14 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, PackageSearch } from 'lucide-react';
+import { Plus, PackageSearch, Search } from 'lucide-react';
 import { revealVariants } from '../../lib/motion';
 import { REGISTER_PANEL } from './surfaces';
 import { displayNameForCategory } from '../../lib/categoryIcons';
+import { PRODUCT_CATEGORIES, isProductInCategory } from '../../config/categories';
 
-const CATEGORIES = [
-  'Rockets',
-  'Sparkles',
-  'Ground Chakkars',
-  'Sky Shots',
-  'Gift Boxes',
-  'Flower Pots',
-  'Bombs',
-  'Garlands',
-  'Kids Special',
-  'Guns, Rolls & Pop Pop',
-  'Threads and Novelties',
-];
+// Single source of truth — billing/src/config/categories.js (canonical order).
+// Pill state holds canonical stored values; labels render display names.
+const CATEGORY_OPTIONS = PRODUCT_CATEGORIES;
 
 const SORT_OPTIONS = [
   { key: 'name', label: 'Name A–Z' },
@@ -33,16 +24,23 @@ const mrpOf = (product) => product.offlineMRP || product.offlinePrice || product
 const SKELETON_COUNT = 12;
 
 /**
- * Product workspace of the counter POS: header with count, horizontally
- * scrollable category pills, and a dense tile grid.
+ * Product workspace of the counter POS: header with the catalogue search,
+ * live count, horizontally scrollable category pills, and a dense tile grid.
  *
- * Pure picker — owns no product state and no pricing rules. Clicking a tile
- * adds it to the bill immediately; the parent owns cart logic.
+ * Pure picker — owns no product state, no pricing rules and no search state.
+ * Clicking a tile adds it to the bill immediately; the parent owns cart logic.
+ * The search input here is the SAME element the register used to render in its
+ * global header: value, change handler and ref are passed down from Billing.jsx,
+ * so the query, filtering and the Ctrl+K focus shortcut all behave exactly as
+ * before — this only relocates where the box is drawn. There is deliberately
+ * only one product search input in the application.
  */
 const ProductPickerPanel = ({
   products,
   loading,
   searchQuery,
+  onSearchChange,
+  searchInputRef,
   onAdd,
   reduced,
   totalCount,
@@ -53,8 +51,7 @@ const ProductPickerPanel = ({
 
   const filtered = products.filter((product) => {
     if (category === 'All') return true;
-    const cats = product.categories && product.categories.length ? product.categories : [product.category];
-    return cats.includes(category);
+    return isProductInCategory(product, category);
   });
 
   const sorted = [...filtered].sort((a, b) => {
@@ -80,18 +77,23 @@ const ProductPickerPanel = ({
       className="flex h-full min-h-0 flex-col"
       style={REGISTER_PANEL}
     >
-      {/* Workspace header: section title + live count */}
+      {/* Products row: title + live count + sort + search, in that reading
+          order, on one line. The search takes the flexible trailing space so
+          the row never wraps on desktop; below sm the whole row wraps rather
+          than overflowing horizontally. Search lives ONLY here — never in the
+          left panel header — so there is exactly one product search input. */}
       <div
-        className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3"
+        className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5"
         style={{ borderColor: 'var(--hairline)' }}
       >
         <h2
           id="catalogue-heading"
-          className="text-base font-bold tracking-tight"
+          className="shrink-0 text-base font-bold tracking-tight"
           style={{ color: 'var(--text-strong)', fontSize: '1rem' }}
         >
           Products
         </h2>
+
         <div className="flex shrink-0 items-center gap-2">
           <span className="tabular text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
             {loading ? 'Loading…' : `${sorted.length} / ${totalCount}`}
@@ -113,7 +115,47 @@ const ProductPickerPanel = ({
             ))}
           </select>
         </div>
-      </div>
+
+        {/* Catalogue search — belongs to the Products row, not the header above. */}
+        <div className="order-last relative min-w-[12rem] flex-1 sm:order-none">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
+            style={{ color: 'var(--text-subtle)' }}
+            aria-hidden="true"
+          />
+          <label htmlFor="pos-product-search" className="sr-only">
+            Search products by name, category or barcode
+          </label>
+          <input
+            id="pos-product-search"
+            ref={searchInputRef}
+            type="text"
+            placeholder="Search products by name, category or barcode…"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="pos-search-input input-premium h-9 w-full pl-9 pr-16 text-sm"
+            autoComplete="off"
+          />
+          <span
+            className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 items-center gap-1 md:flex"
+            aria-hidden="true"
+          >
+            <kbd
+              className="flex h-5 items-center rounded border border-[color:var(--hairline-strong)] px-1.5 text-[0.625rem] font-bold"
+              style={{ color: 'var(--text-subtle)', background: 'var(--surface-raised)' }}
+            >
+              /
+            </kbd>
+            <kbd
+              className="flex h-5 items-center rounded border border-[color:var(--hairline-strong)] px-1.5 text-[0.625rem] font-bold"
+              style={{ color: 'var(--text-subtle)', background: 'var(--surface-raised)' }}
+            >
+              Ctrl K
+            </kbd>
+          </span>
+        </div>
+
+        </div>
 
       {/* Category pills: one compact scrollable row */}
       <div className="shrink-0 border-b px-4 py-2" style={{ borderColor: 'var(--hairline)' }}>
@@ -122,18 +164,18 @@ const ProductPickerPanel = ({
           role="tablist"
           aria-label="Filter by category"
         >
-          {['All', ...CATEGORIES].map((cat) => {
-            const active = category === cat;
+          {[{ value: 'All', name: 'All' }, ...CATEGORY_OPTIONS].map((cat) => {
+            const active = category === cat.value;
             return (
               <button
-                key={cat}
+                key={cat.value}
                 type="button"
                 role="tab"
                 aria-selected={active}
-                onClick={() => setCategory(cat)}
+                onClick={() => setCategory(cat.value)}
                 className={`pos-chip h-8 shrink-0 whitespace-nowrap px-3 text-[0.6875rem] font-bold uppercase tracking-wider ${active ? 'pos-chip-active' : ''}`}
               >
-                {cat}
+                {cat.name}
               </button>
             );
           })}
@@ -153,7 +195,7 @@ const ProductPickerPanel = ({
             aria-live="polite"
             aria-busy="true"
             aria-label="Loading products"
-            className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 min-[1300px]:grid-cols-5 min-[1800px]:grid-cols-6"
+            className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
           >
             {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
               <div key={i} className="pos-skeleton flex flex-col" aria-hidden="true">
@@ -180,7 +222,7 @@ const ProductPickerPanel = ({
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 min-[1300px]:grid-cols-5 min-[1800px]:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
             {sorted.map((product) => {
               const price = unitPriceOf(product);
               const mrp = mrpOf(product);

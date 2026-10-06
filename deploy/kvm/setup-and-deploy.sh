@@ -86,6 +86,26 @@ if [ -z "${FIREBASE_SERVICE_ACCOUNT_KEY:-}" ] && ! grep -q '^FIREBASE_SERVICE_AC
   echo "         The API will start (GET /api/health = ok) but auth/orders/users return 503 until you set it."
 fi
 
+# Email configuration lives in $DEPLOY_DIR/.env — the same file, and the one the
+# API loads as <api>/../.env. Report set/missing only; never echo a value.
+echo "    Email configuration in $DEPLOY_DIR/.env:"
+missing_email=0
+for key in EMAIL_ENABLED SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD \
+           EMAIL_FROM_NAME EMAIL_FROM_ADDRESS ADMIN_NOTIFICATION_EMAIL TRACK_BASE_URL; do
+  if grep -qE "^${key}=.+" "$DEPLOY_DIR/.env" 2>/dev/null; then
+    printf '      %-26s set\n' "$key"
+  else
+    printf '      %-26s MISSING\n' "$key"
+    missing_email=$((missing_email + 1))
+  fi
+done
+if [ "$missing_email" -gt 0 ]; then
+  echo "    $missing_email email key(s) missing. Orders will be created but NO email will send"
+  echo "    until they are set. SMTP_PASSWORD needs the Gmail APP PASSWORD (not the account"
+  echo "    password). If your values are still in a .env.email file, migrate them with:"
+  echo "      node $REPO_DIR/scripts/migrate-email-env-to-primary.js --write"
+fi
+
 echo "==> 11/16 Publish frontend builds + backend to deploy dir"
 # Copy into <dest>.new, rotate the old copy to <dest>.old, then swap — one
 # broken copy can never leave a subdomain with no files on disk.
@@ -106,13 +126,16 @@ publish_app "$REPO_DIR/admin/dist"   "$ADMIN_APP_DIR"
 publish_app "$REPO_DIR/billing/dist" "$BILLING_APP_DIR"
 rm -rf "$DEPLOY_DIR/api" && cp -a "$REPO_DIR/api" "$DEPLOY_DIR/api"
 cp -a "$REPO_DIR/ecosystem.config.cjs" "$DEPLOY_DIR/ecosystem.config.cjs" 2>/dev/null || true
-ln -sfn "$DEPLOY_DIR/.env" "$DEPLOY_DIR/api/.env" 2>/dev/null || cp "$DEPLOY_DIR/.env" "$DEPLOY_DIR/api/.env"
+# Secrets stay in $DEPLOY_DIR/.env, never inside $DEPLOY_DIR/api — this script
+# and update.sh both delete that directory wholesale. The API resolves its env
+# as <api>/../.env, so no link is needed (or wanted) inside it.
+rm -f "$DEPLOY_DIR/api/.env" "$DEPLOY_DIR/api/.env.email"
 ln -sfn "$DEPLOY_DIR/.env" "$REPO_DIR/.env" 2>/dev/null || true
 
 echo "==> 12/16 Configure PM2 (crackers-api, port 3001)"
 cd "$DEPLOY_DIR"
 if [ -f ecosystem.config.cjs ]; then
-  pm2 startOrRestart ecosystem.config.cjs --env production
+  pm2 startOrRestart ecosystem.config.cjs --env production --update-env
 else
   PORT=3001 NODE_ENV=production pm2 startOrRestart "$DEPLOY_DIR/api/server.js" --name crackers-api
 fi

@@ -10,10 +10,13 @@
  *   SMTP_PASSWORD=<Gmail App Password — never the account password>
  *   EMAIL_FROM_NAME=Crackers Hyderabad
  *   EMAIL_FROM_ADDRESS=crackershyderabad@gmail.com
+ *   ADMIN_NOTIFICATION_EMAIL=admin.crackershyderabad@gmail.com
+ *   ADMIN_BASE_URL=https://admin.crackershyderabad.com (optional override)
  *   TRACK_BASE_URL=https://crackershyderabad.com (optional override)
  *
  * Backwards compatibility: SMTP_HOST/PORT/USER/PASSWORD fall back to the
- * pre-existing EMAIL_HOST/PORT/USER/PASS names, so the current KVM
+ * pre-existing EMAIL_HOST/PORT/USER/PASS names, and ADMIN_NOTIFICATION_EMAIL
+ * falls back to the earlier INTERNAL_ORDER_EMAIL name, so the current KVM
  * environment keeps working unchanged.
  *
  * Security rules enforced here, not by callers:
@@ -30,8 +33,10 @@ const { orderConfirmationHtml, orderConfirmationText, statusCopy, emailSubject, 
 const DEFAULT_FROM_NAME = 'Crackers Hyderabad';
 const DEFAULT_FROM_ADDRESS = 'crackershyderabad@gmail.com';
 const DEFAULT_TRACK_BASE_URL = 'https://crackershyderabad.com';
-/* Internal new-order notifications go ONLY here — never to a customer. */
-const DEFAULT_INTERNAL_ORDER_EMAIL = 'crackershyderabad@gmail.com';
+/* Where the store's NEW ORDER notification goes. Configurable via
+   ADMIN_NOTIFICATION_EMAIL; never a customer address, and never hardcoded at a
+   call site. INTERNAL_ORDER_EMAIL is honoured as the earlier name. */
+const DEFAULT_ADMIN_NOTIFICATION_EMAIL = 'admin.crackershyderabad@gmail.com';
 /* Staff order screen base for the internal VIEW ORDER button. The route is
    login-gated and carries no tokens, so linking it is safe. */
 const DEFAULT_ADMIN_BASE_URL = 'https://admin.crackershyderabad.com';
@@ -58,6 +63,15 @@ function readEmailConfig() {
   const fromName = (process.env.EMAIL_FROM_NAME || DEFAULT_FROM_NAME).trim() || DEFAULT_FROM_NAME;
   const fromAddress = (process.env.EMAIL_FROM_ADDRESS || user || DEFAULT_FROM_ADDRESS).trim();
   const trackBaseUrl = (process.env.TRACK_BASE_URL || process.env.PUBLIC_SITE_URL || DEFAULT_TRACK_BASE_URL).replace(/\/+$/, '');
+  // ADMIN_NOTIFICATION_EMAIL is the documented name; INTERNAL_ORDER_EMAIL is the
+  // earlier one and still wins if a server already sets it, so an existing
+  // deployment is never silently re-pointed at a different inbox.
+  const adminNotificationEmail = (
+    process.env.ADMIN_NOTIFICATION_EMAIL
+    || process.env.INTERNAL_ORDER_EMAIL
+    || DEFAULT_ADMIN_NOTIFICATION_EMAIL
+  ).trim();
+  const adminBaseUrl = (process.env.ADMIN_BASE_URL || DEFAULT_ADMIN_BASE_URL).replace(/\/+$/, '');
 
   const problems = [];
   if (!enabled) problems.push('disabled (EMAIL_ENABLED=false)');
@@ -74,8 +88,12 @@ function readEmailConfig() {
     from: `"${fromName}" <${fromAddress}>`,
     fromAddress,
     trackBaseUrl,
-    // Exposed for logging only — pass is deliberately OMITTED.
-    describe: `host=${host} port=${port} secure=${secure} user=${user ? '(set)' : '(missing)'}`,
+    adminNotificationEmail,
+    adminBaseUrl,
+    // Exposed for logging only — pass is deliberately OMITTED. The admin
+    // recipient is not a credential (it is documented in .env.example), so it is
+    // printed to make misrouting obvious in the server log.
+    describe: `host=${host} port=${port} secure=${secure} user=${user ? '(set)' : '(missing)'} adminTo=${adminNotificationEmail || '(missing)'}`,
     ok: problems.length === 0,
     problems,
     hasSecrets: Boolean(pass),
@@ -102,6 +120,30 @@ function safeMailError(error) {
   return message
     .replace(/pass(word)?=[^\s;]*/gi, 'pass=[redacted]')
     .slice(0, 200);
+}
+
+/**
+ * Read the notify block as it is actually stored on the order document.
+ *
+ * The dedup flags are the record of what has already been sent, so they have to
+ * come from the committed document — not from the object a caller happens to be
+ * holding. createOrder builds its post-commit order object fresh every time, so
+ * a guard that trusted it would always see "not sent yet" and a retried create
+ * would mail the customer and the store twice for one order. The stored block
+ * wins; the passed-in object is only a fallback when the document cannot be
+ * read (and a failed read must never block an order).
+ */
+async function readStoredNotify(orderRef, fallback) {
+  const base = fallback && typeof fallback === 'object' ? fallback : {};
+  if (!orderRef || typeof orderRef.get !== 'function') return base;
+  try {
+    const snap = await orderRef.get();
+    const stored = snap && snap.exists ? snap.data() : null;
+    const notify = stored && stored.notify;
+    return notify && typeof notify === 'object' ? { ...base, ...notify } : base;
+  } catch {
+    return base;
+  }
 }
 
 /**
@@ -194,7 +236,7 @@ async function sendOrderConfirmationEmail(
 async function maybeSendOrderConfirmationEmail(db, orderRef, order, { transporter } = {}) {
   const skipped = (reason, extra) => ({ ok: false, skipped: reason, ...(extra || {}) });
   try {
-    const notify = order.notify || {};
+    const notify = await readStoredNotify(orderRef, order.notify);
     if (notify.confirmationEmailSentAt) return skipped('already-sent');
 
     const to = order.customer?.email || order.userEmail || '';
@@ -277,7 +319,7 @@ async function sendStatusUpdateEmail(db, orderRef, order, targetStatus, { transp
     // land in the wrong inbox. Storefront orders never set source:'pos'.
     if (order.source === 'pos') return skipped('counter-sale');
 
-    const notify = order.notify || {};
+    const notify = await readStoredNotify(orderRef, order.notify);
     const prior = notify.statusEmails && notify.statusEmails[key];
     if (prior && prior.sentAt) return skipped('already-sent');
 
@@ -338,6 +380,39 @@ function internalDeliveryLines(order) {
 }
 
 /**
+ * Order date for the internal mail, rendered in IST so the store reads the same
+ * clock as its customers. Accepts a Firestore Timestamp (has toDate), a Date, or
+ * an ISO/parseable string. Returns '' when there is nothing usable — the caller
+ * then omits the row rather than inventing a date.
+ */
+function internalOrderDate(order) {
+  const raw = order.createdAt || order.orderDate || order.placedAt;
+  if (!raw) return '';
+  let date;
+  if (typeof raw.toDate === 'function') {
+    date = raw.toDate();                       // Firestore Timestamp
+  } else if (raw instanceof Date) {
+    date = raw;
+  } else {
+    date = new Date(String(raw));
+  }
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  try {
+    return date.toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return date.toISOString();
+  }
+}
+
+/**
  * ONE internal new-order notification to the store after commit. Guarded by
  * notify.internalNewOrderEmailSentAt so retried creates never double-notify.
  * Never throws; never mails the customer.
@@ -345,7 +420,7 @@ function internalDeliveryLines(order) {
 async function maybeSendInternalNewOrderEmail(db, orderRef, order, { transporter } = {}) {
   const skipped = (reason, extra) => ({ ok: false, skipped: reason, ...(extra || {}) });
   try {
-    const notify = order.notify || {};
+    const notify = await readStoredNotify(orderRef, order.notify);
     if (notify.internalNewOrderEmailSentAt) return skipped('already-sent');
 
     const config = readEmailConfig();
@@ -355,13 +430,13 @@ async function maybeSendInternalNewOrderEmail(db, orderRef, order, { transporter
       return skipped('unconfigured', { error: config.problems.join(', ') });
     }
 
-    const to = (process.env.INTERNAL_ORDER_EMAIL || DEFAULT_INTERNAL_ORDER_EMAIL).trim();
+    const to = config.adminNotificationEmail;
     if (!isValidRecipient(to)) return skipped('no-recipient');
 
     const items = Array.isArray(order.items) ? order.items : [];
     const quantity = items.reduce((n, item) => n + (Number(item.quantity) || 0), 0);
     const code = String(order.shortCode || '').toUpperCase();
-    const adminBase = (process.env.ADMIN_BASE_URL || DEFAULT_ADMIN_BASE_URL).replace(/\/+$/, '');
+    const adminBase = config.adminBaseUrl;
     const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const delivery = internalDeliveryLines(order);
     const payload = {
@@ -372,6 +447,7 @@ async function maybeSendInternalNewOrderEmail(db, orderRef, order, { transporter
       quantity,
       total: order.total ?? 0,
       paymentMethod: order.paymentMode || order.paymentStatus || 'Cash on Delivery',
+      orderDate: internalOrderDate(order),
       deliveryLines: esc(delivery).replace(/, /g, '<br>'),
       deliveryText: delivery,
       viewOrderUrl: `${adminBase}/orders/${orderRef.id}`,
@@ -435,6 +511,8 @@ module.exports = {
   maybeSendInternalNewOrderEmail,
   statusEmailKey,
   orderPaymentNote,
+  internalOrderDate,
+  internalDeliveryLines,
   isValidRecipient,
   safeMailError,
 };
