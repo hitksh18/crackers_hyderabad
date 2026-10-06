@@ -46,7 +46,14 @@ const CategoryPicker = ({ options, selected, onToggle, invalid = false, describe
             <label
               key={entry.value}
               title={entry.name}
-              className="flex min-h-[44px] cursor-pointer items-center gap-2 rounded-[var(--r-sm)] border px-2.5 py-2 transition-colors hover:border-[var(--ember-600)]"
+              /* `relative` is load-bearing: the real checkbox is `sr-only`, which
+                 is absolutely positioned. Without a positioned ancestor it
+                 resolved against <body>, so focusing it scrolled the whole
+                 document — while the form already scrolls inside .admin-main —
+                 and the app root slid up out of view, leaving the page
+                 background showing. Anchoring it to the card keeps the focus
+                 rectangle inside its own card. */
+              className="relative flex min-h-[44px] cursor-pointer items-center gap-2 rounded-[var(--r-sm)] border px-2.5 py-2 transition-colors hover:border-[var(--ember-600)]"
               style={{
                 background: isOn ? 'rgba(195, 58, 20, 0.10)' : 'var(--surface-card)',
                 borderColor: isOn
