@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import { pinOf, navUrlFor, formatCoords, QR_LABEL } from './deliveryLocation';
 import { qrMatrix } from './qr';
 import { LOGO_PNG_DATA_URL, MONEY_FONT_REGULAR_BASE64, MONEY_FONT_BOLD_BASE64 } from './invoiceAssets';
+import { orderIdOf } from '../lib/orderId';
 
 // Print palette, matched to the on-screen brand tokens in src/index.css.
 // jsPDF wants RGB triples, so these are the literal channel values.
@@ -129,9 +130,12 @@ export const generateInvoicePDF = (order, customerInfo, options = {}) => {
      address block, as the old layout did, invented a destination. */
   const isCounterSale = order.source === 'pos';
 
-  const orderId = order.orderId || order.id || 'N/A';
-  const displayOrderId = orderId.length > 6 ? orderId.slice(-6).toUpperCase() : orderId.toUpperCase();
-  const trackingId = order.shortCode ? `#${order.shortCode.toUpperCase()}` : `#${displayOrderId}`;
+  /* The canonical Order ID, exactly as the server minted it. The old code derived
+     a display id by slicing the last six characters of the Firestore document
+     id — a truncated internal id, not an order number — and only used shortCode
+     when it happened to be set. Now there is one id and it is printed whole, so
+     the invoice, the tracking link and the customer's confirmation all agree. */
+  const trackingId = `#${orderIdOf(order) || 'N/A'}`;
 
   /* Admin screens hand over a Firestore Timestamp; the tracking page gets its
      order from /api/orders/track, where createdAt is an ISO string. Accept both
@@ -471,7 +475,8 @@ export const generateInvoicePDF = (order, customerInfo, options = {}) => {
 
   if (discount) {
     const pct = Number(order.discountPercent) > 0 ? ` (${Number(order.discountPercent)}%)` : '';
-    text(`Discount${pct}`, labelX + 4, y, { size: 9, color: GREEN });
+    const couponCode = String(order.coupon?.code || '').trim().toUpperCase();
+    text(`Discount${couponCode ? ` (${couponCode})` : pct}`, labelX + 4, y, { size: 9, color: GREEN });
     amount(discount, RIGHT - 4, y, { size: 9, color: GREEN, prefix: '- ' });
     y += 7;
   }
@@ -616,9 +621,7 @@ export const generateInvoicePDFBlob = (order, customerInfo, options = {}) => {
 
 export const downloadInvoicePDF = (order, customerInfo, options = {}) => {
   const doc = generateInvoicePDF(order, customerInfo, options);
-  const orderId = order.orderId || order.id || 'ORDER';
-  const displayOrderId = orderId.length > 6 ? orderId.slice(-6).toUpperCase() : orderId.toUpperCase();
-  doc.save(`Invoice_${(order.shortCode || displayOrderId)}.pdf`);
+  doc.save(`Invoice_${orderIdOf(order) || 'ORDER'}.pdf`);
 };
 
 export const printInvoicePDF = (order, customerInfo, options = {}) => {

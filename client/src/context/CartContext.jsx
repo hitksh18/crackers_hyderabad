@@ -3,6 +3,11 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import { trackFunnel } from '../utils/siteTracker';
+import toast from '../utils/toast';
+
+const couponDroppedNotice = () => {
+  toast.error('The applied coupon no longer fits this cart and was removed.');
+};
 
 const GUEST_KEY = 'cart_guest';
 const LEGACY_KEY = 'cart';
@@ -18,6 +23,17 @@ export const useCart = () => {
 };
 
 const storageKeyFor = (user) => (user ? `cart_${user.uid}` : GUEST_KEY);
+const COUPON_SESSION_KEY = 'coupon_code';
+
+/* Read a stored coupon code without trusting anything else about it — amounts
+   are always revalidated server-side before display or order creation. */
+const readStoredCouponCode = () => {
+  try {
+    return String(sessionStorage.getItem(COUPON_SESSION_KEY) || '').trim();
+  } catch {
+    return '';
+  }
+};
 
 const readStoredCart = (key) => {
   try {
@@ -158,12 +174,163 @@ export const CartProvider = ({ children }) => {
 
   const clearCart = () => {
     setCart([]);
+    clearCouponState();
     try {
       localStorage.removeItem(storageKeyRef.current);
     } catch {
       // Nothing to clean up if storage is unavailable.
     }
   };
+
+  /*
+   * Shared applied-coupon state — the single authority for Cart and Checkout.
+   * Only the CODE is stored (sessionStorage, this tab only); every amount is
+   * revalidated through POST /api/coupons/validate and the server re-checks
+   * again at order creation, so a stale or tampered value can never change
+   * what is paid. Applying never consumes usage — only a created order does.
+   */
+  const [coupon, setCoupon] = useState(null);
+  const [couponInput, setCouponInput] = useState('');
+  const [couponError, setCouponError] = useState('');
+  const [couponApplying, setCouponApplying] = useState(false);
+
+  const clearCouponState = () => {
+    setCoupon(null);
+    setCouponInput('');
+    setCouponError('');
+    try {
+      sessionStorage.removeItem(COUPON_SESSION_KEY);
+    } catch {
+      // Storage unavailable — in-memory state still clears.
+    }
+  };
+
+  const unitPriceOf = (item) => item.discountPrice || item.onlinePrice || item.price || 0;
+
+  /*
+   * Instant local re-estimate of an applied coupon against the CURRENT cart.
+   * Same arithmetic the server uses (percentage with cap, fixed clamped to
+   * the subtotal). This is display-only: the silent server revalidation
+   * below stays authoritative and corrects any approximation (e.g. product
+   * restrictions the estimate cannot see). Dropping is exact — eligible
+   * value can never exceed the raw subtotal, so raw subtotal below minimum
+   * means the server would drop it too.
+   */
+  const estimateCouponTotals = (applied, items) => {
+    const subtotal = Math.round(items.reduce((s, it) => s + unitPriceOf(it) * (Number(it.quantity) || 0), 0) * 100) / 100;
+    const minimum = Number(applied.minimumOrderValue) || 0;
+    if (subtotal <= 0 || subtotal < minimum) return null;
+    let amount;
+    if (applied.discountType === 'percentage') {
+      const pct = Math.min(100, Math.max(0, Number(applied.discountValue) || 0));
+      amount = (subtotal * pct) / 100;
+      if (applied.maximumDiscount != null) amount = Math.min(amount, Number(applied.maximumDiscount));
+    } else {
+      amount = Math.min(Math.max(0, Number(applied.discountValue) || 0), subtotal);
+    }
+    amount = Math.round(amount * 100) / 100;
+    if (amount <= 0) return null;
+    return { subtotal, discountAmount: amount, total: Math.round((subtotal - amount) * 100) / 100 };
+  };
+
+  const validateCouponCode = async (code, { silent = false, email, phone } = {}) => {
+    const trimmed = String(code || '').trim();
+    if (!trimmed) {
+      if (!silent) setCouponError('Enter a coupon code.');
+      return null;
+    }
+    setCouponApplying(true);
+    if (!silent) setCouponError('');
+    try {
+      const response = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: trimmed,
+          items: cart.map((item) => ({ id: item.id, quantity: item.quantity })),
+          ...(email ? { email } : {}),
+          ...(phone ? { phone } : {}),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.valid) {
+        if (!silent) setCouponError(data.message || 'This coupon code is not valid.');
+        return null;
+      }
+      return {
+        code: data.code,
+        discountType: data.discountType,
+        discountValue: data.discountValue,
+        discountAmount: data.discountAmount,
+        minimumOrderValue: Number(data.minimumOrderValue) || 0,
+        maximumDiscount: data.maximumDiscount ?? null,
+        subtotal: data.subtotal,
+        total: data.total,
+      };
+    } catch {
+      if (!silent) setCouponError('Could not validate the coupon. Please try again.');
+      return null;
+    } finally {
+      setCouponApplying(false);
+    }
+  };
+
+  const applyCoupon = async (code, options = {}) => {
+    const applied = await validateCouponCode(code ?? couponInput, options);
+    if (!applied) {
+      setCoupon(null);
+      return null;
+    }
+    setCoupon(applied);
+    setCouponInput(applied.code);
+    try {
+      sessionStorage.setItem(COUPON_SESSION_KEY, applied.code);
+    } catch {
+      // Storage unavailable — the coupon still applies for this page.
+    }
+    return applied;
+  };
+
+  const removeCoupon = () => {
+    clearCouponState();
+  };
+
+  /* Cart edits re-resolve the coupon in two steps: an instant local
+     re-estimate so every +/- updates totals synchronously, then the silent
+     server revalidation (authoritative — restores or drops as needed). */
+  const cartSignature = cart.map((item) => `${item.id}:${item.quantity}`).join('|');
+  useEffect(() => {
+    if (!hydrated) return undefined;
+    if (cart.length === 0) {
+      if (coupon) setCoupon(null);
+      return undefined;
+    }
+    const stored = coupon?.code || readStoredCouponCode();
+    if (!stored) return undefined;
+    if (coupon) {
+      const estimate = estimateCouponTotals(coupon, cart);
+      if (!estimate) {
+        setCoupon(null);
+        couponDroppedNotice();
+      } else {
+        setCoupon({ ...coupon, ...estimate });
+      }
+    }
+    let cancelled = false;
+    validateCouponCode(stored, { silent: true }).then((fresh) => {
+      if (cancelled) return;
+      if (fresh) {
+        setCoupon(fresh);
+      } else if (coupon) {
+        setCoupon(null);
+        couponDroppedNotice();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, cartSignature]);
 
   const getCartTotal = () =>
     cart.reduce((total, item) => {
@@ -191,6 +358,15 @@ export const CartProvider = ({ children }) => {
     clearCart,
     getCartTotal,
     getCartCount,
+    coupon,
+    couponInput,
+    setCouponInput,
+    couponError,
+    setCouponError,
+    couponApplying,
+    validateCouponCode,
+    applyCoupon,
+    removeCoupon,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

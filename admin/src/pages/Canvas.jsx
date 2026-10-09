@@ -1,55 +1,40 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, getDocs, getDoc, doc, setDoc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDoc, doc, setDoc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { cachedGetDocs, cachedGetDoc, invalidateCache } from '../lib/firestoreCache';
 import {
-  ExternalLink,
   GripVertical,
   Image as ImageIcon,
   Loader2,
   Mail,
-  MapPin,
   Pencil,
   Phone,
   Plus,
-  Save,
   Trash2,
 } from 'lucide-react';
-import AdminHeader from '../components/admin/AdminHeader';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import toast from '../utils/toast';
 import { uploadImage } from '../utils/uploadImage';
 import { isLocalOnlyUrl } from '../utils/storageUrls';
-import { readHomepageConfig, saveHomepageConfig, defaultHeroBanner, defaultPromoCard, defaultSecondaryBanner, defaultProductBanner, DEFAULT_HERO_BANNERS, DEFAULT_PROMO_CARDS } from '../lib/homepage';
+import { readHomepageConfig, saveHomepageConfig, defaultSecondaryBanner, defaultProductBanner, DEFAULT_HERO_BANNERS, DEFAULT_PROMO_CARDS } from '../lib/homepage';
 import { readBuilderConfig, saveSections, moveSection, duplicateSection, BANNER_SECTION_TEMPLATE } from '../lib/homepageBuilder';
 import { readSiteSettings, saveSiteSettings, announcementTexts } from '../lib/siteSettings';
 import { resolveTrustCards, defaultTrustCards } from '../lib/trustIcons';
 import { categoryDefs } from '../components/home/homeData';
-import StorefrontHero from '../components/home/StorefrontHero';
-import CategoryShowcase from '../components/home/CategoryShowcase';
-import FeaturedSection from '../components/home/FeaturedSection';
-import HomeProductRail from '../components/home/HomeProductRail';
-import DealsSection from '../components/home/DealsSection';
-import PromoSection from '../components/home/PromoSection';
-import SecondaryBannerGrid from '../components/home/SecondaryBannerGrid';
-import ProductBannerGrid from '../components/home/ProductBannerGrid';
-import TrustSection from '../components/home/TrustSection';
-import NewsletterBlock from '../components/home/NewsletterBlock';
-import TrackOrderBlock from '../components/home/TrackOrderBlock';
-import WholesaleSection from '../components/home/WholesaleSection';
-import Footer from '../components/Footer';
 import { TopBannerPreview } from '../components/TopBanner';
 import {
-  SectionTabs,
   WorkspaceHead,
-  EditorPane,
   DeviceToggle,
-  PreviewFrame,
   Field,
   Toggle,
   RowMenu,
 } from '../components/admin/homepage/CanvasChrome';
 import { BannerModal, DealModal, TrustModal } from '../components/admin/homepage/CanvasModals';
+import { useCanvasHistory } from '../components/admin/canvas/CanvasHistory';
+import CanvasToolbar from '../components/admin/canvas/CanvasToolbar';
+import CanvasSidebar from '../components/admin/canvas/CanvasSidebar';
+import HomepagePreview from '../components/admin/canvas/HomepagePreview';
 import '../components/admin/homepage/canvas.css';
 
 /* ---------- section navigation (the ONLY navigation) ---------- */
@@ -57,17 +42,16 @@ import '../components/admin/homepage/canvas.css';
 const CANVAS_SECTIONS = [
   { id: 'hero', label: 'Hero' },
   { id: 'messages', label: 'Messages' },
-  { id: 'stable', label: 'Stable Message' },
   { id: 'sections', label: 'Sections' },
   { id: 'categories', label: 'Categories' },
-  { id: 'products', label: 'Products' },
+  { id: 'featured', label: 'Featured Products' },
+  { id: 'bestSellers', label: 'Best Sellers' },
   { id: 'promos', label: 'Banners' },
   { id: 'deals', label: 'Deals' },
   { id: 'trust', label: 'Trust' },
   { id: 'newsletter', label: 'Newsletter' },
   { id: 'wholesale', label: 'Wholesale' },
   { id: 'footer', label: 'Footer' },
-  { id: 'admin', label: 'Admin' },
 ];
 
 /* ---------- defaults (mirror the public homepage fallbacks) ---------- */
@@ -90,14 +74,9 @@ const FOOTER_DEFAULTS = {
   location: '',
 };
 
-const HERO_MAX = 5;
 const SECONDARY_MAX = 10;
 const MSG_MAX = 5;
 const MSG_MIN_ENABLED = 2;
-
-const heroImageOf = (b) => b?.imageDesktop || b?.image || null;
-
-const maxOrAll = (arr, n) => (n && n > 0 ? arr.slice(0, n) : arr);
 
 const byAdminOrder = (a, b) =>
   (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999) ||
@@ -112,7 +91,22 @@ export default function HomepageBuilder() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [active, setActive] = useState('hero');
-  const [draft, setDraft] = useState(null);
+  /* Undo/redo wraps the single draft setter, so every existing edit site
+     (patchText / patchSite / setBuilderEnabled / moveSection / …) is captured
+     without any of them changing. See components/admin/canvas/CanvasHistory.js */
+  const {
+    draft,
+    setDraft,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    reset: resetHistory,
+  } = useCanvasHistory(null);
+
+  /* Editor chrome state: 'edit' shows the controls + live preview,
+     'preview' shows the site alone, exactly as a visitor sees it. */
+  const [editorMode, setEditorMode] = useState('edit');
   const [savedJson, setSavedJson] = useState('');
   const [products, setProducts] = useState([]);
   const [modes, setModes] = useState({});
@@ -121,7 +115,10 @@ export default function HomepageBuilder() {
   const [trustModal, setTrustModal] = useState(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const [faviconUploading, setFaviconUploading] = useState(false);
-  const [newsletterTest, setNewsletterTest] = useState('');
+  /* Legacy settings/homepage document (bannerImageUrl). The public homepage
+     reads it; no Canvas editor owns it yet, so it is loaded read-only for
+     preview parity and never written by save. */
+  const [bannerDoc, setBannerDoc] = useState(null);
   const origCollections = useRef({ promos: [], deals: [] });
   const dragRef = useRef(null);
   const [dropTarget, setDropTarget] = useState(null);
@@ -133,40 +130,42 @@ export default function HomepageBuilder() {
       setLoading(true);
       try {
         const [
-          productsSnap, promoSnap, dealsSnap, catSnap, builder, site, homepage, footerSnap,
+          products, promoDocs, dealDocs, catSnap, builder, site, homepage, footerSnap, bannerSnap,
         ] = await Promise.all([
-          getDocs(collection(db, 'products')).catch(() => ({ docs: [] })),
-          getDocs(collection(db, 'promotionalBanners')).catch(() => ({ docs: [] })),
-          getDocs(collection(db, 'festiveDeals')).catch(() => ({ docs: [] })),
-          getDoc(doc(db, 'settings', 'categoryShowcase')).catch(() => null),
+          cachedGetDocs(collection(db, 'products'), 'products').catch(() => []),
+          cachedGetDocs(collection(db, 'promotionalBanners'), 'promotionalBanners').catch(() => []),
+          cachedGetDocs(collection(db, 'festiveDeals'), 'festiveDeals').catch(() => []),
+          cachedGetDoc(doc(db, 'settings', 'categoryShowcase')).catch(() => null),
           readBuilderConfig().catch(() => null),
           readSiteSettings().catch(() => null),
           readHomepageConfig().catch(() => null),
-          getDoc(doc(db, 'footerSettings', 'main')).catch(() => null),
+          cachedGetDoc(doc(db, 'footerSettings', 'main')).catch(() => null),
+          cachedGetDoc(doc(db, 'settings', 'homepage')).catch(() => null),
         ]);
 
-        setProducts(productsSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setProducts(products);
+        if (bannerSnap) setBannerDoc(bannerSnap);
 
-        const promos = promoSnap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
+        const promos = [...promoDocs]
           .sort((a, b) => (b.order || 0) - (a.order || 0));
-        const deals = dealsSnap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
+        const deals = [...dealDocs]
           .sort((a, b) => (b.order || 0) - (a.order || 0));
         origCollections.current = {
           promos: JSON.parse(JSON.stringify(promos)),
           deals: JSON.parse(JSON.stringify(deals)),
         };
 
-        const catData = catSnap && catSnap.exists() ? catSnap.data() : {};
-        const footData = footerSnap && footerSnap.exists() ? footerSnap.data() : {};
+        const catData = catSnap || {};
+        /* Strip the cache envelope id — footerSettings must keep exactly the
+           fields the footer reads. */
+        const footData = footerSnap ? { ...footerSnap } : {};
+        delete footData.id;
 
         const next = {
           homepage: {
             ...(homepage || {}),
             heroBanners: [...(homepage?.heroBanners || [])]
-              .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-              .slice(0, HERO_MAX),
+              .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
             promoCards: [...(homepage?.promoCards || [])],
             secondaryBanners: [...(homepage?.secondaryBanners || [])]
               .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
@@ -188,7 +187,9 @@ export default function HomepageBuilder() {
         const known = new Set(next.showcase.order);
         categoryDefs.forEach((c) => { if (!known.has(c.slug)) next.showcase.order.push(c.slug); });
 
-        setDraft(next);
+        /* resetHistory, not setDraft: loading the stored configuration is the
+           starting point, not an edit the admin should be able to Undo back. */
+        resetHistory(next);
         setSavedJson(JSON.stringify(next));
         if (import.meta.env.DEV) {
           console.log('[canvas] settings/homepageConfig loaded:', {
@@ -209,7 +210,7 @@ export default function HomepageBuilder() {
       }
     };
     load();
-  }, []);
+  }, [resetHistory]);
 
   const dirty = !!draft && JSON.stringify(draft) !== savedJson;
   const modeOf = (key) => modes[key] || 'desktop';
@@ -292,7 +293,12 @@ export default function HomepageBuilder() {
     await Promise.all(jobs);
   };
 
-  const handleSave = async () => {
+  /* `status` selects draft vs publish. It is read defensively because this
+     handler is also reachable as a plain onClick, where the first argument is a
+     click event. */
+  const handleSave = async ({ status: wanted } = {}) => {
+    const publishStatus =
+      wanted === 'draft' ? 'draft' : wanted === 'published' ? 'published' : null;
     if (!draft || saving) return;
     setSaving(true);
     setSaveError('');
@@ -316,24 +322,8 @@ export default function HomepageBuilder() {
       }
 
       if (changed('homepage')) {
-        const heroOn = (draft.builder?.sections || []).some((s) => s.type === 'hero' && s.enabled !== false);
-        const banners = draft.homepage.heroBanners || [];
-        if (banners.length > HERO_MAX) {
-          throw new Error(`Hero supports at most ${HERO_MAX} banners (has ${banners.length}). Delete extras before saving.`);
-        }
-        const local = banners.filter((b) => isLocalOnlyUrl(heroImageOf(b)));
-        if (local.length > 0) {
-          throw new Error(
-            `${local.length} hero banner(s) use local-only image URLs that cannot load on the public site. Re-upload them to permanent storage before saving.`
-          );
-        }
-        if (heroOn) {
-          const valid = banners.filter((b) => b.enabled !== false && heroImageOf(b));
-          if (valid.length === 0) {
-            throw new Error('Hero is enabled but has no valid banner. Upload at least one banner or disable Hero.');
-          }
-        }
-
+        /* Hero copy (heroCopy) is plain text — nothing to validate. Legacy
+           heroBanners/promoCards ride along untouched for data preservation. */
         const secondary = draft.homepage.secondaryBanners || [];
         if (secondary.length > SECONDARY_MAX) {
           throw new Error(`Secondary banners support at most ${SECONDARY_MAX} (has ${secondary.length}). Delete extras before saving.`);
@@ -387,7 +377,7 @@ export default function HomepageBuilder() {
       await Promise.all([
         labeled(
           'homepage configuration (settings/homepageConfig)',
-          saveHomepageConfig(draft.homepage, { status: draft.homepage.status || 'published', userEmail: user?.email })
+          saveHomepageConfig(draft.homepage, { status: publishStatus || draft.homepage.status || 'published', userEmail: user?.email })
         ),
         labeled('section order (settings/homepageBuilder)', saveSections(draft.builder.sections, user?.email)),
         labeled('site settings (settings/siteSettings)', saveSiteSettings(draft.site, { userEmail: user?.email })),
@@ -441,8 +431,13 @@ export default function HomepageBuilder() {
         deals: JSON.parse(JSON.stringify(freshDeals)),
       };
       const saved = { ...draft, promos: freshPromos, deals: freshDeals };
-      setDraft(saved);
+      /* The saved state becomes the new baseline: history restarts from here so
+         Undo can never walk the admin back past what is already published.
+         The shared read cache is cleared too, so Dashboard and a reopened
+         Canvas re-read what was just written. */
+      resetHistory(saved);
       setSavedJson(JSON.stringify(saved));
+      invalidateCache();
       toast.success('Saved Successfully');
     } catch (e) {
       console.error('[canvas] save failed:', e);
@@ -535,111 +530,50 @@ export default function HomepageBuilder() {
   }));
   const patchSite = (patch) => setDraft((d) => ({ ...d, site: { ...d.site, ...patch } }));
   const patchBar = (patch) => setDraft((d) => ({ ...d, site: { ...d.site, announcementBar: { ...d.site.announcementBar, ...patch } } }));
-  const patchStable = (patch) => setDraft((d) => ({ ...d, site: { ...d.site, stableMessage: { ...d.site.stableMessage, ...patch } } }));
+  const patchHeroCopy = (patch) => setDraft((d) => ({
+    ...d,
+    homepage: { ...d.homepage, heroCopy: { ...(d.homepage.heroCopy || {}), ...patch } },
+  }));
   const moveBuilderSection = (id, dir) => setDraft((d) => ({
     ...d, builder: { ...d.builder, sections: moveSection(d.builder.sections, id, dir) },
   }));
 
   /* ================= section workspaces ================= */
 
-  const heroFull = heroBanners.length >= HERO_MAX;
+  const heroCopy = draft?.homepage?.heroCopy || {};
 
   const editors = {
     hero: (
       <>
-        <WorkspaceHead title="Hero Section" desc="Manage the main homepage hero banners." enabled={sectionEnabled('hero')} />
+        <WorkspaceHead title="Hero" desc="Main headline, subheading and the call-to-action button." enabled={sectionEnabled('hero')} />
         <Field>
           <Toggle checked={sectionEnabled('hero')} onChange={(v) => setBuilderEnabled('hero', v)} label="Enabled" />
         </Field>
-        <Field label="Auto rotate (seconds)" hint="3 – 12 seconds.">
-          <input
-            type="number" min={3} max={12} className="cv-input"
-            value={draft.homepage.carouselDurationSec || 5}
-            onChange={(e) => patchHomepage({ carouselDurationSec: Math.max(3, Math.min(12, Number(e.target.value) || 5)) })}
-          />
+        <Field label="Eyebrow">
+          <input className="cv-input" value={heroCopy.eyebrow || ''} onChange={(e) => patchHeroCopy({ eyebrow: e.target.value })} placeholder="PREMIUM FIREWORKS STORE" />
         </Field>
-        <p className="cv-label" style={{ marginTop: 12 }}>Banners · {heroBanners.length} / {HERO_MAX}</p>
-        <div className="cv-rows">
-          {heroBanners.map((b, i) => (
-            <div
-              key={b.id || i}
-              className={`cv-row${b.enabled === false ? ' is-disabled' : ''}${dropTarget === `hero:${i}` ? ' is-over' : ''}`}
-              {...dnd('hero', i, (from, to) => moveInDraft(
-                (d) => d.homepage.heroBanners,
-                (d, list) => ({ ...d, homepage: { ...d.homepage, heroBanners: list.map((x, n) => ({ ...x, order: n })) } }),
-                from, to
-              ))}
-            >
-              <span className="cv-drag"><GripVertical aria-hidden="true" /></span>
-              {(b.imageDesktop || b.image) && <img src={b.imageDesktop || b.image} alt="" className="cv-row-thumb" />}
-              <div className="cv-row-main">
-                <p className="cv-row-title">Banner {i + 1} · {b.alt || b.heading || 'Untitled'}</p>
-                <p className="cv-row-sub">{b.enabled === false ? 'Disabled' : 'Active'}{b.imageMobile ? ' · has mobile image' : ''}</p>
-                {isLocalOnlyUrl(heroImageOf(b)) && (
-                  <p className="cv-row-sub" style={{ color: 'var(--delta-down)', fontWeight: 700 }}>
-                    Local-only image — will NOT load on the public site
-                  </p>
-                )}
-              </div>
-              <div className="cv-row-actions">
-                <button type="button" className="cv-icon-btn" aria-label={`Edit Banner ${i + 1}`} onClick={() => setBannerModal({ mode: 'hero', title: `Edit Banner ${i + 1}`, initial: b, index: i })}>
-                  <Pencil aria-hidden="true" />
-                </button>
-                <RowMenu
-                  onMoveUp={() => moveInDraft((d) => d.homepage.heroBanners, (d, list) => ({ ...d, homepage: { ...d.homepage, heroBanners: list } }), i, i - 1)}
-                  onMoveDown={() => moveInDraft((d) => d.homepage.heroBanners, (d, list) => ({ ...d, homepage: { ...d.homepage, heroBanners: list } }), i, i + 1)}
-                  onDelete={() => { if (confirm(`Delete Banner ${i + 1}?`)) setDraft((d) => ({ ...d, homepage: { ...d.homepage, heroBanners: d.homepage.heroBanners.filter((_, n) => n !== i) } })); }}
-                  onDuplicate={() => {
-                    if (heroFull) { toast.error(`Maximum ${HERO_MAX} hero banners.`); return; }
-                    setDraft((d) => {
-                      const list = [...d.homepage.heroBanners];
-                      list.splice(i + 1, 0, { ...list[i], id: uid('hb') });
-                      return { ...d, homepage: { ...d.homepage, heroBanners: list.slice(0, HERO_MAX).map((x, n) => ({ ...x, order: n })) } };
-                    });
-                  }}
-                />
-              </div>
-            </div>
-          ))}
+        <div className="cv-row2">
+          <Field label="Title — line 1">
+            <input className="cv-input" value={heroCopy.titleA || ''} onChange={(e) => patchHeroCopy({ titleA: e.target.value })} placeholder="Crackers" />
+          </Field>
+          <Field label="Title — line 2">
+            <input className="cv-input" value={heroCopy.titleB || ''} onChange={(e) => patchHeroCopy({ titleB: e.target.value })} placeholder="Hyderabad" />
+          </Field>
         </div>
-        <button
-          type="button" className="cv-add-btn" disabled={heroFull}
-          style={heroFull ? { opacity: 0.5, cursor: 'default' } : undefined}
-          onClick={() => setBannerModal({ mode: 'hero', title: 'Upload Banner', initial: null, index: -1 })}
-        >
-          <Plus aria-hidden="true" /> {heroFull ? `Maximum ${HERO_MAX} / ${HERO_MAX} banners` : 'Upload Banner'}
-        </button>
-        {heroBanners.some((b) => isLocalOnlyUrl(heroImageOf(b))) && (
-          <p className="cv-error" style={{ marginTop: 8 }}>
-            One or more banners use a local-only image URL (API disk fallback — Firebase Storage
-            unreachable). They preview here but will NOT load on the public homepage. Re-upload
-            after fixing Storage, or replace with a public image URL.
-          </p>
-        )}
-
-        <p className="cv-label" style={{ marginTop: 14 }}>Side promo cards (2 slots)</p>
-        <div className="cv-rows">
-          {[0, 1].map((slot) => {
-            const card = promoCards[slot];
-            return (
-              <div key={slot} className={`cv-row${card?.enabled === false ? ' is-disabled' : ''}`}>
-                {(card?.imageDesktop || card?.image) && <img src={card.imageDesktop || card.image} alt="" className="cv-row-thumb" />}
-                <div className="cv-row-main">
-                  <p className="cv-row-title">{card?.alt || card?.heading || `Promo card ${slot + 1}`}</p>
-                  <p className="cv-row-sub">{card ? (card.enabled === false ? 'Disabled' : 'Active') : 'Empty slot'}</p>
-                </div>
-                <div className="cv-row-actions">
-                  <button type="button" className="cv-icon-btn" aria-label={`Edit promo card ${slot + 1}`} onClick={() => setBannerModal({ mode: 'card', title: `Promo card ${slot + 1}`, initial: card || null, index: slot })}>
-                    <Pencil aria-hidden="true" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+        <Field label="Subheading">
+          <input className="cv-input" value={heroCopy.sub || ''} onChange={(e) => patchHeroCopy({ sub: e.target.value })} placeholder="PREMIUM FIREWORKS • HYDERABAD" />
+        </Field>
+        <div className="cv-row2">
+          <Field label="Button text">
+            <input className="cv-input" value={heroCopy.ctaText || ''} onChange={(e) => patchHeroCopy({ ctaText: e.target.value })} placeholder="SHOP NOW" />
+          </Field>
+          <Field label="Button link">
+            <input className="cv-input" value={heroCopy.ctaLink || ''} onChange={(e) => patchHeroCopy({ ctaLink: e.target.value })} placeholder="/products" />
+          </Field>
         </div>
+        <p className="cv-note">The animated fireworks scene stays as designed — only the text above is editable here.</p>
       </>
     ),
-
     messages: (
       <>
         <WorkspaceHead title="Scrolling Message" desc="Scrolling messages above the navbar." enabled={announcementDraft.enabled !== false} />
@@ -713,21 +647,6 @@ export default function HomepageBuilder() {
             type="range" min={10} max={60} className="w-full"
             value={announcementDraft.speed || 30}
             onChange={(e) => patchBar({ speed: Number(e.target.value) })}
-          />
-        </Field>
-      </>
-    ),
-
-    stable: (
-      <>
-        <WorkspaceHead title="Stable Message" desc="Static message below the hero." enabled={draft.site?.stableMessage?.enabled !== false} />
-        <Field>
-          <Toggle checked={draft.site?.stableMessage?.enabled !== false} onChange={(v) => patchStable({ enabled: v })} label="Enabled" />
-        </Field>
-        <Field label="Stable Message">
-          <textarea
-            className="cv-textarea" rows={3} value={draft.site?.stableMessage?.text || ''}
-            onChange={(e) => patchStable({ text: e.target.value })}
           />
         </Field>
       </>
@@ -847,72 +766,47 @@ export default function HomepageBuilder() {
       </>
     ),
 
-    products: (
+    featured: (
       <>
-        <WorkspaceHead title="Products" desc="Featured rail and best-sellers rail." />
-        <ProductSectionEditor
-          texts={texts.featured} onText={(p) => patchText('featured', p)}
-          enabled={sectionEnabled('featured')} onEnabled={(v) => setBuilderEnabled('featured', v)}
-          showOrdering="Featured flag first, then admin order" paneTitle="Featured products"
-        />
-        <div style={{ height: 18 }} />
-        <ProductSectionEditor
-          texts={texts.bestSellers} onText={(p) => patchText('bestSellers', p)}
-          enabled={sectionEnabled('bestSellers')} onEnabled={(v) => setBuilderEnabled('bestSellers', v)}
-          showOrdering="Highest sales first" paneTitle="Best sellers"
-        />
-        <div style={{ height: 18 }} />
-        <WorkspaceHead title="Product Banners" desc="16:9 banners bound to catalogue products — clicking opens the product page." enabled={sectionEnabled('productBanners')} />
+        <WorkspaceHead title="Featured Products" desc="Heading for the handpicked rail. The products themselves come from the live catalogue." enabled={sectionEnabled('featured')} />
         <Field>
-          <Toggle checked={sectionEnabled('productBanners')} onChange={(v) => setBuilderEnabled('productBanners', v)} label="Enabled" />
+          <Toggle checked={sectionEnabled('featured')} onChange={(v) => setBuilderEnabled('featured', v)} label="Enabled" />
         </Field>
-        <div className="cv-rows">
-          {(draft.homepage.productBanners || []).map((b, i) => {
-            const target = (products || []).find((p) => p.id === b.productId);
-            return (
-              <div
-                key={b.id || i}
-                className={`cv-row${b.enabled === false ? ' is-disabled' : ''}${dropTarget === `pb:${i}` ? ' is-over' : ''}`}
-                {...dnd('pb', i, (from, to) => moveInDraft(
-                  (d) => d.homepage.productBanners,
-                  (d, list) => ({ ...d, homepage: { ...d.homepage, productBanners: list.map((x, n) => ({ ...x, order: n })) } }),
-                  from, to
-                ))}
-              >
-                <span className="cv-drag"><GripVertical aria-hidden="true" /></span>
-                {b.image && <img src={b.image} alt="" className="cv-row-thumb" />}
-                <div className="cv-row-main">
-                  <p className="cv-row-title">{b.productName || 'No product selected'}</p>
-                  <p className="cv-row-sub">
-                    {b.enabled === false ? 'Disabled · ' : ''}/product/{b.productSlug || b.productId || '…'}
-                    {target ? '' : ' · product missing from catalogue'}
-                  </p>
-                  {isLocalOnlyUrl(b.image) && (
-                    <p className="cv-row-sub" style={{ color: 'var(--delta-down)', fontWeight: 700 }}>
-                      Local-only image — will NOT load on the public site
-                    </p>
-                  )}
-                </div>
-                <div className="cv-row-actions">
-                  <button type="button" className="cv-icon-btn" aria-label="Edit product banner" onClick={() => setBannerModal({ mode: 'product', title: `Edit ${b.productName || 'product banner'}`, initial: b, index: i })}>
-                    <Pencil aria-hidden="true" />
-                  </button>
-                  <RowMenu
-                    onMoveUp={() => moveInDraft((d) => d.homepage.productBanners, (d, list) => ({ ...d, homepage: { ...d.homepage, productBanners: list } }), i, i - 1)}
-                    onMoveDown={() => moveInDraft((d) => d.homepage.productBanners, (d, list) => ({ ...d, homepage: { ...d.homepage, productBanners: list } }), i, i + 1)}
-                    onDelete={() => { if (confirm('Delete this product banner?')) setDraft((d) => ({ ...d, homepage: { ...d.homepage, productBanners: d.homepage.productBanners.filter((_, n) => n !== i) } })); }}
-                  />
-                </div>
-              </div>
-            );
-          })}
+        <div className="cv-row2">
+          <Field label="Eyebrow">
+            <input className="cv-input" value={texts.featured.eyebrow} onChange={(e) => patchText('featured', { eyebrow: e.target.value })} />
+          </Field>
+          <Field label="Title">
+            <input className="cv-input" value={texts.featured.title} onChange={(e) => patchText('featured', { title: e.target.value })} />
+          </Field>
         </div>
-        <button type="button" className="cv-add-btn" onClick={() => setBannerModal({ mode: 'product', title: 'Add Product Banner', initial: null, index: -1 })}>
-          <Plus aria-hidden="true" /> Add Product Banner
-        </button>
+        <Field label="Subtitle">
+          <input className="cv-input" value={texts.featured.subtitle} onChange={(e) => patchText('featured', { subtitle: e.target.value })} />
+        </Field>
+        <p className="cv-note">Products are automatic: featured flag first, then admin order. Manage them in Products.</p>
       </>
     ),
 
+    bestSellers: (
+      <>
+        <WorkspaceHead title="Best Sellers" desc="Heading for the top-rated rail. The ranking is calculated from real sales." enabled={sectionEnabled('bestSellers')} />
+        <Field>
+          <Toggle checked={sectionEnabled('bestSellers')} onChange={(v) => setBuilderEnabled('bestSellers', v)} label="Enabled" />
+        </Field>
+        <div className="cv-row2">
+          <Field label="Eyebrow">
+            <input className="cv-input" value={texts.bestSellers.eyebrow} onChange={(e) => patchText('bestSellers', { eyebrow: e.target.value })} />
+          </Field>
+          <Field label="Title">
+            <input className="cv-input" value={texts.bestSellers.title} onChange={(e) => patchText('bestSellers', { title: e.target.value })} />
+          </Field>
+        </div>
+        <Field label="Subtitle">
+          <input className="cv-input" value={texts.bestSellers.subtitle} onChange={(e) => patchText('bestSellers', { subtitle: e.target.value })} />
+        </Field>
+        <p className="cv-note">Products rank automatically by actual sales — there is no manual override. Resetting orders clears the ranking.</p>
+      </>
+    ),
     promos: (
       <>
         <WorkspaceHead title="Secondary Banners" desc="Independent strip below the hero (1–10, 16:9)." enabled={sectionEnabled('secondaryBanners')} />
@@ -1001,6 +895,56 @@ export default function HomepageBuilder() {
         </div>
         <button type="button" className="cv-add-btn" onClick={() => setBannerModal({ mode: 'promo', title: 'Add Promotional Banner', initial: null, index: -1 })}>
           <Plus aria-hidden="true" /> Add Banner
+        </button>
+
+        <div style={{ height: 18 }} />
+        <WorkspaceHead title="Product Banners" desc="16:9 banners bound to catalogue products — clicking opens the product page." enabled={sectionEnabled('productBanners')} />
+        <Field>
+          <Toggle checked={sectionEnabled('productBanners')} onChange={(v) => setBuilderEnabled('productBanners', v)} label="Enabled" />
+        </Field>
+        <div className="cv-rows">
+          {(draft.homepage.productBanners || []).map((b, i) => {
+            const target = (products || []).find((p) => p.id === b.productId);
+            return (
+              <div
+                key={b.id || i}
+                className={`cv-row${b.enabled === false ? ' is-disabled' : ''}${dropTarget === `pb:${i}` ? ' is-over' : ''}`}
+                {...dnd('pb', i, (from, to) => moveInDraft(
+                  (d) => d.homepage.productBanners,
+                  (d, list) => ({ ...d, homepage: { ...d.homepage, productBanners: list.map((x, n) => ({ ...x, order: n })) } }),
+                  from, to
+                ))}
+              >
+                <span className="cv-drag"><GripVertical aria-hidden="true" /></span>
+                {b.image && <img src={b.image} alt="" className="cv-row-thumb" />}
+                <div className="cv-row-main">
+                  <p className="cv-row-title">{b.productName || 'No product selected'}</p>
+                  <p className="cv-row-sub">
+                    {b.enabled === false ? 'Disabled · ' : ''}/product/{b.productSlug || b.productId || '…'}
+                    {target ? '' : ' · product missing from catalogue'}
+                  </p>
+                  {isLocalOnlyUrl(b.image) && (
+                    <p className="cv-row-sub" style={{ color: 'var(--delta-down)', fontWeight: 700 }}>
+                      Local-only image — will NOT load on the public site
+                    </p>
+                  )}
+                </div>
+                <div className="cv-row-actions">
+                  <button type="button" className="cv-icon-btn" aria-label="Edit product banner" onClick={() => setBannerModal({ mode: 'product', title: `Edit ${b.productName || 'product banner'}`, initial: b, index: i })}>
+                    <Pencil aria-hidden="true" />
+                  </button>
+                  <RowMenu
+                    onMoveUp={() => moveInDraft((d) => d.homepage.productBanners, (d, list) => ({ ...d, homepage: { ...d.homepage, productBanners: list } }), i, i - 1)}
+                    onMoveDown={() => moveInDraft((d) => d.homepage.productBanners, (d, list) => ({ ...d, homepage: { ...d.homepage, productBanners: list } }), i, i + 1)}
+                    onDelete={() => { if (confirm('Delete this product banner?')) setDraft((d) => ({ ...d, homepage: { ...d.homepage, productBanners: d.homepage.productBanners.filter((_, n) => n !== i) } })); }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <button type="button" className="cv-add-btn" onClick={() => setBannerModal({ mode: 'product', title: 'Add Product Banner', initial: null, index: -1 })}>
+          <Plus aria-hidden="true" /> Add Product Banner
         </button>
       </>
     ),
@@ -1136,7 +1080,7 @@ export default function HomepageBuilder() {
 
     footer: (
       <>
-        <WorkspaceHead title="Footer" desc="Contact and social columns." />
+        <WorkspaceHead title="Footer" desc="Contact column, brand logo and social links." />
         <Field label="Phone">
           <div className="relative">
             <Phone className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} aria-hidden="true" />
@@ -1159,46 +1103,9 @@ export default function HomepageBuilder() {
             placeholder="https://instagram.com/..."
           />
         </Field>
-        <p className="cv-note">Quick links and category columns follow the site navigation. Logo and favicon live under Admin.</p>
-      </>
-    ),
 
-    admin: (
-      <>
-        <WorkspaceHead title="Business Information" desc="Contact details and brand assets." />
-        <p className="cv-pane-title">Contact</p>
-        <div className="cv-row2">
-          <Field label="Phone Number">
-            <input className="cv-input" value={draft.footer.phone || ''} onChange={(e) => setDraft((d) => ({ ...d, footer: { ...d.footer, phone: e.target.value } }))} />
-          </Field>
-          <Field label="WhatsApp Number">
-            <input className="cv-input" value={draft.footer.whatsapp || ''} onChange={(e) => setDraft((d) => ({ ...d, footer: { ...d.footer, whatsapp: e.target.value } }))} placeholder="+91 ..." />
-          </Field>
-        </div>
-        <Field label="Email">
-          <input className="cv-input" value={draft.site?.contact?.email || ''} onChange={(e) => patchSite({ contact: { ...(draft.site?.contact || {}), email: e.target.value } })} />
-        </Field>
-        <Field label="Instagram">
-          <input
-            className="cv-input" value={draft.site?.socialLinks?.instagram || ''}
-            onChange={(e) => patchSite({ socialLinks: { ...(draft.site?.socialLinks || {}), instagram: e.target.value } })}
-            placeholder="https://instagram.com/..."
-          />
-        </Field>
-        <div className="cv-row2">
-          <Field label="Location">
-            <div className="relative">
-              <MapPin className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} aria-hidden="true" />
-              <input className="cv-input pl-9" value={draft.footer.location || ''} onChange={(e) => setDraft((d) => ({ ...d, footer: { ...d.footer, location: e.target.value } }))} placeholder="Hyderabad, Telangana" />
-            </div>
-          </Field>
-          <Field label="Address">
-            <input className="cv-input" value={draft.footer.address || ''} onChange={(e) => setDraft((d) => ({ ...d, footer: { ...d.footer, address: e.target.value } }))} />
-          </Field>
-        </div>
-
-        <p className="cv-pane-title" style={{ marginTop: 16 }}>Branding</p>
-        <Field label="Main Logo" hint="Navbar, footer, login. Uploading here never touches the favicon.">
+        <p className="cv-pane-title" style={{ marginTop: 16 }}>Brand logo</p>
+        <Field label="Main Logo" hint="Navbar and footer.">
           <div className="cv-upload-box">
             {draft.site?.branding?.logoUrl && (
               <img src={draft.site.branding.logoUrl} alt="Main logo preview" style={{ maxHeight: 64 }} />
@@ -1210,7 +1117,7 @@ export default function HomepageBuilder() {
             />
           </div>
         </Field>
-        <Field label="Favicon" hint="Browser tab icon only. Uploading here never touches the main logo.">
+        <Field label="Favicon" hint="Browser tab icon only.">
           <div className="cv-upload-box">
             {draft.site?.branding?.faviconUrl && (
               <img src={draft.site.branding.faviconUrl} alt="Favicon preview" style={{ maxHeight: 40 }} />
@@ -1229,226 +1136,156 @@ export default function HomepageBuilder() {
             />
           </div>
         </Field>
+        <p className="cv-note">Quick links and category columns follow the site navigation.</p>
       </>
     ),
   };
 
-  /* ================= previews (real components, draft data) ================= */
+  /* ================= live preview wiring (full homepage, draft data) =================
+     The preview renders the SAME section components in the SAME builder order
+     as the customer homepage (see HomepagePreview, which mirrors
+     client/src/pages/Home.jsx), driven by the draft above. Nothing here
+     fetches or persists — edits preview instantly from local draft state and
+     only reach Firestore through handleSave, exactly as before. */
 
-  const previews = {
-    hero: sectionEnabled('hero') ? (
-      <>
-        <StorefrontHero
-          banners={heroBanners.length > 0 ? heroBanners : DEFAULT_HERO_BANNERS}
-          cards={promoCards.length > 0 ? promoCards : DEFAULT_PROMO_CARDS}
-          durationSec={draft.homepage.carouselDurationSec} loading={false} mode={modeOf('hero')}
-        />
-        {heroBanners.length === 0 && (
-          <p className="cv-note" style={{ padding: '8px 2px 0' }}>No banners yet — showing defaults. Upload a banner to replace them.</p>
-        )}
-      </>
-    ) : <p className="cv-empty-preview">Hero is hidden on the homepage.</p>,
+  /* Active tab -> builder section types highlighted in the preview. */
+  const SELECTED_TYPES = {
+    hero: ['hero'],
+    messages: [],
+    sections: [],
+    categories: ['categories'],
+    featured: ['featured'],
+    bestSellers: ['bestSellers'],
+    promos: ['promoBanners', 'secondaryBanners', 'productBanners', 'bannerImage', 'banner'],
+    deals: ['festiveDeals'],
+    trust: ['trust'],
+    newsletter: ['newsletter'],
+    wholesale: ['wholesale'],
+    footer: ['footer'],
+  };
 
-    messages: (
-      <>
+  /* Sidebar status dots. `undefined` hides the dot — sections/footer have no
+     single on/off switch. */
+  const enabledById = {
+    hero: sectionEnabled('hero'),
+    messages: announcementDraft.enabled !== false,
+    sections: undefined,
+    categories: sectionEnabled('categories'),
+    featured: sectionEnabled('featured'),
+    bestSellers: sectionEnabled('bestSellers'),
+    promos: sectionEnabled('secondaryBanners') || sectionEnabled('promoBanners') || sectionEnabled('productBanners'),
+    deals: sectionEnabled('festiveDeals'),
+    trust: sectionEnabled('trust'),
+    newsletter: sectionEnabled('newsletter'),
+    wholesale: sectionEnabled('wholesale'),
+    footer: undefined,
+  };
+
+  /* Contextual strip above the full-page preview. */
+  const previewNotice = (
+    active === 'messages' ? (
+      <p className="cv-live-notice">Live in the TopBanner marquee above the navbar — visible on every page, not just Home.</p>
+    ) : active === 'sections' ? (
+      <p className="cv-live-notice">Click any section in the preview to jump to its settings.</p>
+    ) : null
+  );
+
+  /* Draft-only strips the public homepage does not render in place. The full
+     page below still matches the storefront exactly. */
+  const isolatedPreview = (
+    active === 'messages' ? (
+      <div className="cv-live-isolated">
         <TopBannerPreview messages={announcementPreviewTexts} enabled={announcementDraft.enabled !== false} />
         {(announcementDraft.enabled === false || announcementPreviewTexts.length === 0) && (
           <p className="cv-empty-preview">Announcement bar is hidden on the homepage.</p>
         )}
-      </>
-    ),
-
-    stable: draft.site?.stableMessage?.enabled !== false && draft.site?.stableMessage?.text ? (
-      <div style={{ borderTop: '1px solid rgba(210,166,79,0.22)', background: 'rgba(26,23,20,0.42)' }}>
-        <div className="px-4 py-3.5 text-center">
-          <p className="text-xs font-semibold sm:text-sm" style={{ fontFamily: 'var(--font-body)', color: 'var(--text-on-dark)' }}>
-            {draft.site.stableMessage.text}
-          </p>
-        </div>
       </div>
-    ) : <p className="cv-empty-preview">Stable message is hidden on the homepage.</p>,
+    ) : null
+  );
 
-    sections: (
-      <div className="cv-structure">
-        {orderedSections.filter((s) => s.enabled !== false).map((s, i) => (
-          <div key={s.id} className="cv-structure-row is-on">
-            <span className="tabular" style={{ color: 'var(--text-subtle)', fontSize: 11 }}>{String(i + 1).padStart(2, '0')}</span>
-            {s.label}
-          </div>
-        ))}
-        {orderedSections.filter((s) => s.enabled !== false).length === 0 && (
-          <p className="cv-empty-preview">All sections are disabled.</p>
-        )}
-        {orderedSections.some((s) => s.enabled === false) && (
-          <p className="cv-note" style={{ marginTop: 8 }}>
-            Hidden: {orderedSections.filter((s) => s.enabled === false).map((s) => s.label).join(', ')}
-          </p>
-        )}
-      </div>
-    ),
 
-    categories: sectionEnabled('categories') && visibleCats.length > 0 ? (
-      <CategoryShowcase countInCategory={countInCategory} categories={visibleCats} heading={texts.categories} />
-    ) : <p className="cv-empty-preview">Categories are hidden on the homepage.</p>,
+  const activeLabel = (CANVAS_SECTIONS.find((s) => s.id === active) || {}).label || 'Canvas';
 
-    products: (
-      <>
-        {sectionEnabled('featured') && (
-          <FeaturedSection products={maxOrAll(featuredBase, texts.featured.maxItems)} heading={texts.featured} loading={false} />
-        )}
-        {sectionEnabled('bestSellers') && (
-          <section className="section-pad" style={{ background: 'var(--surface-page)' }}>
-            <div className="shell-wide">
-              <HomeProductRail
-                eyebrow={texts.bestSellers.eyebrow} title={texts.bestSellers.title} subtitle={texts.bestSellers.subtitle}
-                products={maxOrAll(bestBase, texts.bestSellers.maxItems)} loading={false} railLabel="best sellers"
-              />
-            </div>
-          </section>
-        )}
-        {sectionEnabled('productBanners') && (
-          <ProductBannerGrid banners={draft.homepage.productBanners || []} />
-        )}
-        {!sectionEnabled('featured') && !sectionEnabled('bestSellers') && !sectionEnabled('productBanners') && (
-          <p className="cv-empty-preview">All product sections are hidden on the homepage.</p>
-        )}
-      </>
-    ),
-
-    promos: (() => {
-      const showSecondary = sectionEnabled('secondaryBanners')
-        && (draft.homepage.secondaryBanners || []).some((b) => b.enabled !== false);
-      const showRail = sectionEnabled('promoBanners');
-      if (!showSecondary && !showRail) {
-        return <p className="cv-empty-preview">All banner sections are hidden on the homepage.</p>;
-      }
-      return (
-        <>
-          {sectionEnabled('secondaryBanners') && (
-            <SecondaryBannerGrid banners={draft.homepage.secondaryBanners || []} />
-          )}
-          {showRail && (
-            <PromoSection promotionalBanners={[...(draft.promos || [])].sort((a, b) => (b.order || 0) - (a.order || 0))} />
-          )}
-        </>
-      );
-    })(),
-
-    deals: sectionEnabled('festiveDeals') && maxOrAll(enabledDeals, texts.deals.maxItems).length > 0 ? (
-      <DealsSection deals={maxOrAll(enabledDeals, texts.deals.maxItems)} heading={texts.deals} />
-    ) : <p className="cv-empty-preview">Festive deals are hidden on the homepage.</p>,
-
-    trust: sectionEnabled('trust') ? (
-      <TrustSection heading={texts.trust} cards={trustPreview.cards} />
-    ) : <p className="cv-empty-preview">Why Choose Us is hidden on the homepage.</p>,
-
-    newsletter: sectionEnabled('newsletter') ? (
-      <section className="section-pad" style={{ background: 'var(--surface-sunken)' }}>
-        <div className="shell-wide">
-          <div className="grid gap-6 lg:grid-cols-[48fr_52fr] lg:gap-6">
-            <NewsletterBlock
-              email={newsletterTest}
-              onEmailChange={(e) => setNewsletterTest(e.target.value)}
-              onSubmit={(e) => { e.preventDefault(); toast.success('Preview only — subscribe on the live site.'); }}
-              copy={texts.newsletter}
-            />
-            <TrackOrderBlock orderId="" onOrderIdChange={() => {}} onSubmit={(e) => e.preventDefault()} />
-          </div>
-        </div>
-      </section>
-    ) : <p className="cv-empty-preview">Newsletter is hidden on the homepage.</p>,
-
-    wholesale: sectionEnabled('wholesale') ? (
-      <WholesaleSection copy={texts.wholesale} />
-    ) : <p className="cv-empty-preview">Wholesale is hidden on the homepage.</p>,
-
-    footer: (
-      <Footer
-        preview={{
-          phone: draft.footer.phone,
-          email: draft.site?.contact?.email || draft.footer.email,
-          address: draft.footer.address,
-          logoUrl: draft.site?.branding?.logoUrl,
-          instagram: draft.site?.socialLinks?.instagram || '',
-        }}
-      />
-    ),
-
-    admin: (
-      <div className="cv-preview-frame" style={{ padding: 18 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-          {draft.site?.branding?.logoUrl && (
-            <img src={draft.site.branding.logoUrl} alt="Brand logo" style={{ height: 44, width: 44, borderRadius: '50%', objectFit: 'cover' }} />
-          )}
-          <div>
-            <p style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-strong)' }}>
-              Crackers Hyderabad
-            </p>
-            <p className="cv-note">Live brand + contact preview</p>
-          </div>
-        </div>
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-          <AdminPreviewRow label="Phone" value={draft.footer.phone} />
-          <AdminPreviewRow label="WhatsApp" value={draft.footer.whatsapp} empty="Not set" />
-          <AdminPreviewRow label="Email" value={draft.site?.contact?.email} />
-          <AdminPreviewRow label="Instagram" value={draft.site?.socialLinks?.instagram} empty="Hidden in footer" />
-          <AdminPreviewRow label="Location" value={draft.footer.location} empty="Not set" />
-          <AdminPreviewRow label="Address" value={draft.footer.address} />
-        </ul>
-        <div style={{ display: 'flex', gap: 10, marginTop: 14, alignItems: 'center' }}>
-          <span className="cv-note">Favicon:</span>
-          {draft.site?.branding?.faviconUrl
-            ? <img src={draft.site.branding.faviconUrl} alt="Favicon" style={{ height: 28, width: 28, borderRadius: 6 }} />
-            : <span className="cv-note">Not set</span>}
-        </div>
-      </div>
-    ),
+  /* Discard returns the draft to the last saved snapshot. No unsaved changes
+     means nothing to confirm, so the button stays disabled. */
+  const handleDiscard = () => {
+    if (!dirty || !savedJson) return;
+    try {
+      const parsed = JSON.parse(savedJson);
+      resetHistory(parsed);
+      toast.success('Unsaved changes discarded');
+    } catch {
+      toast.error('Could not restore the last saved state');
+    }
   };
 
-  const showDeviceToggle = !['sections', 'admin'].includes(active);
+  const saveState = saveError ? 'error' : saving ? 'saving' : dirty ? 'dirty' : 'saved';
 
-  /* ================= render: ONE section at a time ================= */
+  /* ================= render: visual builder ================= */
+
+  const device = modeOf(active) || 'desktop';
 
   return (
     <div className="cv cv-app">
-      <AdminHeader
-        title="Canvas"
-        backFallback="/dashboard"
-        controls={(
-          <>
-            <span className="hidden text-xs sm:inline" style={{ color: saveError ? 'var(--crimson-600)' : saving ? 'var(--text-muted)' : dirty ? 'var(--gold-600)' : 'var(--leaf-600)' }}>
-              {saveError || (saving ? 'Saving...' : dirty ? 'Unsaved changes' : 'Saved')}
-            </span>
-            <a href="/" target="_blank" rel="noopener noreferrer" className="ax-btn">
-              <ExternalLink aria-hidden="true" />
-              <span className="hidden sm:inline">Preview</span>
-            </a>
-            <button type="button" onClick={handleSave} disabled={saving || !dirty} className="ax-btn-primary">
-              {saving
-                ? <Loader2 className="animate-spin" aria-hidden="true" />
-                : <Save aria-hidden="true" />}
-              <span className="hidden sm:inline">Save Changes</span>
-              <span className="sm:hidden">Save</span>
-            </button>
-          </>
-        )}
+      <CanvasToolbar
+        pageLabel={activeLabel}
+        pageSubLabel="Canvas"
+        editorMode={editorMode}
+        onModeChange={setEditorMode}
+        device={device}
+        onDeviceChange={(m) => setMode(active, m)}
+        deviceLocked={false}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={undo}
+        onRedo={redo}
+        onDiscard={handleDiscard}
+        canDiscard={dirty}
+        onSaveDraft={() => handleSave({ status: 'draft' })}
+        onSavePublish={() => handleSave({ status: 'published' })}
+        saving={saving}
+        saveState={saveState}
+        saveError={saveError}
       />
-      <SectionTabs sections={CANVAS_SECTIONS} active={active} onSelect={setActive} />
 
-      <div className="cv-workspace">
-        <div className="cv-editor" key={`ed-${active}`}>
-          {editors[active]}
-        </div>
-        <div className="cv-preview" key={`pv-${active}`}>
-          <div className="cv-preview-head-fixed">
-            {showDeviceToggle
-              ? <DeviceToggle mode={modeOf(active)} onChange={(m) => setMode(active, m)} />
-              : <p className="cv-pane-title" style={{ marginBottom: 0 }}>Live preview</p>}
+      <div className="cv-builder">
+        {editorMode === 'edit' && (
+          <aside className="cv-sidebar" aria-label="Canvas editor">
+            <CanvasSidebar active={active} onSelect={setActive} enabledById={enabledById} />
+            <div className="cv-side-settings" key={`ed-${active}`}>
+              {editors[active]}
+            </div>
+          </aside>
+        )}
+        <div className="cv-stage">
+          <div className="cv-stage-bar">
+            <DeviceToggle mode={device} onChange={(m) => setMode(active, m)} label="Home" />
           </div>
-          <div className="cv-preview-body">
-            <PreviewFrame mode={showDeviceToggle ? modeOf(active) : 'desktop'}>
-              {previews[active]}
-            </PreviewFrame>
+          <div className="cv-stage-scroll">
+            <div className={`cv-viewport is-${device}`}>
+              <HomepagePreview
+                draft={draft}
+                orderedSections={orderedSections}
+                heroBanners={heroBanners}
+                promoCards={promoCards}
+                heroCopy={heroCopy}
+                texts={texts}
+                featuredBase={featuredBase}
+                bestBase={bestBase}
+                visibleCats={visibleCats}
+                countInCategory={countInCategory}
+                enabledDeals={enabledDeals}
+                trustPreview={trustPreview}
+                bannerSettings={bannerDoc}
+                fallbackBanners={DEFAULT_HERO_BANNERS}
+                fallbackCards={DEFAULT_PROMO_CARDS}
+                selectedTypes={SELECTED_TYPES[active] || []}
+                onSelectType={(tab) => setActive(tab)}
+                notice={previewNotice}
+                isolatedPreview={isolatedPreview}
+                notify={(msg) => toast.success(msg)}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -1463,32 +1300,11 @@ export default function HomepageBuilder() {
           onClose={() => setBannerModal(null)}
           onSave={(saved) => {
             const { mode, index } = bannerModal;
-            if (mode === 'hero' && index < 0 && heroBanners.length >= HERO_MAX) {
-              toast.error(`Maximum ${HERO_MAX} hero banners.`);
-              return;
-            }
             if (mode === 'secondary' && index < 0 && (draft.homepage.secondaryBanners || []).length >= SECONDARY_MAX) {
               toast.error(`Maximum ${SECONDARY_MAX} secondary banners.`);
               return;
             }
             setDraft((d) => {
-              if (mode === 'hero') {
-                const list = [...d.homepage.heroBanners];
-                if (index >= 0) list[index] = { ...list[index], ...saved };
-                else list.push({ ...defaultHeroBanner(list.length), ...saved, id: uid('hb'), order: list.length });
-                return { ...d, homepage: { ...d.homepage, heroBanners: list.slice(0, HERO_MAX).map((x, n) => ({ ...x, order: n })) } };
-              }
-              if (mode === 'card') {
-                const cards = [...(d.homepage.promoCards || [])];
-                const next = { ...defaultPromoCard(index), ...(cards[index] || {}), ...saved };
-                next.imageDesktop = next.imageDesktop || next.image || '';
-                next.image = next.imageDesktop || next.image;
-                cards[index] = next;
-                if (import.meta.env.DEV) {
-                  console.log('[CANVAS PROMO] draft updated', { slot: index, desktop: next.imageDesktop, mobile: next.imageMobile, enabled: next.enabled, fit: next.fit });
-                }
-                return { ...d, homepage: { ...d.homepage, promoCards: cards } };
-              }
               if (mode === 'secondary') {
                 const list = [...(d.homepage.secondaryBanners || [])];
                 if (index >= 0) list[index] = { ...list[index], ...saved };
@@ -1572,40 +1388,6 @@ export default function HomepageBuilder() {
 
 /* ---------- featured / best-sellers text editor (shared) ---------- */
 
-function ProductSectionEditor({ texts, onText, enabled, onEnabled, showOrdering, paneTitle }) {
-  return (
-    <EditorPane title={paneTitle || 'Section settings'}>
-      <Field>
-        <Toggle checked={enabled} onChange={onEnabled} label="Enabled" />
-      </Field>
-      <div className="cv-row2">
-        <Field label="Eyebrow">
-          <input className="cv-input" value={texts.eyebrow || ''} onChange={(e) => onText({ eyebrow: e.target.value })} />
-        </Field>
-        <Field label="Title">
-          <input className="cv-input" value={texts.title || ''} onChange={(e) => onText({ title: e.target.value })} />
-        </Field>
-      </div>
-      <Field label="Subtitle">
-        <input className="cv-input" value={texts.subtitle || ''} onChange={(e) => onText({ subtitle: e.target.value })} />
-      </Field>
-      <div className="cv-row2">
-        <Field label="Number of products" hint="0 shows all.">
-          <input
-            type="number" min={0} max={24} className="cv-input"
-            value={texts.maxItems || 0}
-            onChange={(e) => onText({ maxItems: Math.max(0, Number(e.target.value) || 0) })}
-          />
-        </Field>
-        <Field label="Ordering" hint={showOrdering}>
-          <input className="cv-input" value="Featured products" disabled style={{ opacity: 0.6 }} />
-        </Field>
-      </div>
-      <p className="cv-note">Product source: live catalogue from Firebase — the same records the storefront sells.</p>
-    </EditorPane>
-  );
-}
-
 /* ---------- trust cards editor ---------- */
 
 function TrustCardEditor({ cards, onChange, dnd, dropTarget, openModal }) {
@@ -1668,16 +1450,5 @@ function AssetUploadButton({ label, uploading, onFile }) {
         }}
       />
     </label>
-  );
-}
-
-function AdminPreviewRow({ label, value, empty = '—' }) {
-  return (
-    <li style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '8px 0', borderTop: '1px solid var(--hairline)', fontSize: 12.5 }}>
-      <span style={{ color: 'var(--text-muted)' }}>{label}</span>
-      <strong style={{ color: 'var(--text-strong)', fontWeight: 600, textAlign: 'right', overflowWrap: 'anywhere' }}>
-        {value || empty}
-      </strong>
-    </li>
   );
 }

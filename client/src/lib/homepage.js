@@ -114,9 +114,19 @@ export const DEFAULT_PROMO_CARDS = [
   },
 ];
 
+export const DEFAULT_HERO_COPY = {
+  eyebrow: 'PREMIUM FIREWORKS STORE',
+  titleA: 'Crackers',
+  titleB: 'Hyderabad',
+  sub: 'PREMIUM FIREWORKS • HYDERABAD',
+  ctaText: 'SHOP NOW',
+  ctaLink: '/products',
+};
+
 export const DEFAULT_HOMEPAGE = {
   heroBanners: DEFAULT_HERO_BANNERS,
   promoCards: DEFAULT_PROMO_CARDS,
+  heroCopy: DEFAULT_HERO_COPY,
   secondaryBanners: [],
   productBanners: [],
   featuredCategories: [],
@@ -216,6 +226,7 @@ export async function readHomepageConfig() {
     return {
       ...DEFAULT_HOMEPAGE,
       ...data,
+      heroCopy: { ...DEFAULT_HERO_COPY, ...(data.heroCopy || {}) },
       heroBanners: Array.isArray(data.heroBanners) ? data.heroBanners : DEFAULT_HOMEPAGE.heroBanners,
       promoCards: Array.isArray(data.promoCards) ? data.promoCards : DEFAULT_HOMEPAGE.promoCards,
       secondaryBanners: Array.isArray(data.secondaryBanners) ? data.secondaryBanners : [],

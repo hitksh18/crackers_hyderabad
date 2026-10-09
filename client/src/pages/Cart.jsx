@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 import { Trash2, Minus, Plus, ShoppingBag, Truck, ArrowRight, PackageSearch } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import CouponOffers from '../components/CouponOffers';
 import QuantityInput from '../components/QuantityInput';
 import ImagePlaceholder from '../components/ImagePlaceholder';
 import { displayNameForCategory } from '../lib/categoryIcons';
@@ -41,8 +44,75 @@ const rowVariants = (reduced) => ({
 
 const Cart = () => {
   const reduced = useReducedMotion();
-  const { cart, hydrated, removeFromCart, updateQuantity, getCartTotal } = useCart();
-  const total = getCartTotal();
+  const { cart, hydrated, removeFromCart, updateQuantity, getCartTotal, coupon } = useCart();
+  const total = coupon ? coupon.total : getCartTotal();
+  /* Minimum-order gate — same source of truth as checkout: the live
+     adminSettings/main document, falling back to the shared threshold.
+     Evaluated against the pre-discount cart total, exactly like the backend
+     and checkout enforce it. */
+  const [adminSettings, setAdminSettings] = useState({
+    minimumOrderValue: MINIMUM_ORDER_VALUE,
+    minimumOrderValueEnabled: true,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const adminDoc = await getDoc(doc(db, 'adminSettings', 'main'));
+        if (cancelled || !adminDoc.exists()) return;
+        const data = adminDoc.data();
+        const migratedData = { ...data };
+        if ('minimumOrderValueLocked' in data && !('minimumOrderValueEnabled' in data)) {
+          migratedData.minimumOrderValueEnabled = data.minimumOrderValueLocked !== false;
+        }
+        setAdminSettings((prev) => ({ ...prev, ...migratedData }));
+      } catch {
+        // Fail-open to the shared fallback — checkout and the backend
+        // enforce the real floor regardless.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const minimumMet =
+    !adminSettings.minimumOrderValueEnabled || getCartTotal() >= adminSettings.minimumOrderValue;
+
+  /* Viewport lock is MEASURED, not guessed: the announcement banner, navbar
+     and paddings above this component vary (the banner loads async), so the
+     remaining height is computed from this element's real offsetTop and
+     re-fitted on resize + banner changes. */
+  const lockRef = useRef(null);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const el = lockRef.current;
+    if (!el) return undefined;
+    const fit = () => {
+      if (!mq.matches) {
+        el.style.height = '';
+        return;
+      }
+      const top = Math.round(el.getBoundingClientRect().top + window.scrollY);
+      el.style.height = `calc(100dvh - ${top}px)`;
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    if (typeof mq.addEventListener === 'function') mq.addEventListener('change', fit);
+    /* The announcement banner publishes --top-banner-h on <html> when its
+       async content lands; re-fit so a late banner never pushes overflow. */
+    const observer = typeof MutationObserver !== 'undefined'
+      ? new MutationObserver(fit)
+      : null;
+    observer?.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
+    return () => {
+      window.removeEventListener('resize', fit);
+      if (typeof mq.removeEventListener === 'function') mq.removeEventListener('change', fit);
+      observer?.disconnect();
+      if (el) el.style.height = '';
+    };
+  }, [hydrated, cart.length]);
 
   /* Table scrollbar visibility: hidden at rest, thin gold while the user is
      actively scrolling the rows, then fades out after a short idle beat. */
@@ -145,10 +215,14 @@ const Cart = () => {
     </div>
   );
 
+  /* Viewport-locked cart on desktop (see the measured lock above): the page
+     itself never scrolls. Only the product list and the coupon list scroll
+     internally. Mobile keeps natural page scroll with bounded internal
+     lists. min-h-0 at every level so nested flex scrollers can shrink. */
   return (
-    <div className="section-pad-sm cart-fit pb-24 lg:h-[calc(100dvh-88px-52px)] lg:min-h-[540px] lg:overflow-hidden lg:pb-0">
+    <div ref={lockRef} className="section-pad-sm cart-fit flex flex-col overflow-hidden pb-24 lg:pb-6">
       <Seo title="Your Cart | Crackers Hyderabad" noindex />
-      <div className="shell shell-checkout lg:flex lg:h-full lg:min-h-0 lg:flex-col">
+      <div className="shell shell-checkout flex min-h-0 flex-1 flex-col">
         {/* Compact shipping status — the single banner, same logic. */}
         <div className="panel-editorial glass-card mb-2 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2 sm:px-4">
           <span
@@ -178,11 +252,12 @@ const Cart = () => {
           </div>
         </div>
 
-        {/* Workspace: one full-width table card. The rows scroll inside on
-            desktop; everything below stays put. Natural page scroll below lg. */}
-        <div className="min-w-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+        {/* Workspace: left items column + right summary column. Fixed to the
+            remaining viewport — both columns fit without page scroll. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="flex min-h-0 flex-[1.5] flex-col lg:flex-none">
           {/* ---- Single cart table card ---- */}
-          <section className="panel-editorial glass-card min-w-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden" aria-label="Cart items">
+          <section className="panel-editorial glass-card flex min-h-0 flex-1 flex-col" aria-label="Cart items">
             <div
               className="flex shrink-0 items-center justify-between gap-3 px-3.5 py-2 sm:px-4"
               style={{ borderBottom: '1px solid var(--hairline)' }}
@@ -193,10 +268,10 @@ const Cart = () => {
               </span>
             </div>
 
-            {/* Desktop: real table in its own scroll viewport with a sticky
-                head — only the rows move, the card never grows the page. */}
+            {/* Desktop: real table filling the column with a sticky head —
+                only the rows move. */}
             <div
-              className={`cart-table-scroll hidden min-h-0 md:block lg:flex-1 lg:overflow-y-auto${tableScrolling ? ' is-scrolling' : ''}`}
+              className={`cart-table-scroll hidden min-h-0 flex-1 md:block md:overflow-y-auto${tableScrolling ? ' is-scrolling' : ''}`}
               onScroll={handleTableScroll}
             >
             <table className="w-full">
@@ -292,12 +367,12 @@ const Cart = () => {
             </table>
             </div>
 
-            {/* Mobile: compact structured rows — same data, same controls. */}
+            {/* Mobile: compact structured rows with their own scroll viewport. */}
             <motion.ul
               initial="hidden"
               animate="visible"
               variants={staggerParent(reduced, 0.05)}
-              className="list-none md:hidden"
+              className="min-h-0 flex-1 list-none overflow-y-auto md:hidden"
             >
               <AnimatePresence>
                 {cart.map((item, index) => {
@@ -367,39 +442,84 @@ const Cart = () => {
               </AnimatePresence>
             </motion.ul>
 
-            {/* Totals + actions footer — pinned to the card bottom. */}
-            <div
-              className="flex shrink-0 flex-col gap-3 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4"
-              style={{ borderTop: '1px solid var(--hairline)' }}
-            >
-              <Link to="/products" className="btn-outline w-full shrink-0 sm:w-auto">
+            {/* Pinned footer of the items card — outside both scroll areas,
+                so it never disappears below the fold. */}
+            <div className="shrink-0 border-t px-3.5 py-2.5 sm:px-4" style={{ borderColor: 'var(--hairline)' }}>
+              <Link to="/products" className="btn-outline w-full sm:w-auto">
                 Add More Products
               </Link>
+            </div>
+          </section>
+          </div>
 
-              <div className="min-w-0 sm:text-right">
-                <p className="flex items-center gap-1.5 text-xs font-bold tracking-wide sm:justify-end" style={{ color: 'var(--text-muted)' }} aria-live="polite">
+          {/* ---- Order Summary card: totals, promo, offers, checkout.
+              Fills the column; only the coupon list scrolls, checkout stays
+              pinned at the bottom. Sticky is unnecessary — the page itself
+              never scrolls. ---- */}
+          <aside className="panel-editorial glass-card flex max-h-[48dvh] min-h-0 flex-col overflow-hidden lg:max-h-none" aria-label="Order summary">
+            <div className="flex min-h-0 flex-1 flex-col px-3.5 py-3 sm:px-4">
+              <p className="label-caps shrink-0">Order Summary</p>
+              <div className="mt-2 min-w-0 shrink-0">
+                <p className="flex items-center gap-1.5 text-xs font-bold tracking-wide" style={{ color: 'var(--text-muted)' }} aria-live="polite">
                   <ShoppingBag className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden="true" />
                   <span className="tabular">{cart.length} {cart.length === 1 ? 'ITEM' : 'ITEMS'}</span>
                 </p>
-                <div className="mt-1.5 flex items-baseline justify-between gap-6 text-sm sm:justify-end">
+                <div className="mt-1.5 flex items-baseline justify-between gap-6 text-sm">
                   <span style={{ color: 'var(--text-muted)' }}>Subtotal</span>
                   <span className="price tabular font-semibold" style={{ color: 'var(--text-body)' }}>
-                    {inr(getCartTotal())}
+                    {inr(coupon ? coupon.subtotal : getCartTotal())}
                   </span>
                 </div>
-                <div className="mt-1 flex items-baseline justify-between gap-6 sm:justify-end">
+                <div className="mt-1 flex items-baseline justify-between gap-6 text-sm">
+                  <span style={{ color: 'var(--text-muted)' }}>{coupon ? coupon.code : 'Discount'}</span>
+                  <span
+                    className="price tabular font-semibold"
+                    style={{ color: coupon ? 'var(--leaf-600)' : 'var(--text-subtle)' }}
+                  >
+                    {coupon ? `−${inr(coupon.discountAmount)}` : inr(0)}
+                  </span>
+                </div>
+                <div className="mt-1.5 flex items-baseline justify-between gap-6 border-t pt-2" style={{ borderColor: 'var(--hairline)' }}>
                   <span className="label-caps">Total</span>
                   <span className="price tabular text-2xl font-bold" style={{ color: 'var(--text-strong)' }}>
-                    {inr(getCartTotal())}
+                    {inr(total)}
                   </span>
                 </div>
-                <Link to="/checkout" className="btn-primary btn-shine mt-3 w-full text-base sm:w-auto sm:min-w-[260px]" style={{ minHeight: 50 }}>
+              </div>
+
+              <div aria-hidden="true" className="my-3 shrink-0 border-t" style={{ borderColor: 'var(--hairline)' }} />
+
+              <CouponOffers fill />
+
+              {!minimumMet ? (
+                <p className="tabular mt-3 shrink-0 text-xs font-semibold" style={{ color: 'var(--gold-600)' }} role="status">
+                  Minimum order {inr(adminSettings.minimumOrderValue)} — add {inr(adminSettings.minimumOrderValue - getCartTotal())} more to proceed to checkout.
+                </p>
+              ) : (
+                <p className="mt-3 flex shrink-0 items-center gap-1.5 text-xs font-semibold" style={{ color: 'var(--leaf-600)' }} role="status">
+                  <span aria-hidden="true">✓</span> Minimum order reached
+                </p>
+              )}
+              {minimumMet ? (
+                <Link to="/checkout" className="btn-primary btn-shine mt-3 w-full shrink-0 text-base" style={{ minHeight: 50 }}>
                   Proceed to Checkout
                   <ArrowRight className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
                 </Link>
-              </div>
+              ) : (
+                <span
+                  role="link"
+                  aria-disabled="true"
+                  aria-label="Proceed to checkout (disabled — minimum order not reached)"
+                  title={`Add ${inr(adminSettings.minimumOrderValue - getCartTotal())} more to checkout`}
+                  className="btn-primary btn-shine mt-3 inline-flex w-full shrink-0 cursor-not-allowed items-center justify-center gap-2 text-base opacity-50"
+                  style={{ minHeight: 50 }}
+                >
+                  Proceed to Checkout
+                  <ArrowRight className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
+                </span>
+              )}
             </div>
-          </section>
+          </aside>
 
         </div>
       </div>
@@ -417,23 +537,35 @@ const Cart = () => {
             className="h-1 origin-left"
             style={{ background: 'var(--grad-gold)', transform: `scaleX(${progress / 100})` }}
           />
-          <div className="shell flex items-center gap-4 py-3">
-            <div className="min-w-0">
-              <p className="label-caps">
-                {cart.length} {cart.length === 1 ? 'item' : 'items'}
-              </p>
-              <p
-                className="price text-xl font-bold"
-                style={{ color: 'var(--text-strong)' }}
-              >
-                {inr(total)}
-              </p>
+            <div className="shell flex items-center gap-4 py-3">
+              <div className="min-w-0">
+                <p className="label-caps">
+                  {cart.length} {cart.length === 1 ? 'item' : 'items'}
+                </p>
+                <p
+                  className="price text-xl font-bold"
+                  style={{ color: 'var(--text-strong)' }}
+                >
+                  {inr(total)}
+                </p>
+              </div>
+              {minimumMet ? (
+                <Link to="/checkout" className="btn-primary btn-shine ml-auto shrink-0 px-5">
+                  Proceed to Checkout
+                  <ArrowRight className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
+                </Link>
+              ) : (
+                <span
+                  role="link"
+                  aria-disabled="true"
+                  aria-label="Proceed to checkout (disabled — minimum order not reached)"
+                  className="btn-primary btn-shine ml-auto inline-flex shrink-0 cursor-not-allowed items-center gap-2 px-5 opacity-50"
+                >
+                  Proceed to Checkout
+                  <ArrowRight className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
+                </span>
+              )}
             </div>
-            <Link to="/checkout" className="btn-primary btn-shine ml-auto shrink-0 px-5">
-              Proceed to Checkout
-              <ArrowRight className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
-            </Link>
-          </div>
         </div>
       </div>
     </div>

@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import '../admin-portrait.css';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, getDocs, getDoc, doc, updateDoc, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { invalidateCache } from '../lib/firestoreCache';
+import { cachedGetDocs } from '../lib/firestoreCache';
 import { db } from '../firebase';
 import { Link } from 'react-router-dom';
 import { Eye, FileText, StickyNote, Trash2, Search, ChevronDown } from 'lucide-react';
@@ -11,8 +13,10 @@ import { authFetch, readApiError } from '../utils/apiClient';
 import CustomModal from '../components/CustomModal';
 import { useModal } from '../hooks/useModal';
 import { useAuth } from '../context/AuthContext';
-import { downloadInvoicePDF, printInvoicePDF } from '../utils/pdfGenerator';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+
+/* Invoice PDFs (jsPDF + helpers) load on first use, not with the Orders page. */
+const loadInvoicePdf = () => import('../utils/pdfGenerator');
 import { pageVariants, revealVariants } from '../lib/motion';
 import { Skeleton, TableSkeleton } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
@@ -21,10 +25,12 @@ import { getStatusTone } from '../components/admin/orderStatus';
 import OrderActionBar from '../components/admin/OrderActionBar';
 import OrderEditModal from '../components/admin/OrderEditModal';
 import AdminHeader from '../components/admin/AdminHeader';
+import { orderIdOf, orderIdMatches } from '../lib/orderId';
 
 const statusOptions = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'];
 
-const orderCodeOf = (order) => order.shortCode || order.id.slice(-6).toUpperCase();
+/* The canonical Order ID, as minted on the server. See lib/orderId.js. */
+const orderCodeOf = orderIdOf;
 
 const FilterTab = ({ active, onClick, label, count }) => (
   <button
@@ -96,11 +102,9 @@ const Orders = () => {
 
   const fetchProducts = async () => {
     try {
-      const snapshot = await getDocs(collection(db, 'products'));
-      const productsList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      /* Read-only catalogue for the order editor — shared cache, not a fresh
+         full download on every visit. */
+      const productsList = await cachedGetDocs(collection(db, 'products'), 'products');
       setProducts(productsList);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -194,6 +198,14 @@ const Orders = () => {
       ));
 
       toast.success('Order updated successfully');
+      /* Staff-triggered details notification: the send itself (plus dedup and
+         the automation toggle) is server-side; a skipped send resolves
+         quietly so editing never errors on mail. */
+      authFetch('/api/admin/email-automation/notify-details', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: editingOrder.id }),
+      }).catch(() => {});
       cancelEditingOrder();
     } catch (error) {
       console.error('Error updating order:', error);
@@ -268,39 +280,39 @@ const Orders = () => {
 
   const handleDeleteAllOrders = async () => {
     openModal({
-      title: 'Delete All Orders',
-      message: `WARNING: This will permanently delete ALL ${orders.length} orders!\n\nThis action CANNOT be undone.\n\nType "DELETE ALL ORDERS" below to confirm:`,
+      title: 'Reset All Orders',
+      message: `WARNING: This will permanently delete ALL ${orders.length} loaded orders, their tracking codes and product sales counts, and reset the order-number sequence!\n\nThis action CANNOT be undone.\n\nType "DELETE ALL ORDERS" below to confirm:`,
       type: 'danger',
-      confirmText: 'Delete All',
+      confirmText: 'Reset Everything',
       cancelText: 'Cancel',
       requiresInput: true,
       inputPlaceholder: 'Type DELETE ALL ORDERS',
       expectedInput: 'DELETE ALL ORDERS',
-      pendingText: 'Deleting...',
+      pendingText: 'Resetting...',
       onConfirm: async () => {
-        const loadingToast = toast.loading(`Deleting ${orders.length} orders...`);
-
+        const loadingToast = toast.loading('Resetting all orders on the server...');
         try {
-          const batchSize = 500;
-          const orderIds = orders.map(order => order.id);
-
-          for (let i = 0; i < orderIds.length; i += batchSize) {
-            const batch = writeBatch(db);
-            const batchIds = orderIds.slice(i, i + batchSize);
-
-            batchIds.forEach(orderId => {
-              batch.delete(doc(db, 'orders', orderId));
-            });
-
-            await batch.commit();
-          }
-
+          /* Server-side reset: deletes every order + tracking code, zeroes
+             sales counts and re-arms the counter atomically. A client-side
+             batch loop cannot do any of that safely. */
+          const response = await authFetch('/api/admin/orders/reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ confirm: 'RESET ORDERS' }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.error || 'Reset failed');
           setOrders([]);
-          toast.success(`Successfully deleted ${orderIds.length} orders`, { id: loadingToast });
+          invalidateCache('coll:orders');
+          invalidateCache('coll:products');
+          toast.success(
+            `Reset complete — ${data.ordersDeleted ?? 0} orders deleted`,
+            { id: loadingToast }
+          );
           return true;
         } catch (error) {
-          console.error('Error deleting orders:', error);
-          toast.error(`Failed to delete orders: ${error.message}`, { id: loadingToast });
+          console.error('Error resetting orders:', error);
+          toast.error(error.message || 'Failed to reset orders', { id: loadingToast });
           return false;
         }
       },
@@ -315,7 +327,7 @@ const Orders = () => {
 
     const phone = order.customer.phone.replace(/\D/g, '');
     const formattedPhone = phone.startsWith('91') ? phone : `91${phone}`;
-    const orderId = order.shortCode || order.id.slice(-6).toUpperCase();
+    const orderId = orderCodeOf(order);
     const status = order.status || 'Pending';
     const customerName = order.customer?.name || 'Customer';
 
@@ -351,6 +363,7 @@ const Orders = () => {
         pincode: ''
       };
 
+      const { downloadInvoicePDF } = await loadInvoicePdf();
       downloadInvoicePDF(orderData, customerInfo, { isAdmin: true });
       toast.success('Invoice downloaded successfully!');
     } catch (error) {
@@ -380,6 +393,7 @@ const Orders = () => {
         pincode: ''
       };
 
+      const { printInvoicePDF } = await loadInvoicePdf();
       printInvoicePDF(orderData, customerInfo, { isAdmin: true });
     } catch (error) {
       console.error('Error printing invoice:', error);
@@ -392,9 +406,20 @@ const Orders = () => {
   const visibleOrdersBase = activeTab === 'online' ? onlineOrders : storeOrders;
 
   const filteredVisibleOrders = useMemo(() => {
+    /* The id term is normalised separately from the text fields: an Order ID is
+       upper-case with hyphens, so `ch 2026 10 08 42` should find
+       `CH-20261008-000042`, while a customer called "Chandra" should still be
+       found by typing their name. Matching against the stored id rather than a
+       pattern built from the current format is what keeps search working after
+       the format changes. */
+    const textTerm = search.trim().toLowerCase();
+
     return visibleOrdersBase.filter(order => {
-      const q = search.trim().toLowerCase();
-      const matchesSearch = !q || String(order.shortCode || order.id).toLowerCase().includes(q) || (order.customer?.name || '').toLowerCase().includes(q) || (order.customer?.phone || '').includes(q);
+      const matchesSearch =
+        !search.trim() ||
+        orderIdMatches(order, search) ||
+        (order.customer?.name || '').toLowerCase().includes(textTerm) ||
+        (order.customer?.phone || '').includes(textTerm);
       const matchesStatus = statusFilter === 'All' || (order.status || 'Pending') === statusFilter;
       let matchesDate = true;
       if (dateFilter !== 'All') {
@@ -510,8 +535,8 @@ const Orders = () => {
                 style={{ borderColor: 'rgba(203, 42, 42, 0.35)', color: 'var(--text-strong)' }}
               >
                 <Trash2 aria-hidden="true" style={{ color: '#E14848' }} />
-                <span className="hidden sm:inline">Delete All ({orders.length})</span>
-                <span className="sm:hidden">Delete All</span>
+                <span className="hidden sm:inline">Reset All ({orders.length})</span>
+                <span className="sm:hidden">Reset All</span>
               </button>
             )}
           </>

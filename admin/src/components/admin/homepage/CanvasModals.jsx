@@ -5,28 +5,6 @@ import { DEAL_ICON_OPTIONS } from '../../../lib/dealIcons';
 import { TRUST_ICON_OPTIONS } from '../../../lib/trustIcons';
 import { Field } from './CanvasChrome';
 
-const EMPTY_HERO = {
-  imageDesktop: '',
-  imageMobile: '',
-  alt: '',
-  fit: 'cover',
-  heading: '',
-  description: '',
-  ctaText: 'Shop Now',
-  ctaLink: '/products',
-  enabled: true,
-};
-
-const EMPTY_CARD = {
-  image: '',
-  imageDesktop: '',
-  imageMobile: '',
-  alt: '',
-  fit: 'cover',
-  ctaLink: '/products',
-  enabled: true,
-};
-
 const EMPTY_PROMO = { imageUrl: '', link: '/products', enabled: true, order: 0 };
 
 const EMPTY_SECONDARY = {
@@ -63,8 +41,6 @@ function probeRatio(url) {
 }
 
 const DIR_FOR_MODE = {
-  hero: 'canvas/hero',
-  card: 'canvas/side-promos',
   secondary: 'canvas/banners',
   product: 'canvas/product-banners',
   promo: 'canvas/banners',
@@ -115,17 +91,14 @@ function ImageSlot({ label, url, uploading, onPick, hint }) {
 }
 
 /**
- * Banner editor modal. `mode` is 'hero' (main carousel), 'card' (the two
- * small hero cards), 'secondary' (the independent strip below the hero),
- * 'product' (a banner bound to one catalogue product) or 'promo'
+ * Banner editor modal. `mode` is 'secondary' (the independent strip below the
+ * hero), 'product' (a banner bound to one catalogue product) or 'promo'
  * (promotionalBanners collection rail).
  * Uploads go to Hostinger KVM media storage (/api/upload); only the permanent
  * public URL (https://crackershyderabad.com/uploads/...) is stored in Firestore.
  */
-export function BannerModal({ mode = 'hero', title, initial, products, onSave, onClose }) {
-  const base = mode === 'hero' ? EMPTY_HERO
-    : mode === 'card' ? EMPTY_CARD
-    : mode === 'secondary' ? EMPTY_SECONDARY
+export function BannerModal({ mode = 'secondary', title, initial, products, onSave, onClose }) {
+  const base = mode === 'secondary' ? EMPTY_SECONDARY
     : mode === 'product' ? EMPTY_PRODUCT
     : EMPTY_PROMO;
   const [form, setForm] = useState({ ...base, ...(initial || {}) });
@@ -136,21 +109,12 @@ export function BannerModal({ mode = 'hero', title, initial, products, onSave, o
 
   const pick = async (field, file) => {
     const dir = DIR_FOR_MODE[mode] || 'general';
-    if (import.meta.env.DEV && mode === 'card') {
-      console.log('[CANVAS PROMO] upload started', { field, dir, name: file?.name, size: file?.size });
-    }
     const url = await uploadSlot(file, setUploading, setError, dir);
-    if (url) {
-      if (import.meta.env.DEV && mode === 'card') {
-        console.log('[CANVAS PROMO] upload response permanent URL', { field, url });
-      }
-      set({ [field]: url });
-      if (field === 'imageDesktop' || field === 'image' || field === 'imageUrl') {
-        setRatio(null);
-        probeRatio(url).then(setRatio);
-      }
-    } else if (import.meta.env.DEV && mode === 'card') {
-      console.warn('[CANVAS PROMO] upload failed — card state NOT updated');
+    if (!url) return;
+    set({ [field]: url });
+    if (field === 'imageDesktop' || field === 'image' || field === 'imageUrl') {
+      setRatio(null);
+      probeRatio(url).then(setRatio);
     }
   };
 
@@ -170,18 +134,7 @@ export function BannerModal({ mode = 'hero', title, initial, products, onSave, o
       setError(mode === 'promo' ? 'Upload a banner image first.' : 'Upload a desktop image first.');
       return;
     }
-    /* Promo cards store the desktop image under `imageDesktop` (the field the
-       storefront renders) and mirror `image` for legacy readers. Sync both so
-       a stale desktop URL can never shadow a freshly uploaded image. */
-    const payload = { ...form };
-    if (mode === 'card') {
-      payload.imageDesktop = payload.imageDesktop || payload.image || '';
-      payload.image = payload.imageDesktop || payload.image;
-      if (import.meta.env.DEV) {
-        console.log('[CANVAS PROMO] Firestore save payload', { desktop: payload.imageDesktop, mobile: payload.imageMobile, alt: payload.alt, enabled: payload.enabled, fit: payload.fit });
-      }
-    }
-    onSave(payload);
+    onSave({ ...form });
   };
 
   const offRatio = ratio && Math.abs(ratio.ratio - 16 / 9) / (16 / 9) > 0.15;
@@ -191,9 +144,7 @@ export function BannerModal({ mode = 'hero', title, initial, products, onSave, o
       <div className="cv-modal" role="dialog" aria-modal="true" aria-label={title}>
         <h3>{title}</h3>
         <p className="cv-note" style={{ margin: '2px 0 12px' }}>
-          {mode === 'hero'
-            ? 'Hero creatives are image-only on the homepage — upload the finished design. Text fields are stored with the banner.'
-            : 'Uploads go to KVM media storage (https://crackershyderabad.com/uploads/); the permanent URL is saved.'}
+          Uploads go to KVM media storage (https://crackershyderabad.com/uploads/); the permanent URL is saved.
         </p>
 
         {mode === 'promo' ? (
@@ -211,7 +162,7 @@ export function BannerModal({ mode = 'hero', title, initial, products, onSave, o
           </>
         ) : (
           <>
-            <ImageSlot label="Desktop image" url={form.imageDesktop || form.image} uploading={uploading} onPick={(f) => pick('imageDesktop', f)} hint={mode === 'hero' ? 'Wide creative, e.g. 1600 × 900.' : undefined} />
+            <ImageSlot label="Desktop image" url={form.imageDesktop || form.image} uploading={uploading} onPick={(f) => pick('imageDesktop', f)} />
             <ImageSlot
               label="Mobile image (optional)"
               url={form.imageMobile}
@@ -289,22 +240,6 @@ export function BannerModal({ mode = 'hero', title, initial, products, onSave, o
               </button>
             </div>
           </Field>
-        )}
-
-        {mode === 'hero' && (
-          <>
-            <div className="cv-row2">
-              <Field label="Title (stored)">
-                <input className="cv-input" value={form.heading || ''} onChange={(e) => set({ heading: e.target.value })} placeholder="Light Up Your Celebrations" />
-              </Field>
-              <Field label="CTA text (stored)">
-                <input className="cv-input" value={form.ctaText || ''} onChange={(e) => set({ ctaText: e.target.value })} placeholder="Shop Now" />
-              </Field>
-            </div>
-            <Field label="Subtitle (stored)">
-              <textarea className="cv-textarea" rows={2} value={form.description || ''} onChange={(e) => set({ description: e.target.value })} />
-            </Field>
-          </>
         )}
 
         <label className="cv-check">

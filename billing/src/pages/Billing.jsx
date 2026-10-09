@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { collection, getDocs } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../firebase';
@@ -11,7 +12,6 @@ import {
   CreditCard,
   FilePlus2,
   LogOut,
-  MessageCircle,
   PauseCircle,
   Printer,
   Receipt,
@@ -83,6 +83,10 @@ const Billing = () => {
   const [heldOpen, setHeldOpen] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [saving, setSaving] = useState(false);
+  /* The Order ID the server minted for the bill just rung up, shown on the
+     printed receipt so the counter, the customer and the admin all quote
+     the same one. */
+  const [savedOrderId, setSavedOrderId] = useState('');
   const printRef = useRef();
   const searchRef = useRef();
   const billSectionRef = useRef();
@@ -363,8 +367,20 @@ const Billing = () => {
         return;
       }
 
-      toast.success('Bill saved successfully!');
+      /* The OFFLINE/STORE ORDER ID minted by the server off the independent
+         offline counter (e.g. Ayyapa26-0001) — never the online sequence. The
+         same ORDER ID is stored on the order, shown in history/details and
+         printed on the invoice/receipt. */
+      setSavedOrderId(result.shortCode || '');
+
+      toast.success(result.shortCode ? `Bill saved as ${result.shortCode}` : 'Bill saved successfully!');
+      /* Save-as-PDF filename: browsers name the file after the document
+         title, so stamp the offline ORDER ID into it before printing
+         (e.g. Invoice_Ayyapa26-0001). Restored right after. */
+      const prevTitle = document.title;
+      if (result.shortCode) document.title = `Invoice_${result.shortCode}`;
       handlePrint();
+      setTimeout(() => { document.title = prevTitle; }, 1000);
       resetWorkspace();
     } catch (error) {
       console.error('Error saving bill:', error);
@@ -372,56 +388,6 @@ const Billing = () => {
     } finally {
       setSaving(false);
     }
-  };
-
-  const sendToWhatsApp = () => {
-    if (billItems.length === 0) {
-      toast.error('Add items to the bill first');
-      return;
-    }
-
-    if (!customerName || !customerPhone) {
-      toast.error('Please enter customer name and phone number');
-      return;
-    }
-
-    const itemsList = billItems
-      .map((item, index) => {
-        const price = unitPriceOf(item);
-        const total = price * item.quantity;
-        return `${index + 1}. ${item.name} - Qty: ${item.quantity} - ₹${price} = ₹${total}`;
-      })
-      .join('\n');
-
-    const message = `*${BRAND_NAME_UPPER} - Invoice*
-
-*CUSTOMER DETAILS:*
-Name: ${customerName}
-Phone: ${customerPhone}
-Payment Mode: ${paymentMode}
-
-*ORDER ITEMS:*
-${itemsList}
-
-*BILL SUMMARY:*
-Subtotal: ₹${calculateSubtotal().toFixed(2)}
-${getDiscountAmount() > 0 ? `Discount (${discountPercent}%): -₹${getDiscountAmount().toFixed(2)}\n` : ''}Grand Total: ₹${calculateTotal().toFixed(2)}
-
-Date: ${new Date().toLocaleDateString()}
-Time: ${new Date().toLocaleTimeString()}
-
-Thank you for shopping with us! Have a safe and happy celebration!`;
-
-    const encodedMessage = encodeURIComponent(message);
-
-    const formattedCustomerPhone = customerPhone.startsWith('+')
-      ? customerPhone.replace(/[^0-9]/g, '')
-      : '91' + customerPhone.replace(/[^0-9]/g, '');
-
-    const whatsappURL = `https://wa.me/${formattedCustomerPhone}?text=${encodedMessage}`;
-
-    window.open(whatsappURL, '_blank');
-    toast.success('Opening WhatsApp to send invoice to customer...');
   };
 
   /* ---- Live filtering (name / category / sku / barcode) ------------------ */
@@ -455,8 +421,6 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
   holdBillRef.current = holdBill;
   const saveBillRef = useRef(saveBill);
   saveBillRef.current = saveBill;
-  const whatsappRef = useRef(sendToWhatsApp);
-  whatsappRef.current = sendToWhatsApp;
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -518,16 +482,6 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'h') {
         event.preventDefault();
         holdBillRef.current();
-        return;
-      }
-
-      // Ctrl/Cmd + Shift + W (or Alt + W) → WhatsApp bill.
-      if (
-        ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'w') ||
-        (event.altKey && event.key.toLowerCase() === 'w')
-      ) {
-        event.preventDefault();
-        whatsappRef.current();
         return;
       }
 
@@ -1036,16 +990,6 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
                   <Printer className="h-4 w-4" aria-hidden="true" />
                   {saving ? 'Saving…' : 'Generate Bill'}
                 </button>
-                <button
-                  type="button"
-                  onClick={sendToWhatsApp}
-                  disabled={!canIssue}
-                  className="pos-tool-btn mt-1.5 w-full"
-                  title="WhatsApp bill (Ctrl+Shift+W)"
-                >
-                  <MessageCircle className="h-4 w-4" aria-hidden="true" />
-                  WhatsApp Customer
-                </button>
               </div>
             </div>
           </motion.section>
@@ -1085,40 +1029,57 @@ Thank you for shopping with us! Have a safe and happy celebration!`;
         />
       )}
 
-      <BillPrintSheet
-        ref={printRef}
-        customerName={customerName}
-        customerPhone={customerPhone}
-        paymentMode={paymentMode}
-        items={billItems}
-        subtotal={subtotal}
-        discountPercent={discountPercent}
-        discountAmount={discountAmount}
-        total={grandTotal}
-      />
+      {/* Print invoice lives in a body-level portal, OUTSIDE the
+          viewport-locked POS shell: the shell's fixed height and
+          overflow:hidden (plus absolute positioning) is what clipped
+          multi-page bills. The portal child flows naturally across pages. */}
+      {createPortal(
+        <div className="bill-print-root">
+          <BillPrintSheet
+            ref={printRef}
+            customerName={customerName}
+            customerPhone={customerPhone}
+            paymentMode={paymentMode}
+            items={billItems}
+            subtotal={subtotal}
+            discountPercent={discountPercent}
+            discountAmount={discountAmount}
+            total={grandTotal}
+            orderId={savedOrderId}
+          />
+        </div>,
+        document.body
+      )}
 
       <style>{`
         .bill-print-sheet { display: none; }
 
         @media print {
-          @page { margin: 12mm; }
+          /* Zero page margin is what removes Chrome's own print header/footer —
+             the URL / "localhost:5002", browser date & time, page numbers and the
+             document title are drawn inside the page MARGIN BOX, and with no
+             margin box there is nowhere to draw them. The printable margin the
+             invoice needs is padding on .bps-body in
+             components/billing/BillPrintSheet.css instead. */
+          @page { size: A4 portrait; margin: 0; }
 
-          body * { visibility: hidden !important; }
+          body { margin: 0; }
 
-          /* 100vh resolves against the page box in paged media — without this the
-             screen shell emits a blank sheet ahead of the invoice. */
-          .pos-root { min-height: 0 !important; height: auto !important; overflow: visible !important; }
+          /* Isolate the portal: everything else leaves the layout entirely
+             (display:none, not visibility), so no app shell, toast or overlay
+             can reserve space, clip content or emit blank pages. The invoice
+             is a direct body child in normal flow, which is what lets it
+             fragment across physical pages. */
+          body > *:not(.bill-print-root) { display: none !important; }
+
+          .bill-print-root {
+            display: block !important;
+          }
 
           .bill-print-sheet {
             display: block !important;
-            position: absolute;
-            left: 0;
-            top: 0;
             width: 100%;
           }
-
-          .bill-print-sheet,
-          .bill-print-sheet * { visibility: visible !important; }
         }
       `}</style>
     </div>

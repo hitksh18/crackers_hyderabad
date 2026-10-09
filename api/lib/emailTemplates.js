@@ -52,6 +52,93 @@ function stepIndexForStatus(status) {
 
 const formatINR = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
 
+/* Line total from the SAME unit price the order was written with — display
+   only, never a re-pricing. price × quantity, rounded to paise. */
+const lineTotalOf = (item) => Math.round(Number(item.price || 0) * (Number(item.quantity) || 0) * 100) / 100;
+
+/**
+ * ITEMS IN YOUR ORDER — itemised breakdown rendered from the saved order
+ * items (name, quantity, authoritative unit price). Email-safe single table:
+ * the name cell wraps naturally so there is no horizontal scroll on mobile.
+ * Totals: Subtotal only when a discount applies (otherwise it duplicates the
+ * total), Discount only when > 0, then the authoritative Total Bill. There is
+ * no delivery-charge field in the order schema, so no such row is rendered.
+ * Returns '' when there is nothing to list.
+ */
+function orderItemsSection({ items, subtotal, discount, total, couponCode }) {
+  const rows = (Array.isArray(items) ? items : []).filter(
+    (it) => it && (it.name || Number(it.quantity) > 0)
+  );
+  if (rows.length === 0) return '';
+  const hasDiscount = Number(discount) > 0;
+  const couponLabel = String(couponCode || '').trim()
+    ? `Discount (${escapeHtml(String(couponCode).trim().toUpperCase())})`
+    : 'Discount';
+  const lines = rows.map((it) => {
+    const qty = Number(it.quantity) || 0;
+    const unit = Number(it.price || 0);
+    return `
+                    <tr>
+                      <td style="padding:9px 0;border-top:1px solid #EFE7D6;font-size:13px;color:#211A15;font-family:Arial,Helvetica,sans-serif;">
+                        <div style="font-weight:bold;overflow-wrap:anywhere;">${escapeHtml(String(it.name || 'Item'))}</div>
+                        <div style="padding-top:2px;font-size:12px;color:#6B6259;">Qty: ${qty} × ${formatINR(unit)}</div>
+                      </td>
+                      <td align="right" valign="top" style="padding:9px 0 9px 12px;border-top:1px solid #EFE7D6;font-size:13px;color:#211A15;font-weight:bold;white-space:nowrap;font-family:Arial,Helvetica,sans-serif;">${formatINR(lineTotalOf(it))}</td>
+                    </tr>`;
+  }).join('');
+  const totals = [
+    hasDiscount
+      ? `<tr><td style="padding:8px 0;border-top:1px solid #EFE7D6;font-size:13px;color:#4A423B;font-family:Arial,Helvetica,sans-serif;">Subtotal</td><td align="right" style="padding:8px 0 8px 12px;border-top:1px solid #EFE7D6;font-size:13px;color:#211A15;font-weight:bold;white-space:nowrap;font-family:Arial,Helvetica,sans-serif;">${formatINR(Number(subtotal ?? total))}</td></tr>
+         <tr><td style="padding:4px 0;font-size:13px;color:#4A423B;font-family:Arial,Helvetica,sans-serif;">${couponLabel}</td><td align="right" style="padding:4px 0 4px 12px;font-size:13px;color:#4A423B;white-space:nowrap;font-family:Arial,Helvetica,sans-serif;">-${formatINR(discount)}</td></tr>`
+      : '',
+    `<tr><td style="padding:8px 0;border-top:2px solid #D2A64F;font-size:14px;color:#211A15;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">Total Bill</td><td align="right" style="padding:8px 0 8px 12px;border-top:2px solid #D2A64F;font-size:15px;color:#761713;font-weight:bold;white-space:nowrap;font-family:Arial,Helvetica,sans-serif;">${formatINR(total)}</td></tr>`,
+  ].join('');
+  return `
+        <tr>
+          <td class="px" style="padding:22px 32px 0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FBF7EF;border:1px solid #E7DCC8;border-radius:10px;">
+              <tr>
+                <td style="padding:16px 20px 4px;font-size:11px;letter-spacing:2px;color:#9E7029;font-family:Arial,Helvetica,sans-serif;">ITEMS IN YOUR ORDER</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 20px 16px;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                    ${lines}
+                    ${totals}
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>`;
+}
+
+/** Plain-text items block mirroring orderItemsSection. Returns '' when empty. */
+function orderItemsText({ items, subtotal, discount, total, couponCode }) {
+  const rows = (Array.isArray(items) ? items : []).filter(
+    (it) => it && (it.name || Number(it.quantity) > 0)
+  );
+  if (rows.length === 0) return '';
+  const lines = ['ITEMS IN YOUR ORDER', ''];
+  for (const it of rows) {
+    const qty = Number(it.quantity) || 0;
+    const unit = Number(it.price || 0);
+    lines.push(
+      String(it.name || 'Item'),
+      `Qty: ${qty} × ${formatINR(unit)}`,
+      `Item total: ${formatINR(lineTotalOf(it))}`,
+      ''
+    );
+  }
+  if (Number(discount) > 0) {
+    lines.push(`Subtotal: ${formatINR(Number(subtotal ?? total))}`);
+    const code = String(couponCode || '').trim().toUpperCase();
+    lines.push(`${code ? `Coupon ${code}` : 'Discount'}: -${formatINR(discount)}`);
+  }
+  lines.push(`Total: ${formatINR(total)}`, '');
+  return lines.join('\n');
+}
+
 /* Per-status headline + subject fragment. */
 const STATUS_COPY = {
   Pending: { headline: 'Your order is confirmed', subject: 'Order Confirmed' },
@@ -69,9 +156,11 @@ function statusCopy(status) {
 
 /**
  * Transactional subject line. Sentence case, no emoji, no promo/urgency
- * wording (spam triggers).
+ * wording (spam triggers). `customSubject` (already token-rendered by the
+ * automation layer) wins when provided.
  */
-function emailSubject(orderCode, status) {
+function emailSubject(orderCode, status, customSubject) {
+  if (customSubject && String(customSubject).trim()) return String(customSubject).trim().slice(0, 120);
   const code = String(orderCode || 'N/A').toUpperCase();
   const key = String(status || 'Pending').trim().toLowerCase().replace(/[_-]+/g, ' ');
   const verb =
@@ -134,17 +223,43 @@ function progressTracker(activeIndex) {
 /**
  * Premium order-confirmation email (HTML). Inputs are plain values already
  * resolved server-side from the saved order — never trust frontend totals.
+ *
+ * `custom` (from Email Automation templates + branding) overrides presentation
+ * only: { preheader, eyebrow, heading, intro, buttonText, buttonUrl,
+ * storeName, logoUrl, accent, supportLine }. Absent/empty fields fall back to
+ * the long-standing editorial, so existing sends render byte-identically.
  */
-function orderConfirmationHtml({ orderCode, status, quantity, total, trackUrl, invoiceUrl, customerName, note }) {
+function orderConfirmationHtml({ orderCode, status, quantity, total, trackUrl, invoiceUrl, customerName, note, custom, items, subtotal, discount, couponCode }) {
+  const c = custom && typeof custom === 'object' ? custom : {};
+  const storeName = String(c.storeName || '').trim() || 'Crackers Hyderabad';
+  const safeStore = escapeHtml(storeName);
+  const logoUrl = String(c.logoUrl || '').trim() || 'https://crackershyderabad.com/images/website/nav-logo.png';
+  const accent = /^#[0-9a-fA-F]{6}$/.test(String(c.accent || '')) ? c.accent : '#C33A14';
   const code = escapeHtml(String(orderCode || 'N/A').toUpperCase());
   const activeIndex = stepIndexForStatus(status);
   const cancelled = activeIndex === -1;
-  const items = Number(quantity) || 0;
-  const preheader = escapeHtml(emailPreheader(code));
+  const itemCount = Number(quantity) || 0;
+  const preheader = escapeHtml(String(c.preheader || '').trim() || emailPreheader(code));
   const safeTrack = escapeHtml(trackUrl || '');
   const safeInvoice = escapeHtml(invoiceUrl || trackUrl || '');
   const safeNote = note ? escapeHtml(note) : '';
   const year = new Date().getFullYear();
+  const heading = String(c.heading || '').trim();
+  const intro = String(c.intro || '').trim();
+  /* Default headline is exactly the long-standing 'Thank you, <name>' — a
+     custom heading replaces the whole line, name included. */
+  const headline = heading
+    ? escapeHtml(heading)
+    : `Thank you${customerName ? `, ${escapeHtml(customerName)}` : ''}`;
+  const introHtml = intro
+    ? `<p style="margin:0;font-size:14px;line-height:1.6;color:#4A423B;font-family:Arial,Helvetica,sans-serif;">${escapeHtml(intro)}</p>`
+    : `<p style="margin:0;font-size:14px;line-height:1.6;color:#4A423B;font-family:Arial,Helvetica,sans-serif;">Your order has been successfully placed.</p>`;
+  const primaryCta = String(c.buttonText || '').trim()
+    ? { text: escapeHtml(String(c.buttonText).trim()), url: escapeHtml(String(c.buttonUrl || '').trim() || trackUrl || '') }
+    : { text: 'TRACK YOUR ORDER', url: safeTrack };
+  const storeUrl = String(c.storeUrl || '').trim().replace(/\/+$/, '') || 'https://crackershyderabad.com';
+  const supportLine = String(c.supportLine || '').trim();
+  const footerBrand = escapeHtml(storeName.toUpperCase());
 
   const tracker = cancelled
     ? `<p style="margin:0 0 4px;font-size:14px;color:#CB2A2A;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">This order was cancelled.</p>
@@ -184,10 +299,10 @@ function orderConfirmationHtml({ orderCode, status, quantity, total, trackUrl, i
             <table role="presentation" cellpadding="0" cellspacing="0">
               <tr>
                 <td valign="middle" style="padding:0;">
-                  <img class="logo-img" src="https://crackershyderabad.com/images/website/nav-logo.png" alt="Crackers Hyderabad" width="48" height="48" style="display:block;width:48px;height:48px;border:0;">
+                  <img class="logo-img" src="${escapeHtml(logoUrl)}" alt="${safeStore}" width="48" height="48" style="display:block;width:48px;height:48px;border:0;">
                 </td>
                 <td valign="middle" style="padding:0 0 0 14px;">
-                  <div class="brand-name" style="font-size:19px;color:#211A15;font-weight:bold;font-family:Georgia,'Times New Roman',serif;">Crackers Hyderabad</div>
+                  <div class="brand-name" style="font-size:19px;color:#211A15;font-weight:bold;font-family:Georgia,'Times New Roman',serif;">${safeStore}</div>
                 </td>
               </tr>
             </table>
@@ -196,8 +311,8 @@ function orderConfirmationHtml({ orderCode, status, quantity, total, trackUrl, i
         <tr>
           <td class="px" style="padding:26px 32px 0;">
             <div style="font-size:13px;letter-spacing:2.5px;color:#761713;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">ORDER CONFIRMED</div>
-            <h1 class="h1" style="margin:8px 0 6px;font-size:23px;color:#211A15;font-weight:bold;font-family:Georgia,'Times New Roman',serif;">Thank you${customerName ? `, ${escapeHtml(customerName)}` : ''}</h1>
-            <p style="margin:0;font-size:14px;line-height:1.6;color:#4A423B;font-family:Arial,Helvetica,sans-serif;">Your order has been successfully placed.</p>
+            <h1 class="h1" style="margin:8px 0 6px;font-size:23px;color:#211A15;font-weight:bold;font-family:Georgia,'Times New Roman',serif;">${headline}</h1>
+            ${introHtml}
           </td>
         </tr>
         <tr>
@@ -205,6 +320,7 @@ function orderConfirmationHtml({ orderCode, status, quantity, total, trackUrl, i
             ${tracker}
           </td>
         </tr>
+        ${orderItemsSection({ items, subtotal, discount, total, couponCode })}
         <tr>
           <td class="px" style="padding:22px 32px 0;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FBF7EF;border:1px solid #E7DCC8;border-radius:10px;">
@@ -220,7 +336,7 @@ function orderConfirmationHtml({ orderCode, status, quantity, total, trackUrl, i
                     </tr>
                     <tr>
                       <td style="padding:8px 0;border-top:1px solid #EFE7D6;font-size:13px;color:#4A423B;font-family:Arial,Helvetica,sans-serif;">Quantity</td>
-                      <td align="right" style="padding:8px 0;border-top:1px solid #EFE7D6;font-size:15px;color:#211A15;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">${items} item${items === 1 ? '' : 's'}</td>
+                      <td align="right" style="padding:8px 0;border-top:1px solid #EFE7D6;font-size:15px;color:#211A15;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">${itemCount} item${itemCount === 1 ? '' : 's'}</td>
                     </tr>
                     <tr>
                       <td style="padding:10px 0;border-top:1px solid #EFE7D6;font-size:14px;color:#211A15;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">Total Bill</td>
@@ -244,8 +360,8 @@ function orderConfirmationHtml({ orderCode, status, quantity, total, trackUrl, i
                 <td class="btn-cell" width="50%" valign="top" style="padding:0 6px 0 0;">
                   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                     <tr>
-                      <td align="center" bgcolor="#C33A14" style="border-radius:10px;background:#C33A14;">
-                        <a class="btn-link" href="${safeTrack}" style="display:inline-block;padding:15px 20px;color:#FFFFFF;font-size:14px;font-weight:bold;text-decoration:none;letter-spacing:0.5px;font-family:Arial,Helvetica,sans-serif;">TRACK YOUR ORDER</a>
+                      <td align="center" bgcolor="${accent}" style="border-radius:10px;background:${accent};">
+                        <a class="btn-link" href="${primaryCta.url}" style="display:inline-block;padding:15px 20px;color:#FFFFFF;font-size:14px;font-weight:bold;text-decoration:none;letter-spacing:0.5px;font-family:Arial,Helvetica,sans-serif;">${primaryCta.text}</a>
                       </td>
                     </tr>
                   </table>
@@ -265,16 +381,16 @@ function orderConfirmationHtml({ orderCode, status, quantity, total, trackUrl, i
         </tr>
         <tr>
           <td class="px" style="padding:18px 32px 0;">
-            <div style="text-align:center;font-size:13px;color:#4A423B;font-family:Arial,Helvetica,sans-serif;">Need help with your order? Just reply to this email.</div>
+            <div style="text-align:center;font-size:13px;color:#4A423B;font-family:Arial,Helvetica,sans-serif;">${supportLine ? escapeHtml(supportLine) : 'Need help with your order? Just reply to this email.'}</div>
           </td>
         </tr>
         <tr>
           <td align="center" style="padding:22px 28px 24px;">
             <div style="margin:0 auto;height:1px;width:120px;background:#D2A64F;font-size:0;line-height:0;">&nbsp;</div>
-            <div style="padding-top:12px;font-size:12px;letter-spacing:2px;color:#211A15;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">CRACKERS HYDERABAD</div>
+            <div style="padding-top:12px;font-size:12px;letter-spacing:2px;color:#211A15;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">${footerBrand}</div>
             <div style="padding-top:4px;font-size:12px;color:#4A423B;font-family:Arial,Helvetica,sans-serif;">Hyderabad, Telangana</div>
-            <div style="padding-top:6px;font-size:12px;font-family:Arial,Helvetica,sans-serif;"><a href="https://crackershyderabad.com" style="color:#9E7029;text-decoration:underline;">Visit crackershyderabad.com</a></div>
-            <div style="padding-top:10px;font-size:11px;color:#6B6259;font-family:Arial,Helvetica,sans-serif;">&copy; ${year} Crackers Hyderabad. This is an automated confirmation for order #${code}.</div>
+            <div style="padding-top:6px;font-size:12px;font-family:Arial,Helvetica,sans-serif;"><a href="${escapeHtml(storeUrl)}" style="color:#9E7029;text-decoration:underline;">Visit ${escapeHtml(storeUrl.replace(/^https?:\/\//, ''))}</a></div>
+            <div style="padding-top:10px;font-size:11px;color:#6B6259;font-family:Arial,Helvetica,sans-serif;">&copy; ${year} ${safeStore}. This is an automated confirmation for order #${code}.</div>
           </td>
         </tr>
       </table>
@@ -286,19 +402,27 @@ function orderConfirmationHtml({ orderCode, status, quantity, total, trackUrl, i
 }
 
 /** Plain-text fallback. Concise by design — required fields only. */
-function orderConfirmationText({ orderCode, status, quantity, total, trackUrl, invoiceUrl, customerName, note }) {
+function orderConfirmationText({ orderCode, status, quantity, total, trackUrl, invoiceUrl, customerName, note, custom, items, subtotal, discount, couponCode }) {
+  const c = custom && typeof custom === 'object' ? custom : {};
   const code = String(orderCode || 'N/A').toUpperCase();
   const copy = statusCopy(status);
-  const items = Number(quantity) || 0;
+  const itemCount = Number(quantity) || 0;
+  const heading = String(c.heading || '').trim();
+  const intro = String(c.intro || '').trim();
+  const storeName = String(c.storeName || '').trim() || 'Crackers Hyderabad';
+  const buttonUrl = String(c.buttonUrl || '').trim();
   const lines = [
-    'Crackers Hyderabad',
-    copy.headline,
+    storeName,
+    heading || copy.headline,
     '',
   ];
-  if (customerName) lines.push(`Thank you, ${String(customerName)}.`, '');
+  if (!heading && customerName) lines.push(`Thank you, ${String(customerName)}.`, '');
+  if (intro) lines.push(intro, '');
+  const itemsBlock = orderItemsText({ items, subtotal, discount, total, couponCode });
+  if (itemsBlock) lines.push(itemsBlock);
   lines.push(
     `Order ID: #${code}`,
-    `Quantity: ${items} item${items === 1 ? '' : 's'}`,
+    `Quantity: ${itemCount} item${itemCount === 1 ? '' : 's'}`,
     `Total Bill: ${formatINR(total)}`,
     `Status: ${status || 'Pending'}`,
     '',
@@ -422,6 +546,8 @@ module.exports = {
   emailPreheader,
   orderConfirmationHtml,
   orderConfirmationText,
+  orderItemsSection,
+  orderItemsText,
   internalNewOrderSubject,
   internalNewOrderHtml,
   internalNewOrderText,

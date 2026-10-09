@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { doc, getDoc, getDocs, collection, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { cachedGetDocs } from '../lib/firestoreCache';
 import { db } from '../firebase';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { FileText, Eye } from 'lucide-react';
@@ -10,7 +11,8 @@ import { authFetch, readApiError } from '../utils/apiClient';
 import CustomModal from '../components/CustomModal';
 import { useModal } from '../hooks/useModal';
 import { useAuth } from '../context/AuthContext';
-import { downloadInvoicePDF, printInvoicePDF } from '../utils/pdfGenerator';
+/* Invoice PDFs (jsPDF + helpers) load on first use, not with the detail page. */
+const loadInvoicePdf = () => import('../utils/pdfGenerator');
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { pageVariants, revealVariants } from '../lib/motion';
 import { Skeleton } from '../components/ui/Skeleton';
@@ -21,10 +23,12 @@ import OrderActionBar from '../components/admin/OrderActionBar';
 import AdminHeader from '../components/admin/AdminHeader';
 import OrderDetailPanel from '../components/admin/OrderDetailPanel';
 import OrderEditModal from '../components/admin/OrderEditModal';
+import { orderIdOf } from '../lib/orderId';
 
 const statusOptions = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'];
 
-const orderCodeOf = (order) => order.shortCode || (order.id || '').slice(-6).toUpperCase() || 'N/A';
+/* The canonical Order ID, as minted on the server. See lib/orderId.js. */
+const orderCodeOf = (order) => orderIdOf(order) || 'N/A';
 
 const AdminOrderDetail = () => {
   const { orderId } = useParams();
@@ -54,9 +58,9 @@ const AdminOrderDetail = () => {
     let cancelled = false;
     const load = async () => {
       try {
-        const [orderSnap, productsSnap, adminSnap] = await Promise.all([
+        const [orderSnap, products, adminSnap] = await Promise.all([
           getDoc(doc(db, 'orders', orderId)),
-          getDocs(collection(db, 'products')),
+          cachedGetDocs(collection(db, 'products'), 'products'),
           getDoc(doc(db, 'adminSettings', 'main')),
         ]);
 
@@ -68,7 +72,7 @@ const AdminOrderDetail = () => {
         }
 
         setOrder({ id: orderSnap.id, ...orderSnap.data() });
-        setProducts(productsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setProducts(products);
 
         if (adminSnap.exists()) {
           const value = Number(adminSnap.data().minimumOrderValue);
@@ -269,6 +273,7 @@ const AdminOrderDetail = () => {
     try {
       const orderData = { orderId: order.id, ...order, items: order.items || [] };
       const customerInfo = order.customer || { name: 'N/A', phone: 'N/A', email: '', address: '', city: '', pincode: '' };
+      const { downloadInvoicePDF } = await loadInvoicePdf();
       downloadInvoicePDF(orderData, customerInfo, { isAdmin: true });
       toast.success('Invoice downloaded successfully!');
     } catch (error) {
@@ -284,6 +289,7 @@ const AdminOrderDetail = () => {
     try {
       const orderData = { orderId: order.id, ...order, items: order.items || [] };
       const customerInfo = order.customer || { name: 'N/A', phone: 'N/A', email: '', address: '', city: '', pincode: '' };
+      const { printInvoicePDF } = await loadInvoicePdf();
       printInvoicePDF(orderData, customerInfo, { isAdmin: true });
     } catch (error) {
       console.error('Error printing invoice:', error);

@@ -1,6 +1,13 @@
-import { removeImageBackground } from './removeBackground';
 import { authFetch } from './apiClient';
 import { isLocalOnlyUrl } from './storageUrls';
+
+/* The background-removal model (onnxruntime, tens of MB) is imported lazily
+   so merely uploading an image — the common case in Canvas and products —
+   never downloads it. Only an explicit removeBackground:true pays the cost. */
+async function removeImageBackground(file, onProgress) {
+  const { removeImageBackground: run } = await import('./removeBackground');
+  return run(file, onProgress);
+}
 
 export async function uploadImage(file, options = {}) {
   if (!file) {

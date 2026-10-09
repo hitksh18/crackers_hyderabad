@@ -26,6 +26,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { revealVariants, staggerParent } from '../lib/motion';
 import { Skeleton } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
+import { orderIdOf } from '../lib/orderId';
 
 const OrderCardSkeleton = () => (
   <div className="panel-editorial glass-card p-5 sm:p-7" aria-hidden="true">
@@ -131,7 +132,7 @@ const MyOrders = () => {
       const url = URL.createObjectURL(pdfBlob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `Invoice_${(order.shortCode || order.id.slice(-6).toUpperCase())}.pdf`;
+      link.download = `Invoice_${orderIdOf(order) || 'ORDER'}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -310,7 +311,7 @@ const MyOrders = () => {
             {orders.map((order) => {
               const StatusIcon = getStatusIcon(order.status);
               const isExpanded = expandedOrder === order.id;
-              const orderCode = order.shortCode || order.id.slice(-6).toUpperCase();
+              const orderCode = orderIdOf(order);
               const panelId = `order-panel-${order.id}`;
 
               return (

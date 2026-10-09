@@ -391,7 +391,7 @@ const UserManagement = () => {
                     <div className="lg:hidden">
                       <div className="flex items-start gap-3">
                         <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full" style={{ background: 'var(--surface-sunken)', border: '1px solid var(--hairline)' }}>
-                          {user.photoURL ? <img src={user.photoURL} alt="" className="h-9 w-9 rounded-full object-cover" /> : <RoleIcon className="h-4 w-4" style={{ color: 'var(--text-muted)' }} />}
+                          {user.photoURL ? <img src={user.photoURL} alt="" loading="lazy" decoding="async" width={36} height={36} className="h-9 w-9 rounded-full object-cover" /> : <RoleIcon className="h-4 w-4" style={{ color: 'var(--text-muted)' }} />}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{user.displayName || user.profileName || 'No name'} {isCurrent && <span className="ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'var(--ember-600)', color: '#fff' }}>You</span>}</p>
@@ -417,7 +417,7 @@ const UserManagement = () => {
                     <div className="users-grid hidden lg:grid lg:items-center lg:gap-2">
                       <div className="flex min-w-0 items-center gap-2.5">
                         <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full" style={{ background: 'var(--surface-sunken)', border: '1px solid var(--hairline)' }}>
-                          {user.photoURL ? <img src={user.photoURL} alt="" className="h-8 w-8 rounded-full object-cover" /> : <RoleIcon className="h-4 w-4" style={{ color: 'var(--text-muted)' }} />}
+                          {user.photoURL ? <img src={user.photoURL} alt="" loading="lazy" decoding="async" width={32} height={32} className="h-8 w-8 rounded-full object-cover" /> : <RoleIcon className="h-4 w-4" style={{ color: 'var(--text-muted)' }} />}
                         </div>
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold leading-tight" style={{ color: 'var(--text-strong)' }}>{user.displayName || user.profileName || 'No name'} {isCurrent && <span className="ml-1 rounded-full px-1 py-0.5 text-[10px] font-bold align-middle" style={{ background: 'var(--ember-600)', color: '#fff' }}>You</span>}</p>

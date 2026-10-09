@@ -64,11 +64,11 @@ const HeroShellSkeleton = () => (
 
 /**
  * Storefront hero — the cinematic DOM/CSS/JS fireworks scene.
- * Accepts the same props (banners, cards, durationSec, loading, mode) so
+ * Accepts the same props (banners, cards, durationSec, loading, mode, copy) so
  * Canvas/Home.jsx require no changes. Banner/carousel props are accepted
  * for API compat; the scene is static and needs no campaign data.
  */
-const StorefrontHero = ({ banners, cards, durationSec, loading, mode = 'auto' }) => {
+const StorefrontHero = ({ banners, cards, durationSec, loading, mode = 'auto', copy }) => {
   void banners;
   void cards;
   void durationSec;
@@ -87,7 +87,7 @@ const StorefrontHero = ({ banners, cards, durationSec, loading, mode = 'auto' })
       <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8" style={{ background: 'linear-gradient(180deg, rgba(7,5,5,0.45) 0%, transparent 100%)' }} />
       {/* Hero is visually part of navbar — no hard gap, no bright separator */}
       <div className={mode === 'auto' ? 'relative w-full max-w-full' : 'relative mx-auto w-full max-w-[420px]'}>
-        <FireworksHero />
+        <FireworksHero copy={copy} />
       </div>
       {/* Slim trust strip — the four hero assurances live here now, not in the hero */}
       <HeroTrustStrip />

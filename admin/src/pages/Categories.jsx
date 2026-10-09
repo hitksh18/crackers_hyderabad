@@ -11,13 +11,13 @@ import {
 import AdminHeader from '../components/admin/AdminHeader';
 import {
   collection,
-  getDocs,
   doc,
   updateDoc,
   arrayUnion,
   arrayRemove,
 } from 'firebase/firestore';
 import { db } from '../firebase';
+import { cachedGetDocs } from '../lib/firestoreCache';
 import { categoryDefs } from '../components/home/homeData';
 import CategoryIcon from '../components/CategoryIconPack';
 import toast from '../utils/toast';
@@ -40,8 +40,8 @@ const AdminCategories = () => {
   const loadProducts = useCallback(async () => {
     setLoadError(null);
     try {
-      const snap = await getDocs(collection(db, 'products'));
-      setProducts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      /* Read-only membership mapping — shared cache, not a fresh download. */
+      setProducts(await cachedGetDocs(collection(db, 'products'), 'products'));
     } catch (e) {
       console.error(e);
       setLoadError('Failed to load products');
@@ -308,7 +308,7 @@ const AdminCategories = () => {
                         {checked && <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />}
                       </span>
                       {image ? (
-                        <img src={image} alt="" className="h-9 w-9 justify-self-start rounded-[8px] object-cover lg:h-10 lg:w-10" style={{ border: '1px solid var(--hairline)', background: 'var(--surface-raised)' }} />
+                        <img src={image} alt="" loading="lazy" decoding="async" width={40} height={40} className="h-9 w-9 justify-self-start rounded-[8px] object-cover lg:h-10 lg:w-10" style={{ border: '1px solid var(--hairline)', background: 'var(--surface-raised)' }} />
                       ) : (
                         <span className="grid h-9 w-9 place-items-center rounded-[8px] border lg:h-10 lg:w-10" style={{ background: 'var(--surface-sunken)', borderColor: 'var(--hairline)' }}><Package className="h-4 w-4" style={{ color: 'var(--text-muted)' }} /></span>
                       )}

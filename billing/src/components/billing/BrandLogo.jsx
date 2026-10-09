@@ -4,11 +4,10 @@ import { BRAND_LOGO_SRC, BRAND_NAME, BRAND_NAME_UPPER } from '../../lib/branding
 /**
  * The AYYAPA FIREWORKS brand lockup.
  *
- * Renders the official logo when BRAND_LOGO_SRC resolves, and the wordmark
- * either way. The logo file is not in the repository yet, so today every
- * surface shows the name alone — see the note in lib/branding.js for the one
- * path to drop the artwork into. A missing image therefore never shows as a
- * broken-image icon on a live register or on a customer's printed bill.
+ * Renders the official logo from BRAND_LOGO_SRC with the wordmark beside it;
+ * if the file ever goes missing the mark hides itself and the wordmark
+ * carries the brand alone, so no surface ever shows a broken-image icon on
+ * a live register or a printed bill.
  *
  * Two variants, matching the two rendering contracts in this app:
  *   'screen' — the dark POS chrome, styled with the app's design tokens.

@@ -235,6 +235,7 @@ const Home = () => {
       cards={promoCards}
       durationSec={homepageConfig?.carouselDurationSec ?? 5}
       loading={false}
+      copy={homepageConfig?.heroCopy}
     />
   );
 
@@ -254,10 +255,6 @@ const Home = () => {
       case 'announcement':
         // Announcement bar below hero removed from public homepage per design spec.
         // Top marquee (TopBanner) remains above navbar. Canvas data stays intact.
-        return null;
-      case 'stableMessage':
-        // Stable message below hero removed from public homepage per design spec.
-        // Canvas config (settings/siteSettings.stableMessage) remains writable.
         return null;
       case 'categories':
         return <CategoryShowcase key={section.id} sectionRef={categoriesRef} countInCategory={countInCategory} categories={visibleCategories} heading={homepageContent.categories} />;

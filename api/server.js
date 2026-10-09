@@ -38,14 +38,85 @@ const {
   createRateLimiter,
   securityHeaders,
 } = require('./lib/security');
-const { createOrder, createPosOrder, trackOrder, handlePublicTrack, consumeNotifyToken, isValidEmail } = require('./lib/orders');
+const {
+  createOrder,
+  createPosOrder,
+  trackOrder,
+  handlePublicTrack,
+  consumeNotifyToken,
+  isValidEmail,
+  readHighestUsedSequence,
+  bumpSequenceFloor,
+  priceCart,
+} = require('./lib/orders');
+const {
+  normalizeCode: normalizeCouponCode,
+  validateCouponInput,
+  validateCouponForCart,
+  computeDiscountAmount,
+  getCouponByCode,
+} = require('./lib/coupons');
+const {
+  readOrderIdConfig,
+  writeOrderIdConfig,
+  defaultConfig: defaultOrderIdConfig,
+} = require('./lib/orderId');
 // Single source of truth for SMTP (Gmail App Password via SMTP_*, EMAIL_*
 // fallback) — order confirmations, password resets and manual resends.
 // The compact confirmation template + payment note live in
 // lib/emailTemplates + lib/email so every mail path renders identically.
 const { readEmailConfig, createSmtpTransporter, orderPaymentNote, maybeSendOrderConfirmationEmail, sendStatusUpdateEmail } = require('./lib/email');
 const { orderConfirmationHtml, orderConfirmationText } = require('./lib/emailTemplates');
+// Email Automation (rules, templates, branding, logs, manual sends). The
+// order-id style applies: one module owns validation + persistence + send.
+const {
+  EVENTS: EMAIL_AUTOMATION_EVENTS,
+  readAutomationRules,
+  validateRulesInput,
+  writeAutomationRules,
+  readTemplates: readEmailTemplates,
+  validateTemplatesInput,
+  writeEmailTemplates,
+  readBranding: readEmailBranding,
+  validateBrandingInput,
+  writeEmailBranding,
+  readLogs: readEmailLogs,
+  readLastTriggered: readEmailLastTriggered,
+  sendManualEmail,
+  sendDetailsUpdatedEmail,
+} = require('./lib/emailAutomation');
 const { handleReverseGeocode, handleSearchPlaces, handleGeocodeConfig } = require('./lib/geocode');
+// Order ID generation. The generator, its validation and the messages the admin
+// sees all live in one module so the API can never mint an id the settings
+// screen would have rejected, or vice versa.
+const {
+  TOKENS: ORDER_ID_TOKENS,
+  DEFAULT_FORMAT: ORDER_ID_DEFAULT_FORMAT,
+  DEFAULT_PREFIX: ORDER_ID_DEFAULT_PREFIX,
+  DEFAULT_SEQUENCE_LENGTH: ORDER_ID_DEFAULT_SEQUENCE_LENGTH,
+  MIN_SEQUENCE_LENGTH: ORDER_ID_MIN_SEQUENCE_LENGTH,
+  MAX_SEQUENCE_LENGTH: ORDER_ID_MAX_SEQUENCE_LENGTH,
+  MAX_ORDER_ID_LENGTH: ORDER_ID_MAX_LENGTH,
+  normalizeConfig: normalizeOrderIdConfig,
+  validateConfig: validateOrderIdConfig,
+  renderOrderId: renderConfiguredOrderId,
+  isSafeOrderId,
+  carriesOwnEntropy: orderIdCarriesOwnEntropy,
+} = require('./lib/orderId');
+// OFFLINE/STORE Order IDs — fully independent module (own config doc +
+// own counter). Imported only for the offline routes + POS path; the ONLINE
+// routes above never use it.
+const {
+  defaultOfflineConfig,
+  normalizeOfflineConfig,
+  validateOfflineConfig,
+  readOfflineOrderIdConfig,
+  writeOfflineOrderIdConfig,
+  readHighestUsedOfflineSequence,
+  setOfflineCounterTo,
+  renderOfflineOrderId,
+  buildOfflinePreview,
+} = require('./lib/offlineOrderId');
 
 /**
  * Environment loading — one place, one documented precedence.
@@ -1250,6 +1321,609 @@ app.get('/api/admin/recommendations/config', requireFirebase, requireAdmin, admi
 app.put('/api/admin/recommendations/config', requireFirebase, requireAdmin, adminLimiter, withDb(rec.handlePutConfig));
 
 /* ---------------------------------------------------------------------------
+   Order ID settings — Settings → Orders → Order ID.
+
+   Order ids are minted on the server (lib/orders.js, inside the transaction
+   that writes the order), so this endpoint only ever *configures* the format.
+   It cannot and does not touch an order that already exists: changing the
+   format changes what the NEXT order is called, never what a past one was.
+
+   GET  returns the saved config plus the sequence facts the UI needs to render
+        a preview and to keep the form honest (highest sequence ever issued, the
+        sequence the next order will take).
+   PUT  validates, then saves. The sequence floor is enforced against the live
+        counter, not against the value the browser sent, so a stale form cannot
+        rewind the sequence and re-issue an id that is already out in the world.
+   POST previews an unsaved draft, so the admin sees exactly what would be
+        minted — rendered by the same function that mints it.
+   --------------------------------------------------------------------------- */
+
+/**
+ * Render the two ids the settings screen shows: the next one that would be
+ * minted, and the one after it. Both are pure — nothing is reserved — so an
+ * admin can preview all afternoon without consuming a number.
+ */
+function buildOrderIdPreview(config, baseSequence) {
+  const now = new Date();
+  const first = Math.max(1, Number(baseSequence) || 1);
+  return {
+    next: renderConfiguredOrderId(config, { sequence: first, now }),
+    afterNext: renderConfiguredOrderId(config, { sequence: first + 1, now }),
+    sequence: first,
+  };
+}
+
+app.get(
+  '/api/admin/order-id',
+  requireFirebase,
+  requireAdmin,
+  adminLimiter,
+  withDb(async (req, res) => {
+    try {
+      const db = req.firestore;
+      const [{ config, isUsable }, highestUsedSequence] = await Promise.all([
+        readOrderIdConfig(db),
+        readHighestUsedSequence(db),
+      ]);
+
+      /* The next sequence is the counter, not the stored `nextSequence`. The
+         stored value is only the floor the last save asked for; the counter is
+         what has actually been issued, and it may have moved on since. */
+      const nextSequence = Math.max(highestUsedSequence + 1, Number(config.nextSequence) || 1);
+
+      return res.json({
+        config: { ...config, nextSequence },
+        defaults: defaultOrderIdConfig(),
+        tokens: ORDER_ID_TOKENS,
+        limits: {
+          minSequenceLength: ORDER_ID_MIN_SEQUENCE_LENGTH,
+          maxSequenceLength: ORDER_ID_MAX_SEQUENCE_LENGTH,
+          maxOrderIdLength: ORDER_ID_MAX_LENGTH,
+        },
+        highestUsedSequence,
+        preview: buildOrderIdPreview(config, nextSequence),
+        // False means the stored document was present but unusable and the
+        // default is in force — the UI says so rather than silently showing a
+        // format that is not what orders are actually getting.
+        storedConfigUsable: isUsable,
+      });
+    } catch (error) {
+      console.error('[orderId] failed to load config:', error);
+      return res.status(500).json({ error: 'Could not load the Order ID settings' });
+    }
+  })
+);
+
+app.post(
+  '/api/admin/order-id/preview',
+  requireFirebase,
+  requireAdmin,
+  adminLimiter,
+  withDb(async (req, res) => {
+    try {
+      const db = req.firestore;
+      const highestUsedSequence = await readHighestUsedSequence(db);
+      const { config: saved } = await readOrderIdConfig(db);
+
+      // Preview the draft as typed, falling back to the saved values for
+      // anything the form has not sent, so a half-filled form still previews.
+      const { config } = normalizeOrderIdConfig({
+        format: req.body?.format ?? saved.format,
+        prefix: req.body?.prefix ?? saved.prefix,
+        sequenceLength: req.body?.sequenceLength ?? saved.sequenceLength,
+        nextSequence: req.body?.nextSequence ?? saved.nextSequence,
+      });
+
+      const validation = validateOrderIdConfig(req.body || {}, { highestUsedSequence });
+      const sequence = Math.max(1, Number(req.body?.nextSequence) || highestUsedSequence + 1);
+
+      return res.json({
+        valid: validation.ok,
+        errors: validation.errors,
+        // Rendering the draft is what the admin is actually looking at, so the
+        // preview deliberately bypasses validation — an invalid draft still gets
+        // a preview, marked invalid, rather than a blank panel.
+        preview: buildOrderIdPreview(config, sequence),
+        highestUsedSequence,
+      });
+    } catch (error) {
+      console.error('[orderId] preview failed:', error);
+      return res.status(500).json({ error: 'Could not preview that format' });
+    }
+  })
+);
+
+app.put(
+  '/api/admin/order-id',
+  requireFirebase,
+  requireAdmin,
+  adminLimiter,
+  withDb(async (req, res) => {
+    try {
+      const db = req.firestore;
+      const highestUsedSequence = await readHighestUsedSequence(db);
+      const validation = validateOrderIdConfig(req.body || {}, { highestUsedSequence });
+
+      if (!validation.ok) {
+        return res.status(400).json({
+          error: 'Please fix the highlighted fields',
+          errors: validation.errors,
+        });
+      }
+
+      await writeOrderIdConfig(db, validation.value, { userEmail: req.caller?.email });
+
+      /* Only ever RAISE the counter, never lower it. Bumping after the write is
+         safe because `bumpSequenceFloor` is monotonic: if a checkout slipped in
+         between the read above and this call, the floor lands above it rather
+         than rewinding under it. */
+      await bumpSequenceFloor(db, validation.value.nextSequence);
+
+      console.log(
+        `[orderId] format updated to "${validation.value.format}" (prefix ${validation.value.prefix}, seq ${validation.value.sequenceLength}) by ${req.caller?.email || req.caller?.uid}`
+      );
+
+      const preview = buildOrderIdPreview(validation.value, validation.value.nextSequence);
+      return res.json({
+        success: true,
+        config: validation.value,
+        highestUsedSequence,
+        preview,
+      });
+    } catch (error) {
+      console.error('[orderId] failed to save config:', error);
+      return res.status(500).json({ error: 'Could not save the Order ID settings' });
+    }
+  })
+);
+
+/* ---------------------------------------------------------------------------
+   OFFLINE / STORE Order ID settings — Admin → Site Settings → ORDER ID SETTINGS.
+
+   Fully independent from ONLINE (/api/admin/order-id):
+   - config  : adminSettings/offlineOrderId { prefix, year, separator,
+               padding, nextNumber }
+   - counter : counters/offlineOrders
+   - ONLINE counter (counters/orders) is never read or written here.
+   - Existing orders are never rewritten; changes affect NEW offline orders only.
+   - nextNumber may rewind (reset to 0001 is supported): the POS commit steps
+     over taken trackingCodes instead of reusing them, so rewind is safe.
+   --------------------------------------------------------------------------- */
+
+function buildOfflineAdminPayload(config, highestUsedOfflineSequence) {
+  const nextNumber = Math.max(1, Number(config.nextNumber) || highestUsedOfflineSequence + 1 || 1);
+  return {
+    config: { ...config, nextNumber },
+    defaults: defaultOfflineConfig(),
+    limits: {
+      minPadding: 3,
+      maxPadding: 12,
+      maxOrderIdLength: 40,
+      maxOrderNumber: 9999,
+    },
+    highestUsedSequence: highestUsedOfflineSequence,
+    preview: buildOfflinePreview(config, nextNumber),
+  };
+}
+
+app.get(
+  '/api/admin/offline-order-id',
+  requireFirebase,
+  requireAdmin,
+  adminLimiter,
+  withDb(async (req, res) => {
+    try {
+      const db = req.firestore;
+      const [{ config, isUsable }, highestUsedOfflineSequence] = await Promise.all([
+        readOfflineOrderIdConfig(db),
+        readHighestUsedOfflineSequence(db),
+      ]);
+      const payload = buildOfflineAdminPayload(config, highestUsedOfflineSequence);
+      return res.json({ ...payload, storedConfigUsable: isUsable });
+    } catch (error) {
+      console.error('[offlineOrderId] failed to load config:', error);
+      return res.status(500).json({ error: 'Could not load the offline Order ID settings' });
+    }
+  })
+);
+
+app.post(
+  '/api/admin/offline-order-id/preview',
+  requireFirebase,
+  requireAdmin,
+  adminLimiter,
+  withDb(async (req, res) => {
+    try {
+      const db = req.firestore;
+      const highestUsedOfflineSequence = await readHighestUsedOfflineSequence(db);
+      const { config: saved } = await readOfflineOrderIdConfig(db);
+      const { config } = normalizeOfflineConfig({
+        prefix: req.body?.prefix ?? saved.prefix,
+        year: req.body?.year ?? saved.year,
+        separator: req.body?.separator ?? saved.separator,
+        padding: req.body?.padding ?? req.body?.sequenceLength ?? saved.padding,
+        nextNumber: req.body?.nextNumber ?? req.body?.nextSequence ?? saved.nextNumber,
+      });
+      const validation = validateOfflineConfig(req.body || {});
+      const sequence = Math.max(1, Number(req.body?.nextNumber ?? req.body?.nextSequence) || highestUsedOfflineSequence + 1);
+      return res.json({
+        valid: validation.ok,
+        errors: validation.errors,
+        preview: buildOfflinePreview(config, sequence),
+        highestUsedSequence: highestUsedOfflineSequence,
+      });
+    } catch (error) {
+      console.error('[offlineOrderId] preview failed:', error);
+      return res.status(500).json({ error: 'Could not preview that offline format' });
+    }
+  })
+);
+
+app.put(
+  '/api/admin/offline-order-id',
+  requireFirebase,
+  requireAdmin,
+  adminLimiter,
+  withDb(async (req, res) => {
+    try {
+      const db = req.firestore;
+      const highestUsedOfflineSequence = await readHighestUsedOfflineSequence(db);
+      const validation = validateOfflineConfig(req.body || {});
+      if (!validation.ok) {
+        return res.status(400).json({ error: 'Please fix the highlighted fields', errors: validation.errors });
+      }
+      await writeOfflineOrderIdConfig(db, validation.value, { userEmail: req.caller?.email });
+      // Position the OFFLINE counter only (never the online one). May rewind
+      // on purpose (reset flow); collisions are stepped over at commit time.
+      await setOfflineCounterTo(db, validation.value.nextNumber);
+      console.log(
+        `[offlineOrderId] updated to prefix=${validation.value.prefix} year=${validation.value.year} sep=${JSON.stringify(validation.value.separator)} padding=${validation.value.padding} next=${validation.value.nextNumber} by ${req.caller?.email || req.caller?.uid}`
+      );
+      const preview = buildOfflinePreview(validation.value, validation.value.nextNumber);
+      return res.json({ success: true, config: validation.value, highestUsedSequence: highestUsedOfflineSequence, preview });
+    } catch (error) {
+      console.error('[offlineOrderId] failed to save config:', error);
+      return res.status(500).json({ error: 'Could not save the offline Order ID settings' });
+    }
+  })
+);
+
+app.post(
+  '/api/admin/offline-order-id/reset',
+  requireFirebase,
+  requireAdmin,
+  adminLimiter,
+  withDb(async (req, res) => {
+    try {
+      const db = req.firestore;
+      const nextNumber = Math.trunc(Number(req.body?.nextNumber ?? req.body?.nextSequence));
+      if (!Number.isInteger(nextNumber) || nextNumber < 1 || nextNumber > 9999) {
+        return res.status(400).json({ error: 'Next number must be a whole number between 1 and 9999.' });
+      }
+      // OFFLINE counter only. Existing orders are NOT changed — only the number
+      // used for the next NEW offline order is reset. Taken ids are stepped
+      // over at commit time, so resetting to 0001 never overwrites 0001-0004.
+      await setOfflineCounterTo(db, nextNumber);
+      const [{ config }] = await Promise.all([readOfflineOrderIdConfig(db)]);
+      const updated = { ...config, nextNumber };
+      await writeOfflineOrderIdConfig(db, updated, { userEmail: req.caller?.email });
+      console.log(`[offlineOrderId] counter reset to ${nextNumber} by ${req.caller?.email || req.caller?.uid}`);
+      const highestUsedOfflineSequence = await readHighestUsedOfflineSequence(db);
+      return res.json({
+        success: true,
+        config: updated,
+        highestUsedSequence: highestUsedOfflineSequence,
+        preview: buildOfflinePreview(updated, nextNumber),
+      });
+    } catch (error) {
+      console.error('[offlineOrderId] reset failed:', error);
+      return res.status(500).json({ error: 'Could not reset the offline counter' });
+    }
+  })
+);
+
+/* ---------------------------------------------------------------------------
+   Reset All Orders — Site Settings → Danger Zone.
+
+   Intentionally destructive and admin-only: deletes every order and tracking
+   code, zeroes the product sales ledger (Best Sellers rank from salesCount)
+   and re-arms the sequence counter so the next order mints the configured
+   next sequence. Requires the typed phrase RESET ORDERS — a plain click can
+   never trigger this. Bulk work runs here, server-side, in bounded batches
+   (never a client-side loop), and nothing already issued is renamed: past
+   shortCodes simply stop existing along with their orders.
+   --------------------------------------------------------------------------- */
+app.post(
+  '/api/admin/orders/reset',
+  requireFirebase,
+  requireAdmin,
+  adminLimiter,
+  withDb(async (req, res) => {
+    try {
+      if (String(req.body?.confirm || '').trim().toUpperCase() !== 'RESET ORDERS') {
+        return res.status(400).json({ error: 'Type RESET ORDERS to confirm.' });
+      }
+      const db = req.firestore;
+      const BATCH = 400;
+
+      const deleteCollection = async (name) => {
+        let total = 0;
+        for (;;) {
+          const snap = await db.collection(name).limit(BATCH).get();
+          if (snap.empty) break;
+          const batch = db.batch();
+          snap.docs.forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+          total += snap.size;
+          if (snap.size < BATCH) break;
+        }
+        return total;
+      };
+
+      const [ordersDeleted, trackingCodesDeleted] = await Promise.all([
+        deleteCollection('orders'),
+        deleteCollection('trackingCodes'),
+      ]);
+
+      /* Best Sellers rank from products.salesCount, incremented in the same
+         transaction that creates each order — leaving them behind would keep
+         showing best sellers for orders that no longer exist. */
+      let productsReset = 0;
+      for (;;) {
+        const snap = await db.collection('products').where('salesCount', '>', 0).limit(BATCH).get();
+        if (snap.empty) break;
+        const batch = db.batch();
+        snap.docs.forEach((d) => batch.update(d.ref, { salesCount: 0 }));
+        await batch.commit();
+        productsReset += snap.size;
+        if (snap.size < BATCH) break;
+      }
+
+      /* Re-arm the counter so the next order mints the configured next
+         sequence. version 2 must match ORDER_SEQUENCE_VERSION in
+         lib/orders.js — anything else would trigger a legacy migration. */
+      const { config } = await readOrderIdConfig(db);
+      const nextSequence = Math.max(1, Math.trunc(Number(config.nextSequence) || 1));
+      await db.collection('counters').doc('orders').set({
+        value: nextSequence - 1,
+        version: 2,
+        resetAt: new Date().toISOString(),
+        resetBy: (req.caller && (req.caller.email || req.caller.uid)) || null,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+
+      console.log(
+        `[orders/reset] by ${(req.caller && (req.caller.email || req.caller.uid)) || 'unknown'}: ` +
+        `orders=${ordersDeleted} trackingCodes=${trackingCodesDeleted} ` +
+        `products=${productsReset} counter->${nextSequence}`
+      );
+
+      return res.json({
+        success: true,
+        ordersDeleted,
+        trackingCodesDeleted,
+        feedbackDeleted: 0,
+        productsReset,
+        counterReset: nextSequence,
+      });
+    } catch (error) {
+      console.error('[orders/reset] failed:', error);
+      return res.status(500).json({ error: 'Reset failed — the data was left untouched where possible.' });
+    }
+  })
+);
+
+/* ---------------------------------------------------------------------------
+   Email Automation — rules, templates, branding, manual sends, delivery log.
+
+   Every route is admin-only. Sends go through the same SMTP transport as
+   order mail; credentials never leave the server (emailStatus reports only
+   whether mail is configured and why not). Toggles gate the automated hooks
+   in lib/email.js; templates/branding override presentation only.
+   --------------------------------------------------------------------------- */
+
+const emailAutomationLimiter = adminLimiter;
+
+app.get(
+  '/api/admin/email-automation',
+  requireFirebase,
+  requireAdmin,
+  emailAutomationLimiter,
+  withDb(async (req, res) => {
+    try {
+      const db = req.firestore;
+      const [rules, templates, branding, lastTriggered] = await Promise.all([
+        readAutomationRules(db),
+        readEmailTemplates(db),
+        readEmailBranding(db),
+        readEmailLastTriggered(db),
+      ]);
+      const emailConfig = readEmailConfig();
+      return res.json({
+        events: EMAIL_AUTOMATION_EVENTS,
+        rules,
+        templates,
+        branding,
+        lastTriggered,
+        emailStatus: {
+          enabled: emailConfig.enabled,
+          ok: emailConfig.ok,
+          problems: emailConfig.problems,
+        },
+      });
+    } catch (error) {
+      console.error('[automation] load failed:', error);
+      return res.status(500).json({ error: 'Could not load Email Automation settings' });
+    }
+  })
+);
+
+app.put(
+  '/api/admin/email-automation/rules',
+  requireFirebase,
+  requireAdmin,
+  emailAutomationLimiter,
+  withDb(async (req, res) => {
+    try {
+      const validation = validateRulesInput(req.body || {});
+      if (!validation.ok) {
+        return res.status(400).json({ error: 'Please fix the highlighted toggles', errors: validation.errors });
+      }
+      const saved = await writeAutomationRules(req.firestore, validation.value, { userEmail: req.caller?.email });
+      console.log(`[automation] rules updated by ${req.caller?.email || req.caller?.uid}`);
+      return res.json({ success: true, rules: saved });
+    } catch (error) {
+      console.error('[automation] rules save failed:', error);
+      return res.status(500).json({ error: 'Could not save automation rules' });
+    }
+  })
+);
+
+app.put(
+  '/api/admin/email-automation/templates',
+  requireFirebase,
+  requireAdmin,
+  emailAutomationLimiter,
+  withDb(async (req, res) => {
+    try {
+      const validation = validateTemplatesInput(req.body || {});
+      if (!validation.ok) {
+        return res.status(400).json({ error: 'Please fix the highlighted fields', errors: validation.errors });
+      }
+      const saved = await writeEmailTemplates(req.firestore, validation.value, { userEmail: req.caller?.email });
+      console.log(`[automation] templates updated by ${req.caller?.email || req.caller?.uid}`);
+      return res.json({ success: true, templates: saved });
+    } catch (error) {
+      console.error('[automation] templates save failed:', error);
+      return res.status(500).json({ error: 'Could not save email templates' });
+    }
+  })
+);
+
+app.put(
+  '/api/admin/email-automation/branding',
+  requireFirebase,
+  requireAdmin,
+  emailAutomationLimiter,
+  withDb(async (req, res) => {
+    try {
+      const validation = validateBrandingInput(req.body || {});
+      if (!validation.ok) {
+        return res.status(400).json({ error: 'Please fix the highlighted fields', errors: validation.errors });
+      }
+      const saved = await writeEmailBranding(req.firestore, validation.value, { userEmail: req.caller?.email });
+      console.log(`[automation] branding updated by ${req.caller?.email || req.caller?.uid}`);
+      return res.json({ success: true, branding: saved });
+    } catch (error) {
+      console.error('[automation] branding save failed:', error);
+      return res.status(500).json({ error: 'Could not save email branding' });
+    }
+  })
+);
+
+app.get(
+  '/api/admin/email-automation/logs',
+  requireFirebase,
+  requireAdmin,
+  emailAutomationLimiter,
+  withDb(async (req, res) => {
+    try {
+      const rows = await readEmailLogs(req.firestore, {
+        event: String(req.query.event || ''),
+        status: String(req.query.status || ''),
+        search: String(req.query.q || ''),
+        limit: req.query.limit,
+      });
+      return res.json({ logs: rows });
+    } catch (error) {
+      console.error('[automation] logs read failed:', error);
+      return res.status(500).json({ error: 'Could not load the delivery log' });
+    }
+  })
+);
+
+app.post(
+  '/api/admin/email-automation/test',
+  requireFirebase,
+  requireAdmin,
+  emailAutomationLimiter,
+  withDb(async (req, res) => {
+    try {
+      const to = String(req.body?.to || '').trim();
+      const emailConfig = readEmailConfig();
+      if (!emailConfig.enabled) return res.status(400).json({ error: 'Email is disabled on the server (EMAIL_ENABLED=false).' });
+      if (!emailConfig.ok) {
+        return res.status(400).json({ error: `Email is not configured: ${emailConfig.problems.join(', ')}` });
+      }
+      // No order is read or touched — this only proves the real transport.
+      const result = await sendManualEmail(req.firestore, {
+        to,
+        subject: 'Test email from your store',
+        message: 'Hello from {STORE_NAME},\n\nThis is a test email. If you received it, the store email system is working.\n\n{STORE_URL}',
+        orderId: null,
+      });
+      if (!result.ok) return res.status(400).json({ error: result.error || 'Test email failed.' });
+      await require('./lib/emailAutomation').logDelivery(req.firestore, {
+        event: 'test', orderId: '', recipient: to,
+        subject: result.subject || '', status: 'sent', error: '', messageId: result.messageId || '',
+      }).catch(() => {});
+      return res.json({ success: true, messageId: result.messageId || null });
+    } catch (error) {
+      console.error('[automation] test send failed:', error);
+      return res.status(500).json({ error: 'Test email failed.' });
+    }
+  })
+);
+
+app.post(
+  '/api/admin/email-automation/compose',
+  requireFirebase,
+  requireAdmin,
+  emailAutomationLimiter,
+  withDb(async (req, res) => {
+    try {
+      const result = await sendManualEmail(req.firestore, {
+        to: req.body?.to,
+        subject: req.body?.subject,
+        message: req.body?.message,
+        orderId: req.body?.orderId || null,
+      });
+      if (!result.ok) return res.status(400).json({ error: result.error || 'Send failed.' });
+      await require('./lib/emailAutomation').logDelivery(req.firestore, {
+        event: 'compose', orderId: String(req.body?.orderId || ''), recipient: String(req.body?.to || ''),
+        subject: result.subject || '', status: 'sent', error: '', messageId: result.messageId || '',
+      }).catch(() => {});
+      return res.json({ success: true, messageId: result.messageId || null });
+    } catch (error) {
+      console.error('[automation] compose send failed:', error);
+      return res.status(500).json({ error: 'Send failed.' });
+    }
+  })
+);
+
+app.post(
+  '/api/admin/email-automation/notify-details',
+  requireFirebase,
+  requireAdmin,
+  emailAutomationLimiter,
+  withDb(async (req, res) => {
+    try {
+      const orderId = String(req.body?.orderId || '').trim();
+      if (!orderId) return res.status(400).json({ error: 'Missing order id.' });
+      const result = await sendDetailsUpdatedEmail(req.firestore, orderId);
+      if (!result.ok) {
+        if (result.skipped === 'already-sent') return res.json({ success: true, skipped: true });
+        return res.status(400).json({ error: result.error || 'Notification not sent.' });
+      }
+      return res.json({ success: true });
+    } catch (error) {
+      console.error('[automation] notify-details failed:', error);
+      return res.status(500).json({ error: 'Notification failed.' });
+    }
+  })
+);
+
+/* ---------------------------------------------------------------------------
    Site analytics (first-party)
    Ingestion is public — a visitor is not signed in — but it is rate limited
    and stores no IP address. Reading is admin-only: traffic, referrers and
@@ -1420,10 +2094,10 @@ async function authoriseNotification(req, entry, channel) {
   return ok ? 'token' : false;
 }
 
-/* Manual resend (POST /api/orders/email) renders the SAME compact,
-// item-free confirmation template as the automatic mail — summary, live
-// status, note and actions only. The itemised invoice is generated
-// client-side from the tracking page behind DOWNLOAD INVOICE. */
+/* Manual resend (POST /api/orders/email) renders the SAME confirmation
+// template as the automatic mail — itemised section included. The full
+// itemised invoice is generated client-side from the tracking page behind
+// DOWNLOAD INVOICE. */
 function buildOrderEmailHtml(order) {
   const code = String(order.shortCode || order.orderId || order.id || 'N/A').toUpperCase();
   const items = Array.isArray(order.items) ? order.items : [];
@@ -1434,10 +2108,14 @@ function buildOrderEmailHtml(order) {
     status: order.status || 'Pending',
     quantity,
     total: order.total ?? 0,
-    trackUrl: `${trackBase}/track/${code}`,
+    trackUrl: `${trackBase}/track/${encodeURIComponent(code)}`,
     invoiceUrl: `${trackBase}/track-order?id=${encodeURIComponent(code)}`,
     customerName: order.customer?.name || '',
     note: orderPaymentNote(order),
+    items,
+    subtotal: order.subtotal,
+    discount: order.discount,
+    couponCode: order.coupon?.code,
   });
 }
 
@@ -1451,10 +2129,14 @@ function buildOrderEmailText(order) {
     status: order.status || 'Pending',
     quantity,
     total: order.total ?? 0,
-    trackUrl: `${trackBase}/track/${code}`,
+    trackUrl: `${trackBase}/track/${encodeURIComponent(code)}`,
     invoiceUrl: `${trackBase}/track-order?id=${encodeURIComponent(code)}`,
     customerName: order.customer?.name || '',
     note: orderPaymentNote(order),
+    items,
+    subtotal: order.subtotal,
+    discount: order.discount,
+    couponCode: order.coupon?.code,
   });
 }
 
@@ -1465,8 +2147,37 @@ function buildOrderEmailText(order) {
  * is the only way an order can come into existence.
  *
  * A signed-in caller is bound to their order via the optional bearer token.
+ *
+ * Rate limit: 12 a minute per caller. Checkout is not a retried operation by
+ * design — the storefront disables its submit button while a request is in
+ * flight — but a customer double-tapping or a flaky mobile connection can
+ * produce a second attempt, and this is a ceiling that keeps one impatient
+ * customer from spending the shop's whole order budget.
  */
-const orderLimiter = createRateLimiter({ windowMs: 60_000, max: 12, name: 'orders' });
+/**
+ * The ceiling, overridable only when explicitly opted into.
+ *
+ * ORDER_RATE_LIMIT_MAX exists so the local emulator suite (tests/order-id.e2e.js),
+ * which places dozens of orders in a minute, is not throttled by a control that
+ * exists to slow down a real customer. It is clamped so no value can disable the
+ * limiter outright, and it is ignored in production — a shop must never be able
+ * to relax its own abuse ceiling by editing the environment. Leave it unset in
+ * production and the limit is 12 a minute.
+ */
+const parseOrderRateLimit = (raw) => {
+  const fallback = 12;
+  if (!raw) return fallback;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 1) return fallback;
+  return Math.min(n, 1000);
+};
+
+const ORDER_RATE_LIMIT_MAX =
+  process.env.NODE_ENV === 'production'
+    ? 12
+    : parseOrderRateLimit(process.env.ORDER_RATE_LIMIT_MAX);
+
+const orderLimiter = createRateLimiter({ windowMs: 60_000, max: ORDER_RATE_LIMIT_MAX, name: 'orders' });
 
 app.post('/api/orders', orderLimiter, requireFirebase, async (req, res) => {
   req.caller = await authenticate(req); // null for guests, which is allowed
@@ -1507,6 +2218,268 @@ app.post(
   requireRole(['admin', 'sales']),
   createPosOrder
 );
+
+/* ---------------------------------------------------------------------------
+   Coupons — validation is public (guest checkout applies codes) but the
+   discount is always computed here from the server-priced cart. The browser
+   sends items + code; this endpoint answers what the order would pay.
+   Admin CRUD below is admin-only; the admin UI never writes coupons direct.
+   --------------------------------------------------------------------------- */
+const couponLimiter = createRateLimiter({ windowMs: 60_000, max: 30, name: 'coupons' });
+
+/* Public storefront listing: active, in-window, under-limit coupons with ONLY
+   the fields a customer needs to decide (code, discount, minimum, windows,
+   restrictions). Usage counts, revenue and internal notes never leave the
+   server. Eligibility against the live cart is indicative only — Apply always
+   revalidates through /api/coupons/validate and order creation re-checks. */
+app.get('/api/coupons/active', couponLimiter, requireFirebase, withDb(async (req, res) => {
+  try {
+    const now = Date.now();
+    const snap = await req.firestore.collection('coupons').where('status', '==', 'active').get();
+    const offers = [];
+    snap.docs.forEach((d) => {
+      const c = d.data() || {};
+      if (c.usageLimit != null && Number(c.usageCount || 0) >= Number(c.usageLimit)) return;
+      if (c.startsAt) {
+        const start = new Date(c.startsAt).getTime();
+        if (Number.isFinite(start) && now < start) return;
+      }
+      if (c.expiresAt) {
+        const end = new Date(c.expiresAt).getTime();
+        if (Number.isFinite(end) && now > end) return;
+      }
+      offers.push({
+        code: c.normalizedCode || c.code,
+        description: String(c.description || ''),
+        discountType: c.discountType,
+        discountValue: Number(c.discountValue) || 0,
+        minimumOrderValue: Number(c.minimumOrderValue) || 0,
+        maximumDiscount: c.maximumDiscount ?? null,
+        startsAt: c.startsAt || null,
+        expiresAt: c.expiresAt || null,
+        perCustomerLimit: c.perCustomerLimit ?? null,
+        applicableProductIds: Array.isArray(c.applicableProductIds) ? c.applicableProductIds : [],
+        applicableCategoryIds: Array.isArray(c.applicableCategoryIds) ? c.applicableCategoryIds : [],
+      });
+    });
+    offers.sort((a, b) => String(a.code).localeCompare(String(b.code)));
+    return res.json({ offers });
+  } catch (error) {
+    console.error('[coupons] active list failed:', error);
+    return res.status(500).json({ error: 'Could not load offers.' });
+  }
+}));
+
+const couponCustomerKey = (req, body) =>
+  req.caller?.uid || String(body?.email || body?.customer?.email || '').trim().toLowerCase()
+  || String(body?.phone || body?.customer?.phone || '').replace(/\D/g, '').slice(-10) || null;
+
+app.post('/api/coupons/validate', couponLimiter, requireFirebase, withDb(async (req, res) => {
+  try {
+    const db = req.firestore;
+    const body = req.body || {};
+    if (!Array.isArray(body.items) || body.items.length === 0) {
+      return res.status(400).json({ valid: false, message: 'Your cart is empty.' });
+    }
+    const priced = await priceCart(db, body.items);
+    if (!priced.ok) return res.status(400).json({ valid: false, message: priced.error });
+    const check = await validateCouponForCart(db, {
+      code: body.code,
+      pricedItems: priced.value.items,
+      customerKey: couponCustomerKey(req, body),
+    });
+    if (!check.ok) return res.status(200).json({ valid: false, message: check.error });
+    const subtotal = Math.round(priced.value.total * 100) / 100;
+    const total = Math.max(0, Math.round((subtotal - check.discountAmount) * 100) / 100);
+    return res.json({
+      valid: true,
+      couponId: check.coupon.id,
+      code: check.coupon.normalizedCode,
+      discountType: check.coupon.discountType,
+      discountValue: check.coupon.discountValue,
+      discountAmount: check.discountAmount,
+      minimumOrderValue: Number(check.coupon.minimumOrderValue) || 0,
+      maximumDiscount: check.coupon.maximumDiscount ?? null,
+      subtotal,
+      total,
+    });
+  } catch (error) {
+    console.error('[coupons] validate failed:', error);
+    return res.status(500).json({ valid: false, message: 'Could not validate the coupon. Please try again.' });
+  }
+}));
+
+/* ---------------- Admin coupon management (admin-only) ---------------- */
+
+app.get('/api/admin/coupons', requireFirebase, requireAdmin, adminLimiter, withDb(async (req, res) => {
+  try {
+    const snap = await req.firestore.collection('coupons').get();
+    const coupons = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => String(a.code || '').localeCompare(String(b.code || '')));
+    return res.json({ coupons });
+  } catch (error) {
+    console.error('[coupons] list failed:', error);
+    return res.status(500).json({ error: 'Could not load coupons' });
+  }
+}));
+
+app.get('/api/admin/coupons/stats', requireFirebase, requireAdmin, adminLimiter, withDb(async (req, res) => {
+  try {
+    // Aggregated live on the coupon documents (maintained inside the order
+    // transaction) — no order-table scans, no N+1.
+    const snap = await req.firestore.collection('coupons').get();
+    let activeOffers = 0;
+    let couponUses = 0;
+    let discountGiven = 0;
+    snap.docs.forEach((d) => {
+      const c = d.data() || {};
+      if (c.status === 'active') activeOffers += 1;
+      couponUses += Number(c.usageCount) || 0;
+      discountGiven += Number(c.totalDiscountGiven) || 0;
+    });
+    return res.json({
+      activeOffers,
+      couponUses,
+      discountGiven: Math.round(discountGiven * 100) / 100,
+    });
+  } catch (error) {
+    console.error('[coupons] stats failed:', error);
+    return res.status(500).json({ error: 'Could not load coupon statistics' });
+  }
+}));
+
+app.post('/api/admin/coupons', requireFirebase, requireAdmin, adminLimiter, withDb(async (req, res) => {
+  try {
+    const validation = validateCouponInput(req.body || {});
+    if (!validation.ok) {
+      return res.status(400).json({ error: 'Please fix the highlighted fields', errors: validation.errors });
+    }
+    const db = req.firestore;
+    const existing = await db.collection('coupons').where('normalizedCode', '==', validation.value.normalizedCode).limit(1).get();
+    if (!existing.empty) {
+      return res.status(409).json({ error: `A coupon with code "${validation.value.code}" already exists.`, errors: { code: 'Duplicate coupon code.' } });
+    }
+    const now = new Date().toISOString();
+    const ref = await db.collection('coupons').add({
+      ...validation.value,
+      usageCount: 0,
+      totalDiscountGiven: 0,
+      totalRevenue: 0,
+      createdAt: now,
+      updatedAt: now,
+      updatedBy: req.caller?.email || null,
+    });
+    const snap = await ref.get();
+    console.log(`[coupons] created ${validation.value.code} by ${req.caller?.email || req.caller?.uid}`);
+    return res.status(201).json({ success: true, coupon: { id: ref.id, ...snap.data() } });
+  } catch (error) {
+    console.error('[coupons] create failed:', error);
+    return res.status(500).json({ error: 'Could not create the coupon' });
+  }
+}));
+
+app.put('/api/admin/coupons/:id', requireFirebase, requireAdmin, adminLimiter, withDb(async (req, res) => {
+  try {
+    const validation = validateCouponInput(req.body || {});
+    if (!validation.ok) {
+      return res.status(400).json({ error: 'Please fix the highlighted fields', errors: validation.errors });
+    }
+    const db = req.firestore;
+    const ref = db.collection('coupons').doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Coupon not found.' });
+    const current = snap.data() || {};
+    // The code is the coupon's identity across issued orders — once it has
+    // been used, renaming it would orphan history. Block the rename, allow
+    // everything else.
+    if (Number(current.usageCount || 0) > 0 && validation.value.normalizedCode !== current.normalizedCode) {
+      return res.status(409).json({ error: 'This coupon has already been used — its code cannot be changed.', errors: { code: 'Code is locked after first use.' } });
+    }
+    if (validation.value.normalizedCode !== current.normalizedCode) {
+      const clash = await db.collection('coupons').where('normalizedCode', '==', validation.value.normalizedCode).limit(1).get();
+      if (!clash.empty && clash.docs[0].id !== ref.id) {
+        return res.status(409).json({ error: `A coupon with code "${validation.value.code}" already exists.`, errors: { code: 'Duplicate coupon code.' } });
+      }
+    }
+    await ref.update({
+      ...validation.value,
+      updatedAt: new Date().toISOString(),
+      updatedBy: req.caller?.email || null,
+    });
+    const fresh = await ref.get();
+    console.log(`[coupons] updated ${validation.value.code} by ${req.caller?.email || req.caller?.uid}`);
+    return res.json({ success: true, coupon: { id: ref.id, ...fresh.data() } });
+  } catch (error) {
+    console.error('[coupons] update failed:', error);
+    return res.status(500).json({ error: 'Could not update the coupon' });
+  }
+}));
+
+app.delete('/api/admin/coupons/:id', requireFirebase, requireAdmin, adminLimiter, withDb(async (req, res) => {
+  try {
+    const db = req.firestore;
+    const ref = db.collection('coupons').doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Coupon not found.' });
+    // Used coupons keep their document so historical orders (which snapshot
+    // the coupon at purchase time) stay explainable — deactivate instead.
+    if (Number((snap.data() || {}).usageCount || 0) > 0) {
+      return res.status(409).json({ error: 'This coupon has been used in orders and cannot be deleted. Deactivate it instead.' });
+    }
+    await ref.delete();
+    console.log(`[coupons] deleted ${req.params.id} by ${req.caller?.email || req.caller?.uid}`);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('[coupons] delete failed:', error);
+    return res.status(500).json({ error: 'Could not delete the coupon' });
+  }
+}));
+
+app.post('/api/admin/coupons/:id/duplicate', requireFirebase, requireAdmin, adminLimiter, withDb(async (req, res) => {
+  try {
+    const db = req.firestore;
+    const ref = db.collection('coupons').doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Coupon not found.' });
+    const src = snap.data() || {};
+    const base = `${src.normalizedCode || src.code || 'COUPON'}-COPY`;
+    let code = base;
+    for (let n = 2; n <= 99; n += 1) {
+      const clash = await db.collection('coupons').where('normalizedCode', '==', code).limit(1).get();
+      if (clash.empty) break;
+      code = `${base}-${n}`;
+    }
+    const now = new Date().toISOString();
+    const created = await db.collection('coupons').add({
+      code,
+      normalizedCode: code,
+      description: src.description || '',
+      discountType: src.discountType,
+      discountValue: src.discountValue,
+      minimumOrderValue: src.minimumOrderValue || 0,
+      maximumDiscount: src.maximumDiscount ?? null,
+      usageLimit: src.usageLimit ?? null,
+      perCustomerLimit: src.perCustomerLimit ?? null,
+      startsAt: src.startsAt || null,
+      expiresAt: src.expiresAt || null,
+      status: 'inactive',
+      applicableProductIds: src.applicableProductIds || [],
+      applicableCategoryIds: src.applicableCategoryIds || [],
+      usageCount: 0,
+      totalDiscountGiven: 0,
+      totalRevenue: 0,
+      createdAt: now,
+      updatedAt: now,
+      updatedBy: req.caller?.email || null,
+    });
+    const fresh = await created.get();
+    return res.status(201).json({ success: true, coupon: { id: created.id, ...fresh.data() } });
+  } catch (error) {
+    console.error('[coupons] duplicate failed:', error);
+    return res.status(500).json({ error: 'Could not duplicate the coupon' });
+  }
+}));
 
 /* ---------------------------------------------------------------------------
    Order status changes.

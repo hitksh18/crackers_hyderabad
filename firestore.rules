@@ -211,6 +211,26 @@ service cloud.firestore {
       allow create, update, delete: if isAdminAny();
     }
 
+    // Discount coupons. Validation runs server-side (POST /api/coupons/validate)
+    // and usage is consumed inside the order transaction, so neither the
+    // browser nor a guest ever needs to read this collection — usage counts
+    // and inactive drafts stay out of public reach. Admin manages it through
+    // the admin API; direct writes remain admin-only as a backstop.
+    match /coupons/{couponId} {
+      allow read, write: if isAdminAny();
+    }
+
+    // Idempotency records for coupon redemptions. Created atomically with the
+    // order by the API; no client path needs them.
+    match /couponRedemptions/{redemptionId} {
+      allow read, write: if false;
+    }
+
+    // Per-customer coupon counters. Same capability model as redemptions.
+    match /couponCustomers/{counterId} {
+      allow read, write: if false;
+    }
+
     match /trackingCodes/{code} {
       // Staff only, get and list alike. Codes are sequential, so a public `get`
       // is a public `code -> orderId` oracle: walk the numbers, collect the
@@ -249,11 +269,16 @@ service cloud.firestore {
       allow update, delete: if isAdminAny();
     }
 
-    // The order counter is now advanced by the API inside the same transaction
-    // that creates the order, so no client needs to touch it. Scoped to the one
-    // document that exists rather than a wildcard, which previously let anyone
-    // create arbitrary counter documents.
+    // The order counters are advanced by the API inside the same transaction
+    // that creates the order, so no client needs to touch them. Scoped to the
+    // two documents that exist (online + offline) rather than a wildcard, which
+    // previously let anyone create arbitrary counter documents. ONLINE
+    // (counters/orders) and OFFLINE (counters/offlineOrders) are independent.
     match /counters/orders {
+      allow get: if isStaff();
+      allow write: if false;
+    }
+    match /counters/offlineOrders {
       allow get: if isStaff();
       allow write: if false;
     }

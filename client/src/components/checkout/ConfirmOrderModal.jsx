@@ -9,11 +9,13 @@ import { formatCoords } from '../../utils/deliveryLocation';
 const unitPriceOf = (item) => item.discountPrice || item.onlinePrice || item.price || 0;
 
 const FOCUSABLE =
-  'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+  'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"]):not([disabled])';
 
 /**
- * Final review dialog. Presentation only — every control here calls straight
- * back into the cart / checkout handlers it was handed.
+ * Final review dialog. Presentation only — cart, coupon and totals all come
+ * from the shared CartContext through Checkout props (single source of
+ * truth), so +/-/delete inside the dialog updates every figure live.
+ * Confirm is gated on the same minimum-order rule checkout enforces.
  */
 const ConfirmOrderModal = ({
   cart,
@@ -22,7 +24,12 @@ const ConfirmOrderModal = ({
   sameAsBilling,
   pin,
   total,
+  subtotal,
+  coupon,
+  minimumValue = 0,
+  minimumMet = true,
   loading,
+  submitError,
   onClose,
   onConfirm,
   onAddMore,
@@ -91,13 +98,18 @@ const ConfirmOrderModal = ({
     return () => document.removeEventListener('keydown', onKeyDown, true);
   }, [handleDismiss]);
 
+  const shownSubtotal = coupon ? coupon.subtotal : (subtotal ?? total);
+  /* Shortfall against the RAW cart total — the same pre-discount figure the
+     minimum gate, checkout and the backend enforce. */
+  const rawTotal = cart.reduce((s, it) => s + unitPriceOf(it) * (Number(it.quantity) || 0), 0);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: reduced ? 0.001 : DURATION.fast }}
-      className="fixed inset-0 z-modal flex items-center justify-center p-4"
+      className="fixed inset-0 z-modal flex items-center justify-center p-3 sm:p-6"
       style={{ background: 'rgba(26, 23, 20, 0.66)' }}
       onClick={handleDismiss}
     >
@@ -111,114 +123,108 @@ const ConfirmOrderModal = ({
         animate="visible"
         exit="exit"
         onClick={(event) => event.stopPropagation()}
-        className="glass-strong flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden"
+        className="glass-strong flex max-h-[92dvh] w-full flex-col overflow-hidden"
+        style={{ maxWidth: 'min(960px, calc(100vw - 2rem))' }}
       >
-        <header className="shrink-0 px-5 py-4 sm:px-6" style={{ background: 'var(--grad-maroon)' }}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h2 id="confirm-order-title" className="subsection-title" style={{ color: '#FFFFFF' }}>
-                Confirm Your Order
-              </h2>
-              <p className="mt-1 text-sm" style={{ color: 'rgba(255, 255, 255, 0.78)' }}>
-                Please review your order before confirming
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleDismiss}
-              disabled={loading}
-              aria-label="Close order confirmation"
-              className="-mr-2 -mt-1 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/15 disabled:opacity-50"
-              style={{ color: '#FFFFFF' }}
-            >
-              <X className="h-5 w-5" strokeWidth={2.4} />
-            </button>
+        <header className="flex shrink-0 items-start justify-between gap-3 px-5 py-4 sm:px-6" style={{ background: 'var(--grad-maroon)' }}>
+          <div className="min-w-0">
+            <h2 id="confirm-order-title" className="subsection-title" style={{ color: '#FFFFFF' }}>
+              Confirm Your Order
+            </h2>
+            <p className="mt-0.5 text-sm" style={{ color: 'rgba(255, 255, 255, 0.78)' }}>
+              Please review your order before confirming
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={handleDismiss}
+            disabled={loading}
+            aria-label="Close order confirmation"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/15 disabled:opacity-50"
+            style={{ color: '#FFFFFF' }}
+          >
+            <X className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
+          </button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-            <p className="label-caps">Items</p>
+            <p className="label-caps">Items · {cart.length}</p>
             <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>Adjust quantities below</p>
           </div>
 
           <ul
-            className="mb-5 overflow-hidden"
-            style={{ border: '1px solid var(--hairline)', borderRadius: 'var(--r-md)' }}
+            className="grid grid-cols-1 gap-2 lg:grid-cols-2"
+            style={{ border: '1px solid var(--hairline)', borderRadius: 'var(--r-md)', padding: 6 }}
           >
-            {cart.map((item, index) => (
+            {cart.map((item) => (
               <li
                 key={item.id}
-                className="p-3"
-                style={{ borderTop: index === 0 ? 'none' : '1px solid var(--hairline)' }}
+                className="flex items-center gap-2 rounded-lg px-2 py-1.5"
+                style={{ background: 'var(--surface-sunken)', border: '1px solid var(--hairline)' }}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
-                      {item.name}
-                    </p>
-                    <p className="price text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {inr(unitPriceOf(item))} each
-                    </p>
-                  </div>
-                  <p
-                    className="price shrink-0 text-sm font-bold"
-                    style={{ color: 'var(--text-strong)' }}
-                  >
-                    {inr(unitPriceOf(item) * item.quantity)}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-semibold" style={{ color: 'var(--text-strong)' }} title={item.name}>
+                    {item.name}
+                  </p>
+                  <p className="price tabular text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                    {inr(unitPriceOf(item))} each
                   </p>
                 </div>
-
-                <div className="mt-2.5 flex items-center gap-2">
-                  <div
-                    className="inline-flex items-center"
-                    style={{
-                      border: '1px solid var(--hairline-strong)',
-                      borderRadius: 'var(--r-pill)',
-                      background: 'var(--surface-card)',
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => onQuantityChange(item.id, item.quantity - 1)}
-                      aria-label={`Decrease quantity of ${item.name}`}
-                      className="inline-flex h-11 w-11 items-center justify-center rounded-full"
-                    >
-                      <Minus className="h-4 w-4" strokeWidth={2.6} style={{ color: 'var(--maroon-700)' }} />
-                    </button>
-                    <span
-                      className="tabular w-8 text-center text-sm font-bold"
-                      style={{ color: 'var(--text-strong)' }}
-                    >
-                      {item.quantity}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => onQuantityChange(item.id, item.quantity + 1)}
-                      aria-label={`Increase quantity of ${item.name}`}
-                      className="inline-flex h-11 w-11 items-center justify-center rounded-full"
-                    >
-                      <Plus className="h-4 w-4" strokeWidth={2.6} style={{ color: 'var(--maroon-700)' }} />
-                    </button>
-                  </div>
-
+                <div
+                  className="inline-flex shrink-0 items-center"
+                  style={{
+                    border: '1px solid var(--hairline-strong)',
+                    borderRadius: 'var(--r-pill)',
+                    background: 'var(--surface-card)',
+                  }}
+                >
                   <button
                     type="button"
-                    onClick={() => onRemove(item.id)}
-                    aria-label={`Remove ${item.name} from order`}
-                    title="Remove item"
-                    className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-vermilion-50 dark:hover:bg-white/5"
-                    style={{ color: 'var(--crimson-600)' }}
+                    onClick={() => onQuantityChange(item.id, item.quantity - 1)}
+                    aria-label={`Decrease quantity of ${item.name}`}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full"
                   >
-                    <Trash2 className="h-4 w-4" strokeWidth={2.4} />
+                    <Minus className="h-3.5 w-3.5" strokeWidth={2.6} style={{ color: 'var(--maroon-700)' }} />
+                  </button>
+                  <span
+                    className="tabular w-6 text-center text-[13px] font-bold"
+                    style={{ color: 'var(--text-strong)' }}
+                    aria-live="polite"
+                  >
+                    {item.quantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onQuantityChange(item.id, item.quantity + 1)}
+                    aria-label={`Increase quantity of ${item.name}`}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full"
+                  >
+                    <Plus className="h-3.5 w-3.5" strokeWidth={2.6} style={{ color: 'var(--maroon-700)' }} />
                   </button>
                 </div>
+                <p
+                  className="price tabular w-[72px] shrink-0 text-right text-[13px] font-bold"
+                  style={{ color: 'var(--text-strong)' }}
+                >
+                  {inr(unitPriceOf(item) * item.quantity)}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onRemove(item.id)}
+                  aria-label={`Remove ${item.name} from order`}
+                  title="Remove item"
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-vermilion-50 dark:hover:bg-white/5"
+                  style={{ color: 'var(--crimson-600)' }}
+                >
+                  <Trash2 className="h-4 w-4" strokeWidth={2.4} />
+                </button>
               </li>
             ))}
           </ul>
 
           <div
-            className="mb-4 p-4"
+            className="mt-3 p-3.5"
             style={{
               background: 'var(--surface-sunken)',
               border: '1px solid var(--hairline)',
@@ -229,18 +235,15 @@ const ConfirmOrderModal = ({
             <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
               {formData.name} · <span className="tabular">{formData.phone}</span>
             </p>
-            <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
+            <p className="mt-0.5 text-[13px]" style={{ color: 'var(--text-muted)' }}>
               {sameAsBilling ? (
                 <>{formData.address}, {formData.city} - {formData.pincode}</>
               ) : (
                 <>{deliveryAddress.flatNo}, {deliveryAddress.streetNo}, {deliveryAddress.area}, {deliveryAddress.city} - {deliveryAddress.pincode}</>
               )}
             </p>
-            {/* Last chance to notice the pin is missing, while going back still
-                costs nothing. Stated either way rather than only when absent —
-                silence reads as "fine" and this is worth confirming. */}
             <p
-              className="mt-2 flex items-start gap-1.5 text-xs"
+              className="mt-1.5 flex items-start gap-1.5 text-xs"
               style={{ color: pin ? 'var(--leaf-600)' : 'var(--text-subtle)' }}
             >
               <MapPin className="mt-px h-3.5 w-3.5 shrink-0" strokeWidth={2.4} aria-hidden="true" />
@@ -254,17 +257,36 @@ const ConfirmOrderModal = ({
             </p>
           </div>
 
-          <div className="mb-4 flex items-center gap-2 text-sm" style={{ color: 'var(--text-body)' }}>
+          <div className="mt-3 flex items-center gap-2 text-sm" style={{ color: 'var(--text-body)' }}>
             <Banknote className="h-5 w-5 shrink-0" strokeWidth={2.2} style={{ color: 'var(--gold-600)' }} />
             <span>{paymentMethod === 'upi' ? 'UPI on Delivery' : 'Cash on Delivery'}</span>
           </div>
 
           <div
-            className="flex items-center justify-between gap-3 px-4 py-3"
+            className="mt-3 px-4 py-3"
             style={{ background: 'var(--grad-ember)', borderRadius: 'var(--r-md)', color: '#FFFFFF' }}
           >
-            <span className="font-bold">Total</span>
-            <span className="price text-lg font-bold">{inr(total)}</span>
+            <div className="flex items-baseline justify-between gap-3 text-sm">
+              <span style={{ color: 'rgba(255,255,255,0.85)' }}>Subtotal</span>
+              <span className="price tabular font-semibold">{inr(shownSubtotal)}</span>
+            </div>
+            <div className="mt-1 flex items-baseline justify-between gap-3 text-sm">
+              <span style={{ color: 'rgba(255,255,255,0.85)' }}>
+                {coupon ? `Discount (${coupon.code})` : 'Discount'}
+              </span>
+              <span className="price tabular font-semibold">
+                {coupon ? `−${inr(coupon.discountAmount)}` : inr(0)}
+              </span>
+            </div>
+            <div className="mt-1.5 flex items-baseline justify-between gap-3 border-t border-white/25 pt-2">
+              <span className="font-bold">Total</span>
+              <span className="price text-xl font-bold">{inr(total)}</span>
+            </div>
+            {coupon && (
+              <p className="tabular mt-1 text-right text-xs font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>
+                ✓ {coupon.code} applied — you save {inr(coupon.discountAmount)}
+              </p>
+            )}
           </div>
         </div>
 
@@ -272,21 +294,39 @@ const ConfirmOrderModal = ({
           className="shrink-0 px-5 py-4 sm:px-6"
           style={{ borderTop: '1px solid var(--hairline)', background: 'var(--surface-raised)' }}
         >
-          <div className="grid gap-3 sm:grid-cols-2">
-            <button type="button" onClick={onClose} disabled={loading} className="btn-outline w-full disabled:opacity-50">
+          {submitError && (
+            <p
+              role="alert"
+              className="mb-3 rounded-xl border px-3.5 py-2.5 text-sm font-semibold"
+              style={{ borderColor: 'var(--crimson-600)', background: 'rgba(203, 42, 42, 0.08)', color: 'var(--crimson-600)' }}
+            >
+              Unable to place your order right now. Please try again.
+            </p>
+          )}
+          {!minimumMet && (
+            <p
+              role="status"
+              className="tabular mb-3 rounded-xl border px-3.5 py-2.5 text-sm font-semibold"
+              style={{ borderColor: 'var(--gold-500)', background: 'rgba(210,166,79,0.10)', color: 'var(--gold-600)' }}
+            >
+              Minimum order {inr(minimumValue)} — add {inr(Math.max(0, minimumValue - rawTotal))} more to proceed to checkout.
+            </p>
+          )}
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            <button type="button" onClick={onClose} disabled={loading} className="btn-outline min-h-[48px] w-full disabled:opacity-50">
               Edit Details
             </button>
-            <button type="button" onClick={onAddMore} disabled={loading} className="btn-outline w-full disabled:opacity-50">
+            <button type="button" onClick={onAddMore} disabled={loading} className="btn-outline min-h-[48px] w-full disabled:opacity-50">
               Add More Products
             </button>
           </div>
 
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="mt-2.5 grid gap-2.5 sm:grid-cols-[1fr_1.4fr]">
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl px-4 font-semibold transition-colors disabled:opacity-50"
+              className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl px-4 font-semibold transition-colors disabled:opacity-50"
               style={{
                 background: 'var(--surface-sunken)',
                 color: 'var(--text-body)',
@@ -299,9 +339,9 @@ const ConfirmOrderModal = ({
               type="button"
               whileTap={reduced ? undefined : { scale: 0.98 }}
               onClick={onConfirm}
-              disabled={loading}
+              disabled={loading || !minimumMet}
               aria-busy={loading}
-              className="btn-primary w-full"
+              title={!minimumMet ? `Minimum order ${inr(minimumValue)} not reached` : undefined}              className="btn-primary min-h-[48px] w-full whitespace-nowrap text-[15px] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100 disabled:hover:transform-none"
             >
               {loading ? (
                 <>

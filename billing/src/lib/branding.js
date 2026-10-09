@@ -1,10 +1,12 @@
 /**
  * Billing/POS brand constants — single source of truth.
  *
- * The counter terminal is branded AYYAPA FIREWORKS. This module exists so the
- * name and the logo live in exactly one place: the header, the login screen,
- * the role-error screen, the printed invoice and the WhatsApp bill all read
+ * The counter terminal is branded AYYAPA FIREWORKS ONLY. This module exists
+ * so the name and the logo live in exactly one place: the header, the login
+ * screen, the role-error screen and the printed offline invoice all read
  * from here instead of each hard-coding a string.
+ *
+ * The offline/store invoice must NEVER mention the online store brand anywhere.
  *
  * The customer storefront and the staff console are separate applications and
  * keep their own branding — nothing here affects them.
@@ -20,18 +22,13 @@ export const BRAND_NAME_UPPER = 'AYYAPA FIREWORKS';
 export const BRAND_TAGLINE = 'Premium Quality Fireworks';
 
 /**
- * Official logo asset path.
+ * Official offline logo asset path.
  *
- * ─────────────────────────────────────────────────────────────────────────
- * ACTION REQUIRED: this file does not exist yet, so the terminal renders the
- * wordmark alone (see BrandLogo). To switch on the official artwork, drop the
- * real Ayyapa Fireworks logo here:
- *
- *   billing/public/images/website/ayyapafireworkslogo.png
- *
- * Nothing else has to change — every surface reads BRAND_LOGO_SRC. No
- * placeholder or stand-in logo is shipped, deliberately: an invented mark on
- * a customer's printed invoice is worse than a clean wordmark.
- * ─────────────────────────────────────────────────────────────────────────
+ * The dedicated high-resolution artwork is `billing/images/Ayyappa Fireworks
+ * Logo.png`. A servable copy lives at
+ * `billing/public/images/website/ayyappa-fireworks-logo.png` (same bytes).
+ * Every offline surface reads BRAND_LOGO_SRC; components fall back to the
+ * wordmark if the file ever goes missing, so a missing image never prints
+ * as a broken-image icon. Never use the online-store logo here.
  */
-export const BRAND_LOGO_SRC = '/images/website/ayyapafireworkslogo.png';
+export const BRAND_LOGO_SRC = '/images/website/ayyappa-fireworks-logo.png';

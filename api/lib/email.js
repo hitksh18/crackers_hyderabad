@@ -168,7 +168,7 @@ function orderPaymentNote(order) {
  * Never throws; never includes credentials in any output.
  */
 async function sendOrderConfirmationEmail(
-  { to, orderCode, status, quantity, total, customerName, trackUrl, invoiceUrl, note },
+  { to, orderCode, status, quantity, total, customerName, trackUrl, invoiceUrl, note, custom, customSubject, items, subtotal, discount, couponCode },
   { transporter } = {}
 ) {
   const config = readEmailConfig();
@@ -181,14 +181,18 @@ async function sendOrderConfirmationEmail(
   }
 
   const code = String(orderCode || '').toUpperCase();
-  const url = trackUrl || `${config.trackBaseUrl}/track/${code}`;
+  /* Both links carry the canonical Order ID, which the generator guarantees is
+     URL-safe (A-Z, 0-9, `-`, `_`). encodeURIComponent is belt-and-braces so a
+     legacy or hand-edited id containing anything else cannot break the link or,
+     worse, add a query string to it. */
+  const url = trackUrl || `${config.trackBaseUrl}/track/${encodeURIComponent(code)}`;
   // Invoice PDFs are generated client-side on the phone-gated /track-order
   // lookup, which hosts the real customer Download Invoice action. The code
   // rides as ?id= so the lookup is prefilled — never an admin route, never
   // a guessed endpoint.
   const invoice = invoiceUrl || `${config.trackBaseUrl}/track-order?id=${encodeURIComponent(code)}`;
-  const html = orderConfirmationHtml({ orderCode: code, status, quantity, total, trackUrl: url, invoiceUrl: invoice, customerName, note });
-  const text = orderConfirmationText({ orderCode: code, status, quantity, total, trackUrl: url, invoiceUrl: invoice, customerName, note });
+  const html = orderConfirmationHtml({ orderCode: code, status, quantity, total, trackUrl: url, invoiceUrl: invoice, customerName, note, custom, items, subtotal, discount, couponCode });
+  const text = orderConfirmationText({ orderCode: code, status, quantity, total, trackUrl: url, invoiceUrl: invoice, customerName, note, custom, items, subtotal, discount, couponCode });
 
   let transport = transporter;
   let owned = false;
@@ -204,7 +208,7 @@ async function sendOrderConfirmationEmail(
       envelope: { from: config.fromAddress, to },
       // Structured single recipient: nodemailer cannot expand this into a list.
       to: [{ address: to, name: '' }],
-      subject: emailSubject(code, status),
+      subject: emailSubject(code, status, customSubject),
       text,
       html,
     });
@@ -235,6 +239,9 @@ async function sendOrderConfirmationEmail(
  */
 async function maybeSendOrderConfirmationEmail(db, orderRef, order, { transporter } = {}) {
   const skipped = (reason, extra) => ({ ok: false, skipped: reason, ...(extra || {}) });
+  // Lazy require: emailAutomation reads templates/branding and must not create
+  // a module cycle with this file.
+  const automation = require('./emailAutomation');
   try {
     const notify = await readStoredNotify(orderRef, order.notify);
     if (notify.confirmationEmailSentAt) return skipped('already-sent');
@@ -246,6 +253,30 @@ async function maybeSendOrderConfirmationEmail(db, orderRef, order, { transporte
     const quantity = items.reduce((n, item) => n + (Number(item.quantity) || 0), 0);
     const config = readEmailConfig();
     const code = String(order.shortCode || '').toUpperCase();
+    const trackUrl = `${config.trackBaseUrl}/track/${encodeURIComponent(code)}`;
+    const invoiceUrl = `${config.trackBaseUrl}/track-order?id=${encodeURIComponent(code)}`;
+
+    /* Automation rule gate — a disabled Order Placed rule suppresses the send
+       and records the skip in the delivery log. */
+    const rules = await automation.readAutomationRules(db).catch(() => null);
+    if (!automation.isEventEnabled(rules, 'placed')) {
+      automation.logDelivery(db, {
+        event: 'placed', orderId: orderRef.id, recipient: to,
+        subject: '', status: 'skipped', error: 'automation-disabled',
+      }).catch(() => {});
+      return skipped('automation-disabled');
+    }
+
+    const resolved = await automation.resolveSendCustom(
+      db, { event: 'placed', order, code, trackUrl, invoiceUrl, status: order.status || 'Pending' }
+    ).catch(() => ({ error: 'template-read-failed' }));
+    if (resolved.error) {
+      automation.logDelivery(db, {
+        event: 'placed', orderId: orderRef.id, recipient: to,
+        subject: '', status: 'failed', error: resolved.error,
+      }).catch(() => {});
+      return { ok: false, error: resolved.error };
+    }
 
     const result = await sendOrderConfirmationEmail(
       {
@@ -255,12 +286,26 @@ async function maybeSendOrderConfirmationEmail(db, orderRef, order, { transporte
         quantity,
         total: order.total ?? 0,
         customerName: order.customer?.name || '',
-        trackUrl: `${config.trackBaseUrl}/track/${code}`,
-        invoiceUrl: `${config.trackBaseUrl}/track-order?id=${encodeURIComponent(code)}`,
+        trackUrl,
+        invoiceUrl,
         note: orderPaymentNote(order),
+        custom: resolved.custom,
+        customSubject: resolved.customSubject,
+        items: order.items,
+        couponCode: order.coupon?.code,
+        subtotal: order.subtotal,
+        discount: order.discount,
       },
       { transporter }
     );
+
+    automation.logDelivery(db, {
+      event: 'placed', orderId: orderRef.id, recipient: to,
+      subject: emailSubject(code, order.status || 'Pending', resolved.customSubject),
+      status: result.ok ? 'sent' : 'failed',
+      error: result.ok ? '' : String(result.error || result.skipped || ''),
+      messageId: result.messageId || '',
+    }).catch(() => {});
 
     try {
       if (result.ok) {
@@ -310,6 +355,7 @@ function statusEmailKey(status) {
  */
 async function sendStatusUpdateEmail(db, orderRef, order, targetStatus, { transporter } = {}) {
   const skipped = (reason, extra) => ({ ok: false, skipped: reason, ...(extra || {}) });
+  const automation = require('./emailAutomation');
   try {
     const key = statusEmailKey(targetStatus);
     if (!key) return skipped('not-mailable');
@@ -326,10 +372,34 @@ async function sendStatusUpdateEmail(db, orderRef, order, targetStatus, { transp
     const to = order.customer?.email || order.userEmail || '';
     if (!isValidRecipient(to)) return skipped('no-recipient');
 
+    /* Automation rule gate per status event. */
+    const event = automation.STATUS_TO_EVENT[key] || key;
+    const rules = await automation.readAutomationRules(db).catch(() => null);
+    if (!automation.isEventEnabled(rules, event)) {
+      automation.logDelivery(db, {
+        event, orderId: orderRef.id, recipient: to,
+        subject: '', status: 'skipped', error: 'automation-disabled',
+      }).catch(() => {});
+      return skipped('automation-disabled');
+    }
+
     const items = Array.isArray(order.items) ? order.items : [];
     const quantity = items.reduce((n, item) => n + (Number(item.quantity) || 0), 0);
     const config = readEmailConfig();
     const code = String(order.shortCode || '').toUpperCase();
+    const trackUrl = `${config.trackBaseUrl}/track/${encodeURIComponent(code)}`;
+    const invoiceUrl = `${config.trackBaseUrl}/track-order?id=${encodeURIComponent(code)}`;
+
+    const resolved = await automation.resolveSendCustom(
+      db, { event, order, code, trackUrl, invoiceUrl, status: targetStatus }
+    ).catch(() => ({ error: 'template-read-failed' }));
+    if (resolved.error) {
+      automation.logDelivery(db, {
+        event, orderId: orderRef.id, recipient: to,
+        subject: '', status: 'failed', error: resolved.error,
+      }).catch(() => {});
+      return { ok: false, error: resolved.error };
+    }
 
     const result = await sendOrderConfirmationEmail(
       {
@@ -339,12 +409,26 @@ async function sendStatusUpdateEmail(db, orderRef, order, targetStatus, { transp
         quantity,
         total: order.total ?? 0,
         customerName: order.customer?.name || '',
-        trackUrl: `${config.trackBaseUrl}/track/${code}`,
-        invoiceUrl: `${config.trackBaseUrl}/track-order?id=${encodeURIComponent(code)}`,
+        trackUrl,
+        invoiceUrl,
         note: orderPaymentNote(order),
+        custom: resolved.custom,
+        customSubject: resolved.customSubject,
+        items: order.items,
+        couponCode: order.coupon?.code,
+        subtotal: order.subtotal,
+        discount: order.discount,
       },
       { transporter }
     );
+
+    automation.logDelivery(db, {
+      event, orderId: orderRef.id, recipient: to,
+      subject: emailSubject(code, targetStatus, resolved.customSubject),
+      status: result.ok ? 'sent' : 'failed',
+      error: result.ok ? '' : String(result.error || result.skipped || ''),
+      messageId: result.messageId || '',
+    }).catch(() => {});
 
     try {
       if (result.ok) {
@@ -419,6 +503,7 @@ function internalOrderDate(order) {
  */
 async function maybeSendInternalNewOrderEmail(db, orderRef, order, { transporter } = {}) {
   const skipped = (reason, extra) => ({ ok: false, skipped: reason, ...(extra || {}) });
+  const automation = require('./emailAutomation');
   try {
     const notify = await readStoredNotify(orderRef, order.notify);
     if (notify.internalNewOrderEmailSentAt) return skipped('already-sent');
@@ -432,6 +517,18 @@ async function maybeSendInternalNewOrderEmail(db, orderRef, order, { transporter
 
     const to = config.adminNotificationEmail;
     if (!isValidRecipient(to)) return skipped('no-recipient');
+
+    /* Automation rule gate — a disabled Internal New Order rule suppresses
+       the staff notification. It can never reroute to the customer: `to`
+       stays the configured store inbox. */
+    const rules = await automation.readAutomationRules(db).catch(() => null);
+    if (!automation.isEventEnabled(rules, 'internalNewOrder')) {
+      automation.logDelivery(db, {
+        event: 'internalNewOrder', orderId: orderRef.id, recipient: to,
+        subject: '', status: 'skipped', error: 'automation-disabled',
+      }).catch(() => {});
+      return skipped('automation-disabled');
+    }
 
     const items = Array.isArray(order.items) ? order.items : [];
     const quantity = items.reduce((n, item) => n + (Number(item.quantity) || 0), 0);
@@ -472,6 +569,11 @@ async function maybeSendInternalNewOrderEmail(db, orderRef, order, { transporter
         html,
       });
       console.log(`[email] internal new-order sent for ${code} (messageId: ${info && info.messageId})`);
+      automation.logDelivery(db, {
+        event: 'internalNewOrder', orderId: orderRef.id, recipient: to,
+        subject: internalNewOrderSubject(code),
+        status: 'sent', error: '', messageId: (info && info.messageId) || null,
+      }).catch(() => {});
       try {
         await orderRef.update({
           'notify.internalNewOrderEmailSentAt': FieldValue.serverTimestamp(),

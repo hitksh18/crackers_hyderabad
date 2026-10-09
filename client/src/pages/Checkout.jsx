@@ -74,6 +74,25 @@ const Checkout = () => {
   const orderPlacedRef = useRef(false);
   const formRef = useRef(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  /* Inline modal error (generic wording only — never server internals).
+     Cleared whenever the dialog opens. */
+  const [placeError, setPlaceError] = useState('');
+  /* Shared coupon state lives in CartContext (single authority for Cart +
+     Checkout). Contact details ride along so per-customer limits resolve. */
+  const {
+    coupon, couponInput, setCouponInput, couponError, setCouponError,
+    couponApplying, applyCoupon: applySharedCoupon, removeCoupon,
+  } = useCart();
+  const applyCoupon = async (e) => {
+    e?.preventDefault?.();
+    const applied = await applySharedCoupon(undefined, {
+      email: formData.email || undefined,
+      phone: formData.phone || undefined,
+    });
+    if (applied) {
+      toast.success(`Coupon ${applied.code} applied — you save ${inr(applied.discountAmount)}`);
+    }
+  };
   // Presentation-only: mobile order-summary collapse. Desktop is always
   // expanded via CSS (lg:block); this never affects submission or totals.
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -406,11 +425,13 @@ const Checkout = () => {
       return;
     }
 
+    setPlaceError('');
     setShowConfirm(true);
   };
 
   const confirmPlaceOrder = async () => {
     setLoading(true);
+    setPlaceError('');
 
     try {
       // The cart can still be edited inside the review modal, so re-check the
@@ -445,6 +466,7 @@ const Checkout = () => {
           deliveryLocation: pin,
           paymentMethod,
           items: cart.map((item) => ({ id: item.id, quantity: item.quantity })),
+          ...(coupon ? { couponCode: coupon.code } : {}),
         }),
       });
 
@@ -472,6 +494,8 @@ const Checkout = () => {
         toast.error(`${serverMessage || 'Could not place your order. Please try again.'}${devDetail}`, {
           duration: 5000,
         });
+        // The modal stays open; the inline message names no internals.
+        setPlaceError('Unable to place your order right now. Please try again.');
         return;
       }
 
@@ -511,6 +535,7 @@ const Checkout = () => {
           ? ` (${error.message})`
           : '';
       toast.error(`Failed to place order. Please try again.${devCause}`);
+      setPlaceError('Unable to place your order right now. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -574,7 +599,10 @@ const Checkout = () => {
     !sameAsShipping && touched[`bill.${key}`] && !String(formData[key] || '').trim() ? billingMessages[key] : '';
 
   const total = getCartTotal();
-  const minimumMet = total >= adminSettings.minimumOrderValue;
+  /* Same gate the submit handler and the backend enforce: raw cart total
+     against the live floor, honoured only while the floor is enabled. */
+  const minimumValue = Number(adminSettings.minimumOrderValue) || 0;
+  const minimumMet = !adminSettings.minimumOrderValueEnabled || total >= minimumValue;
 
   const shippingSummary = shippingDone ? [
     `${formData.name} · ${formData.phone}`,
@@ -1055,19 +1083,76 @@ const Checkout = () => {
               </ul>
 
               <div className="mt-3 shrink-0 px-4 pb-4 pt-3" style={{ borderTop: '1px solid var(--hairline)' }}>
+                {/* Coupon — validated server-side; the server re-checks at order time. */}
+                {!coupon ? (
+                  <form onSubmit={applyCoupon} className="mb-3">
+                    <label htmlFor="checkout-coupon" className="label-caps mb-1.5 block">Have a coupon?</label>
+                    <div className="flex gap-2">
+                      <input
+                        id="checkout-coupon"
+                        type="text"
+                        value={couponInput}
+                        onChange={(e) => { setCouponInput(e.target.value.toUpperCase()); setCouponError(''); }}
+                        placeholder="Enter coupon code"
+                        disabled={couponApplying}
+                        className="input-premium h-10 min-w-0 flex-1 text-sm tabular"
+                        autoComplete="off"
+                      />
+                      <button
+                        type="submit"
+                        disabled={couponApplying || !couponInput.trim()}
+                        className="btn-primary h-10 shrink-0 px-4 text-sm font-semibold disabled:opacity-50"
+                      >
+                        {couponApplying ? 'Applying…' : 'Apply'}
+                      </button>
+                    </div>
+                    {couponError && (
+                      <p className="mt-1.5 text-xs font-semibold" style={{ color: 'var(--crimson-600)' }} role="alert">
+                        {couponError}
+                      </p>
+                    )}
+                  </form>
+                ) : (
+                  <div className="mb-3 rounded-[var(--r-md)] border p-3" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)' }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="tabular text-sm font-bold" style={{ color: 'var(--leaf-600)' }}>
+                        {coupon.code} applied
+                      </p>
+                      <button
+                        type="button"
+                        onClick={removeCoupon}
+                        className="text-xs font-semibold underline"
+                        style={{ color: 'var(--text-muted)' }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <p className="tabular mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+                      You save {inr(coupon.discountAmount)}
+                    </p>
+                  </div>
+                )}
                 <div className="flex items-baseline justify-between gap-3 text-sm">
                   <span style={{ color: 'var(--text-muted)' }}>Subtotal</span>
                   <span className="price tabular font-semibold" style={{ color: 'var(--text-body)' }}>
-                    {inr(getCartTotal())}
+                    {inr(coupon ? coupon.subtotal : getCartTotal())}
                   </span>
                 </div>
+                {coupon && (
+                  <div className="mt-1 flex items-baseline justify-between gap-3 text-sm">
+                    <span style={{ color: 'var(--text-muted)' }}>Coupon {coupon.code}</span>
+                    <span className="price tabular font-semibold" style={{ color: 'var(--leaf-600)' }}>
+                      −{inr(coupon.discountAmount)}
+                    </span>
+                  </div>
+                )}
                 <div className="mt-1.5 flex items-baseline justify-between gap-3">
                   <span className="label-caps">Total</span>
                   <span
                     className="price tabular text-2xl font-bold"
                     style={{ color: 'var(--text-strong)' }}
                   >
-                    {inr(getCartTotal())}
+                    {inr(coupon ? coupon.total : getCartTotal())}
                   </span>
                 </div>
 
@@ -1145,9 +1230,15 @@ const Checkout = () => {
               pin={pin}
               sameAsBilling={false}
               paymentMethod={paymentMethod}
-              total={getCartTotal()}
+              total={coupon ? coupon.total : getCartTotal()}
+              subtotal={coupon ? coupon.subtotal : getCartTotal()}
+              subtotal={coupon ? coupon.subtotal : getCartTotal()}
+              coupon={coupon || null}
+              minimumValue={minimumValue}
+              minimumMet={minimumMet}
               loading={loading}
-              onClose={() => setShowConfirm(false)}
+              submitError={placeError}
+              onClose={() => { setPlaceError(''); setShowConfirm(false); }}
               onConfirm={confirmPlaceOrder}
               onAddMore={() => navigate('/products')}
               onQuantityChange={updateQuantity}

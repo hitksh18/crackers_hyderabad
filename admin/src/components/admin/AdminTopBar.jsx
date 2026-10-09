@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom';
-import { Search, ShoppingCart, Bell, Receipt } from 'lucide-react';
+import { Search, ShoppingCart, Bell, Receipt, Settings } from 'lucide-react';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { useAuth } from '../../context/AuthContext';
 import { BILLING_URL } from '../../lib/billingUrl';
+import { useAdminIdentity, useToday } from '../../hooks/useAdminIdentity';
 import AccountMenu from './AccountMenu';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,6 +11,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 const AdminTopBar = ({ searchValue = '', onSearchChange, showSearch = true, onNotificationClick }) => {
   const { unreadCount, liveOrderCount, serverStatus } = useNotifications();
   const { isAdmin, isSales } = useAuth();
+  const { name: adminName, roleLabel } = useAdminIdentity();
+  const today = useToday();
   const [internalOpen, setInternalOpen] = useState(false);
   const isOnline = serverStatus === 'online';
   const canSeeBilling = isAdmin || isSales;
@@ -18,12 +21,8 @@ const AdminTopBar = ({ searchValue = '', onSearchChange, showSearch = true, onNo
   return (
     <>
       <header className="admin-topbar sticky top-0 z-40 flex h-[68px] w-full shrink-0 items-center gap-3 border-b px-4 transition-colors duration-200 lg:px-8 xl:px-10" style={{ borderColor: 'var(--admin-border)', background: 'var(--admin-bg)' }}>
-        <Link to="/" className="flex shrink-0 items-center gap-2.5">
-          <img src="/images/website/nav-logo.png" alt="Crackers Hyderabad" width={36} height={36} className="h-9 w-9 rounded-full" />
-          <span className="admin-topbar-name hidden text-[16px] font-semibold tracking-tight sm:block" style={{ fontFamily: 'var(--admin-font)', color: 'var(--text-strong)' }}>
-            Crackers <span style={{ color: 'var(--gold-500)' }}>Hyderabad</span>
-          </span>
-        </Link>
+        {/* No store branding here — the sidebar owns the single identity.
+            Search stays centered, identity and actions stay right. */}
 
         {showSearch ? (
           <div className="admin-topbar-search mx-2 hidden flex-1 justify-center lg:flex">
@@ -57,6 +56,29 @@ const AdminTopBar = ({ searchValue = '', onSearchChange, showSearch = true, onNo
           <Link to="/orders" className="hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium sm:inline-flex transition-colors duration-200" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)', color: 'var(--text-body)' }}>
             <ShoppingCart className="h-3.5 w-3.5" style={{ color: 'var(--gold-500)' }} /> {liveOrderCount} Orders
           </Link>
+
+          {/* Admin-only: system settings live on the Site Settings page. */}
+          {isAdmin && (
+            <Link
+              to="/site-settings"
+              title="Site settings"
+              className="hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors duration-200 sm:inline-flex"
+              style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)', color: 'var(--text-body)' }}
+            >
+              <Settings className="h-3.5 w-3.5" style={{ color: 'var(--text-subtle)' }} /> Settings
+            </Link>
+          )}
+
+          {/* Signed-in identity + date — kept compact, hidden on small screens
+              where the avatar menu still carries the account. */}
+          <div className="hidden min-w-0 flex-col items-end leading-tight md:flex" title={today.full}>
+            <span className="max-w-[160px] truncate text-[13px] font-semibold" style={{ color: 'var(--text-strong)' }}>
+              {adminName}
+            </span>
+            <span className="text-[11px] tabular" style={{ color: 'var(--text-subtle)' }}>
+              {roleLabel} • {today.short}
+            </span>
+          </div>
 
           <button
             onClick={handleBellClick}

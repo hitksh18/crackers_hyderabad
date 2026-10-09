@@ -23,10 +23,6 @@ export const DEFAULT_SITE_SETTINGS = {
       'Premium Fireworks Collection',
     ],
   },
-  stableMessage: {
-    enabled: true,
-    text: 'Your trusted online fireworks store in Hyderabad — from premium gift boxes to everyday sparklers.',
-  },
   updatedAt: null,
   updatedBy: null,
 };
@@ -49,7 +45,6 @@ export async function readSiteSettings() {
           (data.announcementBar || {}).messages ?? DEFAULT_SITE_SETTINGS.announcementBar.messages
         ),
       },
-      stableMessage: { ...DEFAULT_SITE_SETTINGS.stableMessage, ...(data.stableMessage || {}) },
     };
   } catch (error) {
     console.error('Error reading site settings:', error);
@@ -102,11 +97,6 @@ export async function updateBranding(branding, userEmail) {
 export async function updateAnnouncementBar(bar, userEmail) {
   const current = await readSiteSettings();
   return saveSiteSettings({ ...current, announcementBar: { ...current.announcementBar, ...bar } }, { userEmail });
-}
-
-export async function updateStableMessage(msg, userEmail) {
-  const current = await readSiteSettings();
-  return saveSiteSettings({ ...current, stableMessage: { ...current.stableMessage, ...msg } }, { userEmail });
 }
 
 export async function updateSocialLinks(links, userEmail) {

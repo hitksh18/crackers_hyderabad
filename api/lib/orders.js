@@ -5,6 +5,20 @@ const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestor
 const { normaliseCoords } = require('./geocode');
 const { STAFF_ROLES } = require('./security');
 const { maybeSendOrderConfirmationEmail, maybeSendInternalNewOrderEmail, orderPaymentNote } = require('./email');
+const {
+  renderOrderId,
+  readOrderIdConfig,
+  normalizeConfig,
+  carriesOwnEntropy,
+  isSafeOrderId,
+} = require('./orderId');
+// OFFLINE/STORE ids are fully independent (own config + own counter).
+// Imported here only for the POS path below; the online path above never uses it.
+const {
+  readOfflineOrderIdConfig,
+  commitOfflineSequencedOrder,
+  trackingKeyFor: offlineTrackingKeyFor,
+} = require('./offlineOrderId');
 
 /**
  * Server-side order creation.
@@ -72,14 +86,37 @@ const normalisePhone = (value) => {
 const ORDER_COUNTER_DOC = 'orders';
 const ORDER_SEQUENCE_VERSION = 2;
 const ORDER_SEQUENCE_START = 1;
+/* Four-digit human-facing range: 0001-9999. Past the top the server refuses
+   to mint (see commitSequencedOrder) rather than rolling over to 0000. */
+const ORDER_NUMBER_MAX = 9999;
+const ORDER_NUMBER_LIMIT_MESSAGE =
+  'Order number limit reached. Please update the order ID prefix and reset/start a new sequence.';
 const MAX_ORDER_CREATE_ATTEMPTS = 5;
 
-/** Format a sequence number as CH01 ... CH99, CH100, CH101, ... */
+/* The live format config, read once per request. `readOrderIdConfig` falls back
+   to the documented default when the document is missing or unusable, so order
+   creation never depends on the settings screen having been opened once.
+   It is threaded through as an argument rather than kept in a module variable
+   on purpose: two checkouts in flight must not be able to see each other's
+   format if the admin saves a change in between. */
+async function loadOrderIdConfig(db) {
+  const loaded = await readOrderIdConfig(db);
+  return loaded.config;
+}
+
+/**
+ * The legacy `CH01` renderer, kept for the pre-config orders already in the
+ * database and for anything that still needs to recognise the old shape.
+ *
+ * It is NOT what mints ids any more — `renderOrderId` from lib/orderId is, and it
+ * honours whatever format the admin configured. Existing `CH01`-style orders keep
+ * the id they were given because the id lives on the order document, not here.
+ */
 function formatShortCode(n) {
   return `CH${String(n).padStart(2, '0')}`;
 }
 
-/** Parse the numeric part of a CH code, or null when not a sequence code. */
+/** Parse the numeric part of a legacy CH code, or null when not one. */
 function parseShortCodeNumber(code) {
   const m = /^CH(\d+)$/i.exec(String(code || '').trim());
   if (!m) return null;
@@ -87,7 +124,40 @@ function parseShortCodeNumber(code) {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Reserve the next human-facing order number (transaction-safe). */
+/**
+ * Mint the id for a sequence number using the active format config.
+ *
+ * Falls back to the legacy `CH01` shape if the config somehow did not load, so
+ * order creation fails visibly on a missing format rather than writing
+ * `undefined` into a customer-facing field.
+ */
+function renderActiveOrderId(config, sequence, now = new Date()) {
+  const effective = config || normalizeConfig(null).config;
+  const rendered = renderOrderId(effective, { sequence, now });
+  return rendered || formatShortCode(sequence);
+}
+
+/**
+ * The counter document's current value — the highest sequence ever issued.
+ *
+ * Used by the settings screen to refuse a next-sequence below what has already
+ * been handed out. Reads the counter directly rather than scanning orders: the
+ * counter IS the sequence, advanced in the same transaction that writes every
+ * order, so it cannot be behind an order that exists.
+ */
+async function readHighestUsedSequence(db) {
+  try {
+    const snap = await db.collection('counters').doc(ORDER_COUNTER_DOC).get();
+    if (!snap.exists) return 0;
+    const value = Number(snap.data()?.value);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch (error) {
+    console.warn('[orders] could not read the sequence counter:', error.message);
+    return 0;
+  }
+}
+
+/** Reserve the next sequence number, without rendering an id (transaction-safe). */
 async function reserveNextOrderNumber(db) {
   const ref = db.collection('counters').doc(ORDER_COUNTER_DOC);
   const orderNumber = await db.runTransaction(async (tx) => {
@@ -126,6 +196,39 @@ async function nextOrderNumber(db) {
   return orderNumber;
 }
 
+/**
+ * Raise the counter so the next order mints `sequence` or higher.
+ *
+ * The only legitimate use is the admin setting a next-sequence by hand, and it is
+ * monotonic on purpose: a request that raced an in-flight checkout can only ever
+ * push the counter further forward, never pull it back, so an admin save can
+ * never hand two orders the same sequence.
+ */
+async function bumpSequenceFloor(db, sequence) {
+  const target = Math.trunc(Number(sequence));
+  if (!Number.isFinite(target) || target < 1) return;
+
+  await db.runTransaction(async (tx) => {
+    const ref = db.collection('counters').doc(ORDER_COUNTER_DOC);
+    const snap = await tx.get(ref);
+    const data = snap.data() || {};
+    const current = Number(data.value) || 0;
+    if (current >= target) return;
+
+    if (!snap.exists || data.version !== ORDER_SEQUENCE_VERSION) {
+      tx.set(ref, {
+        value: target - 1,
+        version: ORDER_SEQUENCE_VERSION,
+        legacyValue: Number.isFinite(current) ? current : null,
+        migratedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+    tx.update(ref, { value: target - 1, updatedAt: FieldValue.serverTimestamp() });
+  });
+}
+
 /** True when a commit failed because the tracking code already exists. */
 function isTrackingCollision(error) {
   if (!error) return false;
@@ -154,26 +257,42 @@ function orderFailure(status, code, message) {
 /**
  * Atomically advance the sequence and create the order.
  *
- * `buildDocs(orderNumber, shortCode)` returns `{ order, tracking }`.
+ * `buildDocs(orderNumber, orderId)` returns `{ order, tracking }`.
  * `productIncrements` is a Map of productId -> quantity for the sales ledger.
  *
- * Everything lands in a single transaction, so the CH id only ever exists
+ * `orderIdConfig` is the format the admin saved. It is a parameter rather than
+ * module state so that a config save landing between two concurrent checkouts
+ * cannot give one of them the new format and the other the old one silently.
+ *
+ * Everything lands in a single transaction, so the order id only ever exists
  * alongside its order: no gaps consumed by failures, no partial orders.
+ *
+ * Uniqueness does not rest on the format being clever. `tx.create` on the
+ * tracking document fails the whole transaction if that id is already taken —
+ * by an order from an older format, by a retry of this one, or by a hand-made
+ * document — so a duplicate id is not reachable even if the sequence were
+ * rewound. The retry below steps the counter over the taken number and mints
+ * the next one.
  */
-async function commitSequencedOrder(db, { orderRef, buildDocs, productIncrements }) {
-  // The code the aborted attempt minted. The transaction rolled back, so the
-  // counter did NOT advance past it — captured here so the retry can step
-  // over it instead of minting the same taken code again.
+async function commitSequencedOrder(db, { orderRef, buildDocs, productIncrements, orderIdConfig = null, couponBurn = null }) {
+  // What the aborted attempt minted. The transaction rolled back, so the counter
+  // did NOT advance past it — captured here so the retry can step over it
+  // instead of minting the same taken code again.
   let attemptedCode = null;
+  let attemptedOrderNumber = 0;
   for (let attempt = 1; attempt <= MAX_ORDER_CREATE_ATTEMPTS; attempt += 1) {
     try {
       return await db.runTransaction(async (tx) => {
+        /* Firestore rule: every tx.get must precede every tx.set/create/
+           update. The counter read, the coupon re-reads and the customer
+           counter read therefore all happen up front; writes follow. */
         const counterRef = db.collection('counters').doc(ORDER_COUNTER_DOC);
         const snap = await tx.get(counterRef);
         let orderNumber;
+        let advanceCounter = null;
         if (!snap.exists) {
           orderNumber = ORDER_SEQUENCE_START;
-          tx.set(counterRef, {
+          advanceCounter = () => tx.set(counterRef, {
             value: orderNumber,
             version: ORDER_SEQUENCE_VERSION,
             updatedAt: FieldValue.serverTimestamp(),
@@ -183,7 +302,7 @@ async function commitSequencedOrder(db, { orderRef, buildDocs, productIncrements
           if (data.version !== ORDER_SEQUENCE_VERSION) {
             const legacyValue = Number(data.value);
             orderNumber = ORDER_SEQUENCE_START;
-            tx.set(counterRef, {
+            advanceCounter = () => tx.set(counterRef, {
               value: orderNumber,
               version: ORDER_SEQUENCE_VERSION,
               legacyValue: Number.isFinite(legacyValue) ? legacyValue : null,
@@ -193,12 +312,54 @@ async function commitSequencedOrder(db, { orderRef, buildDocs, productIncrements
           } else {
             orderNumber = (Number(data.value) || 0) + 1;
             if (orderNumber < 1) orderNumber = 1;
-            tx.update(counterRef, { value: orderNumber, updatedAt: FieldValue.serverTimestamp() });
+            /* Hard stop at the top of the four-digit range. Throwing aborts the
+               transaction before anything is written, so the counter is not
+               consumed and no duplicate id can slip out. Both online checkout
+               and POS orders funnel through here. */
+            if (orderNumber > ORDER_NUMBER_MAX) {
+              throw orderFailure(503, 'ORDER_NUMBER_LIMIT', ORDER_NUMBER_LIMIT_MESSAGE);
+            }
+            advanceCounter = () => tx.update(counterRef, { value: orderNumber, updatedAt: FieldValue.serverTimestamp() });
           }
         }
 
-        const shortCode = formatShortCode(orderNumber);
+        /* Coupon limit re-checks (reads). They ride here — not just at
+           validate time — so two simultaneous checkouts cannot both slip
+           under a cap. Still no writes yet. */
+        let couponCustUsed = 0;
+        if (couponBurn) {
+          const {
+            COUPONS_COLLECTION: COUPON_COLL,
+            CUSTOMER_COUNTERS_COLLECTION: CUST_COLL,
+          } = require('./coupons');
+          const couponRef = db.collection(COUPON_COLL).doc(couponBurn.couponId);
+          const couponSnap = await tx.get(couponRef);
+          if (!couponSnap.exists) {
+            throw orderFailure(400, 'COUPON_INVALID', 'This coupon is no longer available.');
+          }
+          const live = couponSnap.data() || {};
+          if (live.status !== 'active') {
+            throw orderFailure(400, 'COUPON_INACTIVE', 'This coupon is no longer active.');
+          }
+          if (live.usageLimit != null && Number(live.usageCount || 0) >= Number(live.usageLimit)) {
+            throw orderFailure(400, 'COUPON_LIMIT', 'This coupon has reached its usage limit.');
+          }
+          if (couponBurn.perCustomerLimit != null && couponBurn.customerKey) {
+            const custSnap = await tx.get(
+              db.collection(CUST_COLL).doc(`${couponBurn.couponId}_${couponBurn.customerKey}`)
+            );
+            couponCustUsed = custSnap.exists ? Number(custSnap.data().count) || 0 : 0;
+            if (couponCustUsed >= Number(couponBurn.perCustomerLimit)) {
+              throw orderFailure(400, 'COUPON_CUSTOMER_LIMIT', 'You have already used this coupon the maximum number of times.');
+            }
+          }
+        }
+
+        /* Writes begin — no more tx.get past this point. */
+        if (advanceCounter) advanceCounter();
+        const shortCode = renderActiveOrderId(orderIdConfig, orderNumber);
         attemptedCode = shortCode;
+        attemptedOrderNumber = orderNumber;
         const { order, tracking } = buildDocs(orderNumber, shortCode);
         tx.set(orderRef, order);
         tx.create(db.collection('trackingCodes').doc(shortCode), tracking);
@@ -209,6 +370,42 @@ async function commitSequencedOrder(db, { orderRef, buildDocs, productIncrements
             });
           }
         }
+        if (couponBurn) {
+          /* Coupon usage is consumed in the SAME atomic transaction as the
+             order: one committed order == exactly one redemption. Retries,
+             refreshes and duplicate posts cannot double-count, because the
+             redemption document is created (never overwritten) alongside the
+             order — a replay faces the same document and the whole commit
+             aborts. */
+          const {
+            COUPONS_COLLECTION: COUPON_COLL,
+            REDEMPTIONS_COLLECTION: REDEEM_COLL,
+            CUSTOMER_COUNTERS_COLLECTION: CUST_COLL,
+          } = require('./coupons');
+          const couponRef = db.collection(COUPON_COLL).doc(couponBurn.couponId);
+          if (couponBurn.perCustomerLimit != null && couponBurn.customerKey) {
+            tx.set(db.collection(CUST_COLL).doc(`${couponBurn.couponId}_${couponBurn.customerKey}`), {
+              couponId: couponBurn.couponId,
+              customerKey: couponBurn.customerKey,
+              count: couponCustUsed + 1,
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+          }
+          tx.update(couponRef, {
+            usageCount: FieldValue.increment(1),
+            totalDiscountGiven: FieldValue.increment(couponBurn.discountAmount),
+            totalRevenue: FieldValue.increment(couponBurn.orderTotal),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          tx.create(db.collection(REDEEM_COLL).doc(orderRef.id), {
+            couponId: couponBurn.couponId,
+            code: couponBurn.code,
+            orderId: orderRef.id,
+            customerKey: couponBurn.customerKey || null,
+            discountAmount: couponBurn.discountAmount,
+            createdAt: FieldValue.serverTimestamp(),
+          });
+        }
         return { orderNumber, shortCode };
       });
     } catch (error) {
@@ -218,37 +415,15 @@ async function commitSequencedOrder(db, { orderRef, buildDocs, productIncrements
           console.warn(`[orders] tracking collision on ${attemptedCode}, stepping over it (attempt ${attempt})`);
           // The aborted transaction rolled back its own counter advance, so
           // without this the retry would mint the same taken code forever.
-          // Step the shared counter up to the taken number; the retry then
-          // mints the next one. Monotonic (max) so concurrent orders are safe.
-          const taken = parseShortCodeNumber(attemptedCode);
-          if (taken !== null) {
-            await db.runTransaction(async (stepTx) => {
-              const stepRef = db.collection('counters').doc(ORDER_COUNTER_DOC);
-              const stepSnap = await stepTx.get(stepRef);
-              if (!stepSnap.exists) {
-                stepTx.set(stepRef, {
-                  value: taken,
-                  version: ORDER_SEQUENCE_VERSION,
-                  updatedAt: FieldValue.serverTimestamp(),
-                });
-                return;
-              }
-              const stepData = stepSnap.data() || {};
-              const current = Number(stepData.value) || 0;
-              if (taken > current) {
-                if (stepData.version !== ORDER_SEQUENCE_VERSION) {
-                  stepTx.set(stepRef, {
-                    value: taken,
-                    version: ORDER_SEQUENCE_VERSION,
-                    legacyValue: Number.isFinite(current) ? current : null,
-                    migratedAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp(),
-                  });
-                } else {
-                  stepTx.update(stepRef, { value: taken, updatedAt: FieldValue.serverTimestamp() });
-                }
-              }
-            }).catch((stepError) => {
+          // Step the shared counter past the number this attempt minted; the
+          // retry then takes the next one. The step is monotonic (max) so
+          // concurrent orders can only ever push it further forward.
+          //
+          // The sequence is recovered from what was minted rather than parsed
+          // back out of the id: with a configurable format there is no fixed
+          // shape to parse, and `orderNumber` is exactly what produced it.
+          if (attemptedCode !== null) {
+            await bumpSequenceFloor(db, attemptedOrderNumber + 1).catch((stepError) => {
               console.warn('[orders] sequence step-over failed:', stepError.message);
             });
           }
@@ -474,6 +649,46 @@ async function createOrder(req, res) {
       });
     }
 
+    /* Optional coupon: the browser sends only the CODE. Everything else —
+       validity, discount math, usage accounting — is decided here from the
+       server-priced cart. The minimum above applies to the pre-discount total.
+       Historical snapshot rides on the order so later edits to the coupon
+       can never rewrite what this order paid. */
+    const { normalizeCode, validateCouponForCart } = require('./coupons');
+    const couponCode = normalizeCode(body.couponCode);
+    let couponSnapshot = null;
+    let couponBurn = null;
+    let orderTotal = priced.value.total;
+    let orderDiscount = 0;
+    if (couponCode) {
+      const signedInUidEarly = req.caller?.uid || null;
+      const customerKey = signedInUidEarly
+        || customer.value.email || customer.value.phone || null;
+      const check = await validateCouponForCart(db, {
+        code: couponCode,
+        pricedItems: priced.value.items,
+        customerKey,
+      });
+      if (!check.ok) return res.status(400).json({ error: check.error, code: 'COUPON_INVALID' });
+      orderDiscount = Math.round(check.discountAmount * 100) / 100;
+      orderTotal = Math.max(0, Math.round((priced.value.total - orderDiscount) * 100) / 100);
+      couponSnapshot = {
+        code: check.coupon.normalizedCode,
+        couponId: check.coupon.id,
+        discountType: check.coupon.discountType,
+        discountValue: check.coupon.discountValue,
+        discountAmount: orderDiscount,
+      };
+      couponBurn = {
+        couponId: check.coupon.id,
+        code: check.coupon.normalizedCode,
+        discountAmount: orderDiscount,
+        orderTotal,
+        perCustomerLimit: check.coupon.perCustomerLimit,
+        customerKey,
+      };
+    }
+
     /* Dropped when the feature is switched off, so "off" means orders genuinely
        stop carrying coordinates — not just that the map is hidden while a stale
        client, or anything else posting to this endpoint, keeps sending them. */
@@ -488,9 +703,15 @@ async function createOrder(req, res) {
     const notifyToken = crypto.randomBytes(32).toString('base64url');
     const notifyTokenHash = crypto.createHash('sha256').update(notifyToken).digest('hex');
 
-    // One atomic transaction mints the CH id and writes the order: the id only
-    // exists when the order does, failures consume nothing and leave nothing
-    // partial behind.
+    /* The order-id format the admin configured, read once and passed into the
+       commit. Read after the (slower) cart pricing so a busy shop is not holding
+       a settings read open across it — the value is only consumed inside the
+       transaction below. */
+    const orderIdConfig = await loadOrderIdConfig(db);
+
+    // One atomic transaction mints the order id and writes the order: the id
+    // only exists when the order does, failures consume nothing and leave
+    // nothing partial behind.
     const orderRef = db.collection('orders').doc();
     const increments = new Map(priced.value.items.map((item) => [item.id, item.quantity]));
     let orderNumber;
@@ -499,6 +720,8 @@ async function createOrder(req, res) {
       ({ orderNumber, shortCode } = await commitSequencedOrder(db, {
         orderRef,
         productIncrements: increments,
+        orderIdConfig,
+        couponBurn,
         buildDocs: (num, code) => ({
           order: {
             userId: signedInUid,
@@ -512,8 +735,15 @@ async function createOrder(req, res) {
                code — regenerate identically months later. */
             deliveryLocation,
             items: priced.value.items,
-            total: priced.value.total,
-            status: 'Pending',
+            subtotal: priced.value.total,
+            discount: orderDiscount,
+            couponCode: couponSnapshot ? couponSnapshot.code : null,
+            coupon: couponSnapshot,
+            total: orderTotal,
+            /* Successfully placed orders are born Confirmed — there is no
+               Pending state for customer orders. The timeline therefore
+               starts at Confirmed → Packed → … on every surface. */
+            status: 'Confirmed',
             orderNumber: num,
             shortCode: code,
             createdAt: FieldValue.serverTimestamp(),
@@ -537,7 +767,7 @@ async function createOrder(req, res) {
       throw error;
     }
 
-    console.log(`[orders] created ${orderRef.id} (${shortCode}) total=${priced.value.total}`);
+    console.log(`[orders] created ${orderRef.id} (${shortCode}) total=${orderTotal}${couponSnapshot ? ` coupon=${couponSnapshot.code}(-${orderDiscount})` : ''}`);
 
     /* Exactly ONE customer confirmation + ONE internal new-order
        notification — strictly after the successful commit, so an id is only
@@ -548,8 +778,11 @@ async function createOrder(req, res) {
     const savedOrder = {
       shortCode,
       orderNumber,
-      status: 'Pending',
-      total: priced.value.total,
+      status: 'Confirmed',
+      total: orderTotal,
+      subtotal: priced.value.total,
+      discount: orderDiscount,
+      coupon: couponSnapshot,
       items: priced.value.items,
       customer: customer.value,
       userEmail: signedInEmail || customer.value.email || null,
@@ -570,7 +803,10 @@ async function createOrder(req, res) {
       orderId: orderRef.id,
       shortCode,
       orderNumber,
-      total: priced.value.total,
+      total: orderTotal,
+      subtotal: priced.value.total,
+      discount: orderDiscount,
+      coupon: couponSnapshot,
       itemCount: priced.value.items.reduce((n, i) => n + i.quantity, 0),
       notifyToken,
     });
@@ -733,18 +969,24 @@ async function createPosOrder(req, res) {
     const discount = Math.round(priced.value.total * (discountPercent / 100) * 100) / 100;
     const total = Math.max(0, Math.round((priced.value.total - discount) * 100) / 100);
 
-    // Same atomic discipline as /api/orders: the CH id, the order, the tracking
-    // code and the sales ledger commit in one transaction, so counter and
-    // storefront checkouts share a single never-duplicated sequence and a
-    // failed bill consumes nothing.
+    /* OFFLINE/STORE id only: own format (Ayyapa26-0001 by default) and own
+       counter (counters/offlineOrders). Never touches the ONLINE counter, so
+       counter bills and storefront checkouts never share a sequence. */
+    const { config: offlineConfig } = await readOfflineOrderIdConfig(db);
+
+    // Same atomic discipline as /api/orders but on the OFFLINE counter: the
+    // offline id, the order, the tracking code and the sales ledger commit in
+    // one transaction, so two terminals can never receive the same id and a
+    // failed bill consumes nothing. Collisions step over (never overwrite).
     const orderRef = db.collection('orders').doc();
     const increments = new Map(priced.value.items.map((item) => [item.id, item.quantity]));
     let orderNumber;
     let shortCode;
     try {
-      ({ orderNumber, shortCode } = await commitSequencedOrder(db, {
+      ({ orderNumber, shortCode } = await commitOfflineSequencedOrder(db, {
         orderRef,
         productIncrements: increments,
+        offlineConfig,
         buildDocs: (num, code) => ({
           order: {
             userId: req.caller?.uid || null,
@@ -766,11 +1008,27 @@ async function createPosOrder(req, res) {
             total,
             status: 'Completed',
             source: 'pos',
+            channel: 'offline',
+            orderType: 'offline',
             orderNumber: num,
+            offlineOrderNumber: num,
+            /* Single source of truth for the offline ID: stored directly on
+               the order. `shortCode` mirrors it for compatibility with every
+               existing reader (lists, search, invoices). Both are the same
+               string — never regenerated downstream. */
+            orderId: code,
             shortCode: code,
             createdAt: FieldValue.serverTimestamp(),
           },
-          tracking: { orderId: orderRef.id, shortCode: code, orderNumber: num },
+          tracking: {
+            orderId: orderRef.id,
+            shortCode: code,
+            offlineOrderId: code,
+            orderNumber: num,
+            channel: 'offline',
+            source: 'pos',
+            trackingKey: offlineTrackingKeyFor(code),
+          },
         }),
       }));
     } catch (error) {
@@ -784,7 +1042,9 @@ async function createPosOrder(req, res) {
 
     return res.status(201).json({
       orderId: orderRef.id,
+      firestoreId: orderRef.id,
       shortCode,
+      offlineOrderId: shortCode,
       orderNumber,
       total,
       itemCount: priced.value.items.reduce((n, i) => n + i.quantity, 0),
@@ -943,18 +1203,26 @@ async function trackOrder(req, res) {
 
     if (!isStaff && isTrackLocked(raw)) return deny();
 
-    /* What counts as proof of ownership, decided once from the shape of what
-       was typed rather than re-derived at each check:
+    /* What counts as proof of ownership, decided once from the shape of what was
+       typed rather than re-derived at each check. `carriesOwnEntropy` lives in
+       lib/orderId so the storefront's copy of this rule cannot drift from the
+       one that actually guards the data:
          - staff, holding a verified token, need nothing further;
-         - a 20-character Firestore auto-id is itself unguessable;
+         - a Firestore auto-id is itself unguessable;
          - a legacy CH1042-K7QMX3 carries six random characters, which is the
            same defence the phone check replaces, so those keep working and
            nothing needs migrating;
-         - a bare sequential CH1042 proves nothing on its own, and is the only
-           case that needs the four digits. */
-    const looksLikeOrderId = entered.length >= 18;
-    const isLegacyCode = raw.includes('-');
-    const needsPhone = !isStaff && !looksLikeOrderId && !isLegacyCode;
+         - everything else — the old CH1042 and every id in the configurable
+           format, including CH-20261008-000001 — proves nothing on its own and
+           needs the four digits. Note that a hyphen is NOT evidence of
+           entropy: hyphens are now ordinary in an id. */
+    /* One rule, from one place, for "does this prove ownership on its own". The
+       length-only check this replaced was a hole: the default configured format,
+       CH-20261008-000001, is exactly 18 characters, so every new order would have
+       been treated as an unguessable Firestore auto-id and served without the
+       phone check. `carriesOwnEntropy` identifies an auto-id by its mixed case
+       instead, which no generated id can ever have. */
+    const needsPhone = !isStaff && !carriesOwnEntropy(raw);
 
     let phoneLast4 = '';
     if (needsPhone) {
@@ -1080,9 +1348,16 @@ async function handlePublicTrack(req, res) {
     const entered = String(req.params?.orderCode || '').trim().replace(/^#/, '');
     const raw = entered.toUpperCase();
 
-    // Current sequence codes (CH01, CH02, … CH100, …) plus legacy random-suffix
-    // codes (CH1042-K7QMX3) that predate the sequential system.
-    if (!/^(CH\d+|CH\d+-[A-Z0-9]+)$/.test(raw) || raw.length > 40) {
+    /* Accepts every id the shop can have issued: the old CH01/CH100 range, the
+       legacy CH1042-K7QMX3 codes, and whatever the configured format renders
+       (by default CH-20261008-000001).
+
+       Gated on the safe character set rather than on a shape, because the shape
+       is admin-configurable — pinning the regex to `CH` would have broken
+       tracking the first time the prefix was changed, which is exactly the
+       failure this has to not have. The generator can only produce the safe set
+       (see validateConfig), so this admits those ids and nothing more. */
+    if (!isSafeOrderId(raw)) {
       return res.status(400).json({ error: 'Invalid order code' });
     }
 
@@ -1118,8 +1393,13 @@ module.exports = {
   parseShortCodeNumber,
   reserveNextOrderNumber,
   nextOrderNumber,
+  readHighestUsedSequence,
+  bumpSequenceFloor,
   commitSequencedOrder,
+  priceCart,
   NOTIFY_TOKEN_TTL_MS,
   MAX_ITEMS,
   MAX_ORDER_CREATE_ATTEMPTS,
+  ORDER_NUMBER_MAX,
+  ORDER_NUMBER_LIMIT_MESSAGE,
 };

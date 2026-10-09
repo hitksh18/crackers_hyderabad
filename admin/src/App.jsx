@@ -7,6 +7,7 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import CustomToast from './components/CustomToast';
 import ScrollToTop from './components/ScrollToTop';
+import AdminSidebar from './components/admin/AdminSidebar';
 import Login from './pages/Login';
 import { BILLING_URL } from './lib/billingUrl';
 
@@ -19,12 +20,21 @@ const Analytics = lazy(() => import('./pages/Analytics'));
 const Orders = lazy(() => import('./pages/Orders'));
 const OrderDetail = lazy(() => import('./pages/OrderDetail'));
 const Products = lazy(() => import('./pages/Products'));
+const Coupons = lazy(() => import('./pages/Coupons'));
 const AddProduct = lazy(() => import('./pages/AddProduct'));
 const EditProduct = lazy(() => import('./pages/EditProduct'));
 const Categories = lazy(() => import('./pages/Categories'));
 const Users = lazy(() => import('./pages/Users'));
 const PriceList = lazy(() => import('./pages/PriceList'));
 const Canvas = lazy(() => import('./pages/Canvas'));
+// Settings → Orders → Order ID. Admin-only: the format decides what every new
+// order is called, and the API re-checks it against the live sequence counter.
+const OrderIdSettings = lazy(() => import('./pages/OrderIdSettings'));
+// Site Settings (order IDs, store contact, order reset). Admin-only system
+// settings that intentionally live outside the homepage Canvas.
+const SiteSettings = lazy(() => import('./pages/SiteSettings'));
+// Email Automation (rules, templates, branding, compose, delivery log).
+const EmailAutomation = lazy(() => import('./pages/EmailAutomation'));
 // NOTE: the counter register is NOT an admin route. It runs as its own
 // frontend (see /billing); /billing below is only a signpost pointing there.
 
@@ -87,11 +97,21 @@ function BillingMoved() {
 
 function AdminShell() {
   const location = useLocation();
+  /* The login page and the full-screen Canvas editor manage their own chrome;
+     every other admin page shares the sidebar. */
+  const hideSidebar =
+    location.pathname === '/login' || location.pathname.startsWith('/canvas');
 
   return (
     <div className="admin-viewport">
       <ScrollToTop />
-      <main className="admin-main">
+      <div className="admin-shell-row">
+        {!hideSidebar && <AdminSidebar />}
+        {/* Keyed by pathname so each route change — dashboard to Canvas and
+            back — fades/slides the content area in. The sidebar, navbar and
+            scroll container are outside the key and never re-animate. */}
+        <main className="admin-main" key={location.pathname}>
+          <div className="page-enter">
         <Suspense fallback={<RouteFallback />}>
           <Routes location={location}>
             <Route
@@ -140,6 +160,14 @@ function AdminShell() {
               element={
                 <ProtectedRoute adminOnly>
                   <Products />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/coupons"
+              element={
+                <ProtectedRoute adminOnly>
+                  <Coupons />
                 </ProtectedRoute>
               }
             />
@@ -201,10 +229,41 @@ function AdminShell() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/settings/orders/order-id"
+              element={
+                <ProtectedRoute adminOnly>
+                  <OrderIdSettings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/site-settings"
+              element={
+                <ProtectedRoute adminOnly>
+                  <SiteSettings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/email-automation"
+              element={
+                <ProtectedRoute adminOnly>
+                  <EmailAutomation />
+                </ProtectedRoute>
+              }
+            />
+            {/* Short aliases, so /settings and /settings/orders land on the
+                Order ID panel rather than 404-ing. This is the only settings
+                group that exists today; the path is shaped for the next one. */}
+            <Route path="/settings" element={<Navigate to="/settings/orders/order-id" replace />} />
+            <Route path="/settings/orders" element={<Navigate to="/settings/orders/order-id" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
-      </main>
+          </div>
+        </main>
+      </div>
       <CustomToast />
     </div>
   );

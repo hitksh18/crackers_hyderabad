@@ -1,0 +1,721 @@
+/*
+ * BillPrintSheet — print styles for the generated counter invoice ONLY.
+ *
+ * Scoped hard to `.bill-print-sheet`, which is display:none on screen (see the
+ * inline <style> in pages/Billing.jsx), so nothing here can reach the POS shell.
+ *
+ * A framed premium retail invoice: a hairline page frame, a branded top bar,
+ * maroon section strips and a dark table head, with restrained gold spark
+ * accents. Paper stays white/cream — the colour lives in the framing and the
+ * accents, never as a full-page ground.
+ *
+ * GEOMETRY — why the margins live here and not in @page:
+ * pages/Billing.jsx declares `@page { size: A4 portrait; margin: 0 }`. Chrome
+ * draws its own print header/footer (URL, "localhost:5002", browser date/time,
+ * page numbers, document title) inside the page MARGIN BOX. With a zero page
+ * margin that box does not exist, so those artefacts are suppressed and the
+ * PDF starts directly with the invoice. The printable margin this sheet needs
+ * is therefore padding on .bps-body.
+ *
+ * PAGE BALANCE: items are explicitly sliced into one .bps-page chunk per
+ * physical page with MAXIMUM 20 rows (see paginateInvoice.chunkItems) —
+ * never browser auto-break alone. Each chunk is a content-sized block
+ * column: rows carry break-inside:avoid so a row never splits, non-final
+ * chunks end with break-after:page (the last never does, so no blank extra
+ * page), totals + thank-you print on the final chunk only, and every chunk
+ * carries its own AYYAPA FIREWORKS footer with dynamic Page X of N.
+ */
+
+.bill-print-sheet {
+  --bps-charcoal: #1c1917;
+  --bps-charcoal-2: #2b2521;
+  --bps-maroon: #8a1b2e;
+  --bps-maroon-dark: #6b1424;
+  --bps-orange: #e8621c;
+  --bps-gold: #d99a2b;
+  --bps-ink: #1f1c1a;
+  --bps-ink-soft: #46403b;
+  --bps-muted: #7b736c;
+  --bps-line: #e0d9cf;
+  --bps-line-soft: #ece6dc;
+  --bps-cream: #fffdf9;
+  --bps-cream-2: #faf6ef;
+}
+
+@media print {
+  /* The POS terminal declares color-scheme:dark on <html>; without this the
+     UA paints form controls and default backgrounds dark on paper. */
+  :root,
+  html.dark {
+    color-scheme: light !important;
+  }
+
+  .bill-print-sheet {
+    width: 100%;
+    font-family: 'Inter', 'Noto Sans', system-ui, sans-serif;
+    color: var(--bps-ink);
+    background: #ffffff;
+  }
+
+  /* Keep the accent fills true flat colour: without this Chrome drops
+     background graphics in "Save as PDF". */
+  .bill-print-sheet * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Never let a row or a section straddle a page break. */
+  .bps-avoid-break,
+  .bps-rows tr,
+  .bps-summary,
+  .bps-footer,
+  .bps-header,
+  .bps-panel,
+  .bps-spark {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Repeat the column headings if a long bill spills to page two. */
+  .bps-rows thead {
+    display: table-header-group;
+  }
+
+  .bps-rows tbody tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
+/* ── Page frame ─────────────────────────────────────────────────────────── */
+
+/* Each chunk is exactly one physical page (max 20 rows, see paginateInvoice).
+   Content-sized block columns: no min-height / fixed height anywhere, so a
+   page can never render as header+footer with a huge blank middle. */
+.bps-pages {
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+
+.bps-pages:empty {
+  display: none;
+}
+
+.bill-print-root:empty {
+  display: none;
+}
+
+.bps-page {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 186mm;
+  margin: 0 auto;
+  background: var(--bps-cream);
+  border: 1px solid var(--bps-line);
+  display: flex;
+  flex-direction: column;
+  break-inside: auto;
+  page-break-inside: auto;
+}
+
+/* Every chunk but the last ends its physical page. The last chunk never
+   forces a break, so a 20/40-row bill can never spill a blank extra page. */
+.bps-pages > .bps-page:not(:last-child) {
+  break-after: page;
+  page-break-after: always;
+}
+
+.bps-pages > .bps-page:last-child {
+  break-after: auto;
+  page-break-after: auto;
+}
+
+@media print {
+  /* Block (not flex) columns fragment cleanly in Chrome: a fixed-height flex
+     column clips instead of flowing, which surfaced as blank pages. */
+  .bps-page {
+    display: block;
+  }
+
+  .bill-print-root {
+    display: block !important;
+    margin: 0;
+    padding: 0;
+  }
+
+  .bps-pages {
+    display: block;
+  }
+}
+
+/* Branded top bar: charcoal, then fire orange, then a gold hairline. This is
+   the first thing the eye lands on, so it carries the brand immediately. */
+.bps-topbar {
+  flex: none;
+  display: block;
+  height: 7px;
+  background: var(--bps-charcoal);
+  border-bottom: 2px solid var(--bps-orange);
+  box-shadow: inset 0 -1px 0 var(--bps-gold);
+}
+
+.bps-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 10mm 11mm 9mm;
+}
+
+@media print {
+  .bps-body {
+    display: block;
+    flex: none;
+  }
+}
+
+.bps-main {
+  flex: 0 0 auto;
+}
+
+/* ── Spark accents ──────────────────────────────────────────────────────── */
+
+/* Four-point star used sparingly as the fireworks cue: a couple in the header
+   and a couple by the footer. Tiny and low-contrast, so they read as a printed
+   ornament rather than as graphics sitting in the middle of the invoice. */
+.bps-spark {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.bps-spark--hdr-1 {
+  top: 2px;
+  right: 168px;
+  width: 13px;
+  height: 13px;
+  color: var(--bps-gold);
+  opacity: 0.55;
+}
+
+.bps-spark--hdr-2 {
+  top: 15px;
+  right: 152px;
+  width: 8px;
+  height: 8px;
+  color: var(--bps-orange);
+  opacity: 0.45;
+}
+
+.bps-spark--ftr-1 {
+  bottom: 4px;
+  left: 16mm;
+  width: 11px;
+  height: 11px;
+  color: var(--bps-gold);
+  opacity: 0.5;
+}
+
+.bps-spark--ftr-2 {
+  bottom: 11px;
+  left: 22mm;
+  width: 7px;
+  height: 7px;
+  color: var(--bps-orange);
+  opacity: 0.4;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+
+.bps-header {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 11px;
+  border-bottom: 2px solid var(--bps-charcoal);
+}
+
+.bps-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+/* The official Ayyapa Fireworks mark ONLY (never the online-store logo).
+   Contained box so the artwork is letterboxed, never stretched. */
+.bps-brand-mark {
+  width: 72px;
+  height: 72px;
+  flex: none;
+  display: block;
+  object-fit: contain;
+  max-width: 100%;
+}
+
+.bps-brand-text {
+  min-width: 0;
+}
+
+.bps-brand-name {
+  margin: 0;
+  font-family: 'Playfair Display', 'Noto Sans', Georgia, serif;
+  font-size: 27px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  color: var(--bps-charcoal);
+  white-space: nowrap;
+}
+
+.bps-brand-tagline {
+  margin: 5px 0 0;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--bps-orange);
+  white-space: nowrap;
+}
+
+/* Removed: the offline invoice represents AYYAPA FIREWORKS only and must
+   never print a parent-brand / online-store line. Stub kept so a cached
+   class name can never render text. */
+.bps-brand-parent {
+  display: none !important;
+}
+
+.bps-doc {
+  flex: none;
+  min-width: 168px;
+  text-align: right;
+}
+
+.bps-doc-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--bps-maroon);
+  line-height: 1;
+}
+
+.bps-doc-rule {
+  width: 100%;
+  height: 2px;
+  margin: 6px 0 7px;
+  background: var(--bps-orange);
+}
+
+.bps-meta-list {
+  display: grid;
+  gap: 2px;
+  font-size: 10px;
+}
+
+.bps-meta-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.bps-meta-key {
+  color: var(--bps-muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.bps-meta-val {
+  font-weight: 700;
+  color: var(--bps-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The canonical Order ID: letters and hyphens as well as digits, so it keeps
+   tabular figures off (they misalign under proportional glyphs) and gets the
+   maroon accent the rest of the sheet uses for the one number that matters. */
+.bps-meta-val--order {
+  font-variant-numeric: normal;
+  letter-spacing: 0.02em;
+  color: var(--bps-maroon);
+}
+
+/* ── Section headers ────────────────────────────────────────────────────── */
+
+/* Small maroon label with a hairline running out to the edge. */
+.bps-section {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 7px;
+}
+
+.bps-section-title {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--bps-maroon);
+  white-space: nowrap;
+}
+
+.bps-section-line {
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--bps-line);
+}
+
+/* ── Panels (billing info, bill to) ─────────────────────────────────────── */
+
+.bps-panel {
+  border: 1px solid var(--bps-line);
+  background: #ffffff;
+  margin-bottom: 11px;
+}
+
+/* Maroon strip header shared by both boxed panels. */
+.bps-panel-head {
+  padding: 5px 10px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #ffffff;
+  background: var(--bps-maroon);
+}
+
+.bps-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.bps-strip-cell {
+  padding: 7px 10px;
+  min-width: 0;
+  border-left: 1px solid var(--bps-line-soft);
+}
+
+.bps-strip-cell:first-child {
+  border-left: 0;
+}
+
+.bps-strip-key {
+  display: block;
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--bps-muted);
+}
+
+.bps-strip-val {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--bps-ink);
+  overflow-wrap: anywhere;
+}
+
+.bps-strip-val-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Small professional PAID badge rather than plain text. */
+.bps-badge {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 2px 9px;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #ffffff;
+  background: var(--bps-charcoal);
+  border-radius: 2px;
+}
+
+.bps-billto {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.bps-billto-cell {
+  padding: 7px 10px;
+  min-width: 0;
+  background: var(--bps-cream-2);
+  border-top: 1px solid var(--bps-line-soft);
+}
+
+.bps-billto-cell + .bps-billto-cell {
+  border-left: 1px solid var(--bps-line-soft);
+}
+
+.bps-billto-key {
+  display: block;
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--bps-muted);
+}
+
+.bps-billto-val {
+  display: block;
+  margin-top: 3px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--bps-ink);
+  overflow-wrap: anywhere;
+}
+
+.bps-billto-val-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Items table ────────────────────────────────────────────────────────── */
+
+/* Fixed layout keeps the numeric columns at their declared widths however long
+   a product name is: only the Product column absorbs the slack, and it wraps
+   instead of forcing horizontal overflow. */
+.bps-rows {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 11px;
+}
+
+.bps-rows thead th {
+  padding: 7px 8px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  text-align: left;
+  color: #ffffff;
+  background: var(--bps-charcoal);
+  border-bottom: 2px solid var(--bps-orange);
+}
+
+.bps-rows td {
+  padding: 5.5px 8px;
+  border-bottom: 1px solid var(--bps-line-soft);
+  vertical-align: middle;
+}
+
+.bps-rows tbody tr:nth-child(even) {
+  background: var(--bps-cream-2);
+}
+
+.bps-rows tbody tr:last-child td {
+  border-bottom: 1px solid var(--bps-line);
+}
+
+.bps-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bps-centre {
+  text-align: center;
+}
+
+.bps-name {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--bps-ink);
+}
+
+/* MRP stays visually secondary: smaller and muted, struck through only when
+   the line is actually discounted. */
+.bps-mrp {
+  font-size: 10px;
+  color: var(--bps-muted);
+}
+
+.bps-mrp-off {
+  color: #a79f97;
+  text-decoration: line-through;
+}
+
+/* PRICE carries the accent; TOTAL is the boldest figure in the row. */
+.bps-price {
+  font-weight: 700;
+  color: var(--bps-maroon);
+}
+
+.bps-price--plain {
+  color: var(--bps-ink);
+  font-weight: 600;
+}
+
+.bps-line-total {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--bps-ink);
+}
+
+/* ── Totals ─────────────────────────────────────────────────────────────── */
+
+.bps-bottom {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 11px;
+}
+
+.bps-summary {
+  width: 252px;
+  flex: none;
+  border: 1px solid var(--bps-line);
+  border-top: 2px solid var(--bps-charcoal);
+  background: #ffffff;
+}
+
+.bps-summary-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 11px;
+  font-size: 10.5px;
+  border-bottom: 1px solid var(--bps-line-soft);
+}
+
+.bps-summary-key {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bps-ink-soft);
+}
+
+.bps-summary-val {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--bps-ink);
+}
+
+.bps-summary-val-off {
+  color: var(--bps-maroon);
+}
+
+/* Grand total: charcoal ground with the amount reversed out in white and a
+   gold edge. Rectangular and invoice-like, not a rounded UI card. */
+.bps-grand {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 11px;
+  background: var(--bps-charcoal);
+  border-bottom: 2px solid var(--bps-gold);
+}
+
+.bps-grand-key {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--bps-gold);
+}
+
+.bps-grand-val {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: #ffffff;
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+
+/* In normal flow directly after the content: pages are content-sized, so no
+   pinning is needed and the footer can never be overlapped. */
+.bps-footer {
+  position: relative;
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+.bps-footer-rule {
+  height: 1px;
+  background: var(--bps-line);
+  margin-bottom: 11px;
+}
+
+.bps-footer-rule::after {
+  content: '';
+  display: block;
+  width: 56px;
+  height: 2px;
+  margin: -1px auto 0;
+  background: var(--bps-orange);
+}
+
+.bps-footer-thanks {
+  margin: 0;
+  font-family: 'Playfair Display', 'Noto Sans', Georgia, serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bps-ink);
+}
+
+.bps-footer-line {
+  margin: 4px 0 0;
+  font-size: 9.5px;
+  color: var(--bps-ink-soft);
+}
+
+.bps-footer-brand {
+  margin: 10px 0 0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--bps-maroon);
+}
+
+.bps-page-num {
+  margin: 6px 0 0;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bps-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Continuation header (pages 2+) ────────────────────────────────────── */
+
+.bps-header--cont {
+  align-items: center;
+  padding-bottom: 9px;
+}
+
+.bps-brand-mark--sm {
+  width: 36px;
+  height: 36px;
+}
+
+.bps-cont-name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--bps-charcoal);
+}
+
+.bps-cont-sub {
+  margin: 2px 0 0;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--bps-muted);
+}

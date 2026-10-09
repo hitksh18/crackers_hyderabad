@@ -346,10 +346,14 @@ async function simulateStatusChange(orderRef, previousStatus, nextStatus) {
     check('EXTRA  customer email has the brand logo', customer.html.includes('nav-logo.png'), true);
     check('EXTRA  customer email has TRACK YOUR ORDER', /TRACK YOUR ORDER/i.test(customer.html), true);
     check('EXTRA  customer email has DOWNLOAD INVOICE', /DOWNLOAD INVOICE/i.test(customer.html), true);
-    check('EXTRA  customer email hides product names',
-      customer.html.includes('Sparklers 30 PCS') || customer.html.includes('Flower Pot 5 PCS'), false);
-    check('EXTRA  customer email shows no per-item price table',
-      /240|320/.test(customer.html.replace(/[^0-9]/g, (c) => (c === '2' || c === '4' || c === '3' || c === '0' ? '' : c))), false);
+    check('EXTRA  customer email lists ordered product names',
+      customer.html.includes('Sparklers 30 PCS') && customer.html.includes('Flower Pot 5 PCS'), true);
+    check('EXTRA  customer email shows item quantities and line totals',
+      customer.html.includes('Qty: 5') && customer.html.includes('Qty: 3')
+      && customer.html.includes('₹1,200') && customer.html.includes('₹960'), true);
+    check('EXTRA  customer email items section precedes order details',
+      customer.html.indexOf('ITEMS IN YOUR ORDER') !== -1
+      && customer.html.indexOf('ITEMS IN YOUR ORDER') < customer.html.indexOf('ORDER DETAILS'), true);
   }
 
   console.log(results.join('\n'));

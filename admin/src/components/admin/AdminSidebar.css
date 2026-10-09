@@ -1,0 +1,340 @@
+/* Primary admin sidebar. Scoped to .asb-* so the storefront, billing and the
+   Canvas editor are untouched. Colours come from the shared admin tokens. */
+
+.admin-shell-row {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ---------- desktop rail ---------- */
+
+.asb-desktop {
+  flex: none;
+  width: 248px;
+  min-height: 0;
+  display: none;
+  border-right: 1px solid var(--hairline);
+  background: var(--surface-card);
+}
+
+@media (min-width: 1024px) {
+  .asb-desktop {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+.asb-inner {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.asb-brand {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--hairline);
+  min-width: 0;
+}
+
+.asb-brand-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex: none;
+  object-fit: cover;
+}
+
+.asb-brand-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.asb-brand-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asb-brand-sub {
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.asb-nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 10px 12px;
+}
+
+.asb-group + .asb-group {
+  margin-top: 14px;
+}
+
+.asb-group-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  padding: 0 8px;
+  margin: 0 0 6px;
+}
+
+.asb-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.asb-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-left: 3px solid transparent;
+  transition: background-color 0.18s ease-out, color 0.18s ease-out, border-color 0.18s ease-out;
+}
+
+.asb-item:hover {
+  color: var(--text-strong);
+  background: rgba(237, 231, 223, 0.05);
+}
+
+.asb-item:focus-visible {
+  outline: 2px solid var(--gold-400);
+  outline-offset: -2px;
+}
+
+.asb-item.is-active {
+  color: var(--text-strong);
+  background: rgba(210, 166, 79, 0.13);
+  border-left-color: var(--gold-400);
+  border-radius: 0 10px 10px 0;
+}
+
+.asb-item-icon {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  color: var(--text-subtle);
+  transition: color 0.18s ease-out;
+}
+
+.asb-item.is-active .asb-item-icon {
+  color: var(--gold-400);
+}
+
+.asb-item-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asb-item-ext {
+  font-size: 11px;
+  color: var(--text-subtle);
+  flex: none;
+}
+
+.asb-foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border-top: 1px solid var(--hairline);
+}
+
+.asb-collapse,
+.asb-signout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.asb-collapse:hover,
+.asb-signout:hover {
+  color: var(--text-strong);
+  background: rgba(237, 231, 223, 0.05);
+}
+
+.asb-collapse svg,
+.asb-signout svg {
+  width: 17px;
+  height: 17px;
+  flex: none;
+}
+
+.asb-signout:hover {
+  color: var(--delta-down, #f2716b);
+}
+
+/* Collapsed: icons only, tooltips via title. */
+.asb-desktop .asb-inner.is-collapsed {
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .asb-desktop:has(.asb-inner.is-collapsed) {
+    width: 64px;
+  }
+
+  .asb-inner.is-collapsed .asb-brand {
+    justify-content: center;
+    padding: 14px 8px;
+  }
+
+  .asb-inner.is-collapsed .asb-brand-text,
+  .asb-inner.is-collapsed .asb-group-title,
+  .asb-inner.is-collapsed .asb-item-label,
+  .asb-inner.is-collapsed .asb-item-ext {
+    display: none;
+  }
+
+  .asb-inner.is-collapsed .asb-item,
+  .asb-inner.is-collapsed .asb-collapse,
+  .asb-inner.is-collapsed .asb-signout {
+    justify-content: center;
+    border-left-color: transparent;
+    border-radius: 10px;
+  }
+
+  .asb-inner.is-collapsed .asb-item.is-active {
+    border-left-color: transparent;
+    background: rgba(210, 166, 79, 0.16);
+  }
+}
+
+/* ---------- mobile trigger + drawer ---------- */
+
+.asb-fab {
+  position: fixed;
+  left: 14px;
+  bottom: 14px;
+  z-index: 45;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--text-strong);
+  color: var(--surface-card);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.asb-fab svg {
+  width: 20px;
+  height: 20px;
+}
+
+@media (min-width: 1024px) {
+  .asb-fab {
+    display: none;
+  }
+}
+
+.asb-drawer-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 48;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.asb-drawer-veil.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.asb-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 49;
+  width: min(300px, 86vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-card);
+  border-right: 1px solid var(--hairline);
+  transform: translateX(-102%);
+  transition: transform 0.22s ease;
+  overflow: hidden;
+}
+
+.asb-drawer.is-open {
+  transform: translateX(0);
+}
+
+@media (min-width: 1024px) {
+  .asb-drawer,
+  .asb-drawer-veil {
+    display: none;
+  }
+}
+
+.asb-drawer .asb-inner {
+  padding-top: 8px;
+}
+
+.asb-drawer-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--hairline);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+
+.asb-drawer-close svg {
+  width: 15px;
+  height: 15px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asb-drawer,
+  .asb-drawer-veil {
+    transition: none;
+  }
+}

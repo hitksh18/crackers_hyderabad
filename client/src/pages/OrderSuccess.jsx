@@ -21,6 +21,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { revealVariants, staggerParent, DURATION, EASE_OUT_EXPO, SPRING } from '../lib/motion';
 import FireworksCanvas from '../components/ui/FireworksCanvas';
 import { RangoliDivider } from '../components/ui/Ornaments';
+import { orderIdOf } from '../lib/orderId';
 
 /* Sixteen decorative rays around the seal. Static geometry, one grouped fade. */
 const SEAL_RAYS = Array.from({ length: 16 }, (_, i) => i * 22.5);
@@ -250,7 +251,11 @@ const OrderSuccess = () => {
     }
   };
 
-  const trackingCode = shortCode || (orderId ? orderId.slice(-8).toUpperCase() : '');
+  /* The Order ID the server minted, shown to the customer and used for the
+     tracking link and the copy button. `shortCode` arrives on router state from
+     the checkout response; the fallback exists only for a refresh, where the
+     internal document id is all that survives and is better than nothing. */
+  const trackingCode = orderIdOf({ shortCode, id: orderId });
 
   /* Summary numbers ride along on navigation state. They are absent on a
      refresh or a direct visit, in which case the line is not rendered at all. */
@@ -328,7 +333,7 @@ const OrderSuccess = () => {
                     className="px-1 pb-5 pt-4 text-sm leading-relaxed text-pretty"
                     style={{ color: 'var(--text-muted)' }}
                   >
-                    We&apos;ll contact you soon for confirmation. Save your{' '}
+                    Your order is confirmed and being packed. Save your{' '}
                     <strong style={{ color: 'var(--gold-600)' }}>tracking code</strong> to follow
                     your order&apos;s status.
                   </p>

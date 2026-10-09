@@ -13,7 +13,6 @@ import {
   PackageOpen,
   PackageSearch,
   ClipboardCheck,
-  ClipboardList,
   Copy,
   Download,
   Loader2,
@@ -27,14 +26,17 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { revealVariants, staggerParent, DURATION, EASE_OUT_EXPO } from '../lib/motion';
 import EmptyState from '../components/ui/EmptyState';
 import Seo from '../components/Seo';
+import { orderIdOf, normalizeOrderIdInput, orderIdCarriesOwnEntropy } from '../lib/orderId';
 
-const statusSteps = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered'];
+/* The timeline begins at Confirmed — successfully placed orders are born
+   confirmed, so there is no Pending step. Legacy Pending orders (if any are
+   still in the database) resolve to the first step. */
+const statusSteps = ['Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered'];
 
-const stepIcons = [ClipboardList, Check, Package, Truck, MapPin, PackageOpen];
+const stepIcons = [Check, Package, Truck, MapPin, PackageOpen];
 
 /* What each step means in plain words, so the timeline reads without colour. */
 const stepNotes = [
-  'Order received and awaiting confirmation',
   'Order confirmed by our team',
   'Items packed for dispatch',
   'Handed over for transit',
@@ -182,12 +184,18 @@ const formatPlacedAt = (value) => {
 
 /**
  * Whether a code is unguessable on its own, and so needs no phone digits.
- * Mirrors the server's rule (see trackOrder in api/lib/orders.js): a 20-character
- * order auto-id and a legacy CH1042-K7QMX3 both carry their own entropy, a bare
- * CH1042 does not. Shared by the form and by the arrive-and-look-up effect so
- * the two cannot disagree about what a code needs.
+ *
+ * Delegates to lib/orderId.js, which mirrors the server's rule (`carriesOwnEntropy`
+ * in api/lib/orderId.js, applied by trackOrder in api/lib/orders.js). Shared by the
+ * form and by the arrive-and-look-up effect so the two cannot disagree about what a
+ * code needs.
+ *
+ * Note what is NOT evidence of entropy: a hyphen. The configured default format is
+ * `CH-20261008-000001`, which is strictly sequential, so treating a hyphen as proof
+ * would skip the phone check on every new order. Only a Firestore auto-id and the
+ * legacy `CH1042-K7QMX3` qualify.
  */
-const codeCarriesOwnEntropy = (code) => code.length >= 18 || code.includes('-');
+const codeCarriesOwnEntropy = orderIdCarriesOwnEntropy;
 
 const TrackOrder = () => {
   const navigate = useNavigate();
@@ -208,7 +216,7 @@ const TrackOrder = () => {
   /* Only demand the digits when the server will actually check them. This decides
      what the form asks for — the server decides what it accepts, and disagreeing
      with it costs a round trip, not access. */
-  const typedCode = orderId.trim().replace(/^#/, '');
+  const typedCode = normalizeOrderIdInput(orderId);
   const codeNeedsPhone = !isStaff && typedCode.length > 0 && !codeCarriesOwnEntropy(typedCode);
 
   /* Shown before anything is typed rather than after a rejected attempt: the
@@ -253,7 +261,9 @@ const TrackOrder = () => {
    * guests are the main audience here. Same optional-header shape as checkout.
    */
   const fetchOrder = async (rawId, digits) => {
-    const code = String(rawId || '').trim().replace(/^#/, '');
+    /* Upper-cased and de-decorated before it leaves the browser: the server
+       stores codes upper-case, so this is exactly what it will look up. */
+    const code = normalizeOrderIdInput(rawId);
     if (!code) return;
     setLoading(true);
     setNotFound(false);
@@ -342,7 +352,7 @@ const TrackOrder = () => {
     const lookupOrAsk = (code, digits) => {
       setOrderId(code);
       setPhoneLast4(digits);
-      if (!isStaff && !digits && !codeCarriesOwnEntropy(code.trim().replace(/^#/, ''))) {
+      if (!isStaff && !digits && !codeCarriesOwnEntropy(code)) {
         setPhoneRequired(true);
         return;
       }
@@ -371,7 +381,7 @@ const TrackOrder = () => {
 
   const handleTrack = (e) => {
     e.preventDefault();
-    const id = orderId.trim().replace(/^#/, '');
+    const id = normalizeOrderIdInput(orderId);
     if (!id) {
       toast.error('Please enter your tracking code');
       return;
@@ -392,7 +402,7 @@ const TrackOrder = () => {
   const copyTrackingCode = async () => {
     if (!order) return;
     try {
-      await navigator.clipboard.writeText(order.shortCode || order.id);
+      await navigator.clipboard.writeText(orderIdOf(order));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -402,7 +412,11 @@ const TrackOrder = () => {
 
   const statusIndex = order ? statusSteps.indexOf(order.status) : -1;
   const isCancelled = order?.status === 'Cancelled';
-  const effectiveIndex = statusIndex === -1 && order ? statusSteps.length - 1 : statusIndex;
+  /* Unknown statuses fall back to the last step (never a fake Delivered —
+     see isDelivered below). Legacy 'Pending' orders predate auto-confirm and
+     resolve to the first step instead of the end of the line. */
+  const legacyPending = order && String(order.status || '').trim().toLowerCase() === 'pending';
+  const effectiveIndex = statusIndex === -1 && order ? (legacyPending ? 0 : statusSteps.length - 1) : statusIndex;
   // Terminal state only — an unrecognised status still falls back to the last
   // step, but must not be presented as a completed delivery.
   const isDelivered = order?.status === statusSteps[statusSteps.length - 1];
@@ -586,7 +600,7 @@ const TrackOrder = () => {
                     className="tabular mt-1 break-all text-xl font-bold"
                     style={{ color: 'var(--white-soft)', fontFamily: 'var(--font-body)' }}
                   >
-                    #{order.shortCode || order.id.slice(-8).toUpperCase()}
+                    #{orderIdOf(order)}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">

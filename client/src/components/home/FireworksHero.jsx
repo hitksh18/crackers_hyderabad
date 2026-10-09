@@ -83,7 +83,18 @@ const glowSprite = (inner, outer, size, blur) => {
   return c;
 };
 
-const FireworksHero = () => {
+const FireworksHero = ({ copy } = {}) => {
+  /* Hero copy is Canvas-editable (settings/homepageConfig.heroCopy) with the
+     long-standing editorial below as fallback, so the hero never blanks. */
+  const c = {
+    eyebrow: 'PREMIUM FIREWORKS STORE',
+    titleA: 'Crackers',
+    titleB: 'Hyderabad',
+    sub: 'PREMIUM FIREWORKS • HYDERABAD',
+    ctaText: 'SHOP NOW',
+    ctaLink: '/products',
+    ...(copy || {}),
+  };
   const reduced = useReducedMotion();
   const rootRef = useRef(null);
   const canvasRef = useRef(null);
@@ -901,19 +912,19 @@ const FireworksHero = () => {
 
       <div className="fx-content">
         <p className="fx-eyebrow fx-rise" style={{ '--d': '0.15s' }}>
-          <span>PREMIUM FIREWORKS STORE</span>
+          <span>{c.eyebrow}</span>
         </p>
-        <h1 className="fx-title fx-rise" style={{ '--d': '0.3s' }} aria-label="Crackers Hyderabad">
-          <span className="fx-title-crackers">Crackers</span>
-          <span className="fx-title-hyd">Hyderabad</span>
+        <h1 className="fx-title fx-rise" style={{ '--d': '0.3s' }} aria-label={`${c.titleA} ${c.titleB}`}>
+          <span className="fx-title-crackers">{c.titleA}</span>
+          <span className="fx-title-hyd">{c.titleB}</span>
         </h1>
         <p className="fx-sub fx-rise" style={{ '--d': '0.45s' }}>
-          PREMIUM FIREWORKS&nbsp;&nbsp;•&nbsp;&nbsp;HYDERABAD
+          {c.sub}
         </p>
         <div className="fx-ctas fx-rise" style={{ '--d': '0.6s' }}>
-          <Link to="/products" className="fx-btn-primary">
+          <Link to={c.ctaLink || '/products'} className="fx-btn-primary">
             <ShoppingBag className="h-4 w-4" strokeWidth={2.1} aria-hidden="true" />
-            <span>SHOP NOW</span>
+            <span>{c.ctaText}</span>
           </Link>
         </div>
       </div>

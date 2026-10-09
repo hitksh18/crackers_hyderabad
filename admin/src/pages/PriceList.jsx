@@ -1,18 +1,11 @@
-import { useState, useEffect } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebase';
-import { motion } from 'framer-motion';
-import toast from '../utils/toast';
-import { Search, Package, Printer, CircleCheck, CircleSlash, Layers } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Search, Package, Printer, RefreshCw } from 'lucide-react';
 import EmptyState from '../components/ui/EmptyState';
-import CategoryIcon from '../components/CategoryIconPack';
-import { slugForCategory, displayNameForCategory } from '../lib/categoryIcons';
-import { TableSkeleton } from '../components/ui/Skeleton';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-import { pageVariants, revealVariants } from '../lib/motion';
-import { fetchTradePricingMap, mergeTradePricing } from '../lib/tradePricing';
+import { displayNameForCategory } from '../lib/categoryIcons';
+import { Skeleton, TableSkeleton } from '../components/ui/Skeleton';
 import AdminHeader from '../components/admin/AdminHeader';
-import { CATEGORY_VALUES, isProductInCategory, categoryDisplayName } from '../config/categories';
+import { CATEGORY_VALUES, isProductInCategory, categoryDisplayName, productCategoryValues } from '../config/categories';
+import { usePriceListData } from '../hooks/usePriceListData';
 
 // Single source of truth — admin/src/config/categories.js (canonical order).
 // State holds canonical stored values; labels render display names.
@@ -24,6 +17,18 @@ const inCategory = (product, category) => {
   return isProductInCategory(product, category);
 };
 
+/* Canonical rank for stable grouping: first matching canonical value wins,
+   uncategorised sorts last, then by name. */
+const rankOf = (product, rankByValue) => {
+  const values = productCategoryValues(product);
+  let best = rankByValue.size;
+  for (const value of values) {
+    const rank = rankByValue.get(value);
+    if (rank !== undefined && rank < best) best = rank;
+  }
+  return best;
+};
+
 const PANEL = {
   background: 'var(--surface-card)',
   border: '1px solid var(--hairline)',
@@ -32,46 +37,71 @@ const PANEL = {
   overflow: 'hidden',
 };
 
-const StockCell = ({ outOfStock }) =>
-  outOfStock ? (
-    <span className="badge badge-crimson">
-      <CircleSlash className="h-3 w-3" aria-hidden="true" />
-      Out of Stock
+const PriceSkeleton = () => (
+  <span className="inline-block h-4 w-14 rounded" style={{ background: 'var(--surface-raised)' }} aria-hidden="true" />
+);
+
+const StockCell = ({ outOfStock }) => (
+  <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold">
+    <span
+      aria-hidden="true"
+      className="h-1.5 w-1.5 shrink-0 rounded-full"
+      style={{ background: outOfStock ? 'var(--delta-down, #f2716b)' : 'var(--delta-up, #4fb483)' }}
+    />
+    <span style={{ color: outOfStock ? 'var(--delta-down, #f2716b)' : 'var(--delta-up, #4fb483)' }}>
+      {outOfStock ? 'Out of Stock' : 'Available'}
     </span>
-  ) : (
-    <span className="badge badge-leaf">
-      <CircleCheck className="h-3 w-3" aria-hidden="true" />
-      Available
+  </span>
+);
+
+const CategoryBadges = ({ product }) => {
+  const values = productCategoryValues(product);
+  if (values.length === 0) {
+    return <span style={{ color: 'var(--text-subtle)' }}>—</span>;
+  }
+  const shown = values.slice(0, 2);
+  const extra = values.length - shown.length;
+  return (
+    <span className="flex flex-wrap gap-1">
+      {shown.map((value) => (
+        <span key={value} className="badge badge-neutral">
+          {displayNameForCategory(value)}
+        </span>
+      ))}
+      {extra > 0 && (
+        <span className="badge badge-neutral tabular">+{extra}</span>
+      )}
     </span>
   );
+};
 
-const PriceRow = ({ product, showCategories }) => (
+const PriceRow = ({ product, showCategories, pricingLoading }) => (
   <tr
     className="border-t transition-colors hover:bg-primary-50 dark:hover:bg-primary-900/15"
     style={{ borderColor: 'var(--hairline)' }}
   >
-    <td className="px-4 py-2.5 text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
+    <td
+      className="max-w-0 truncate px-4 py-2 text-[13px] font-semibold"
+      style={{ color: 'var(--text-strong)' }}
+      title={product.name}
+    >
       {product.name}
     </td>
 
     {showCategories && (
-      <td className="px-4 py-2.5">
-        <span className="flex flex-wrap gap-1">
-          {(product.categories || [product.category]).map((cat, idx) => (
-            <span key={idx} className="badge badge-neutral">
-              {displayNameForCategory(cat)}
-            </span>
-          ))}
-        </span>
+      <td className="px-4 py-2">
+        <CategoryBadges product={product} />
       </td>
     )}
 
-    <td className="price px-4 py-2.5 text-right text-sm" style={{ color: 'var(--text-body)' }}>
-      ₹{product.offlineMRP || product.price || 0}
+    <td className="price tabular whitespace-nowrap px-4 py-2 text-right text-[13px]" style={{ color: 'var(--text-body)' }}>
+      {pricingLoading ? <PriceSkeleton /> : `₹${product.offlineMRP || product.price || 0}`}
     </td>
 
-    <td className="price px-4 py-2.5 text-right text-sm">
-      {product.offlineDiscountPrice ? (
+    <td className="price tabular whitespace-nowrap px-4 py-2 text-right text-[13px]">
+      {pricingLoading ? (
+        <PriceSkeleton />
+      ) : product.offlineDiscountPrice ? (
         <span className="font-bold" style={{ color: 'var(--leaf-600)' }}>
           ₹{product.offlineDiscountPrice}
         </span>
@@ -80,7 +110,7 @@ const PriceRow = ({ product, showCategories }) => (
       )}
     </td>
 
-    <td className="px-4 py-2.5 text-right">
+    <td className="whitespace-nowrap px-4 py-2 text-right">
       <StockCell outOfStock={product.outOfStock} />
     </td>
   </tr>
@@ -90,105 +120,78 @@ const PriceTableHead = ({ showCategories }) => (
   <thead>
     <tr style={{ background: 'var(--surface-sunken)' }}>
       <th className="label-caps px-4 py-2.5 text-left">Product Name</th>
-      {showCategories && <th className="label-caps px-4 py-2.5 text-left">Categories</th>}
-      <th className="label-caps px-4 py-2.5 text-right">Offline MRP</th>
-      <th className="label-caps px-4 py-2.5 text-right">Offline Sale Price</th>
-      <th className="label-caps px-4 py-2.5 text-right">Status</th>
+      {showCategories && <th className="label-caps px-4 py-2.5 text-left">Category</th>}
+      <th className="label-caps whitespace-nowrap px-4 py-2.5 text-right">Offline MRP</th>
+      <th className="label-caps whitespace-nowrap px-4 py-2.5 text-right">Sale Price</th>
+      <th className="label-caps whitespace-nowrap px-4 py-2.5 text-right">Status</th>
     </tr>
   </thead>
 );
 
 const PriceList = () => {
-  const [products, setProducts] = useState([]);
-  const [filteredProducts, setFilteredProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    products,
+    productsLoading,
+    pricingLoading,
+    productsError,
+    pricingError,
+    refresh,
+  } = usePriceListData();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const reduced = useReducedMotion();
+  const [statusFilter, setStatusFilter] = useState('all');
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
+  const rankByValue = useMemo(
+    () => new Map(CATEGORY_VALUES.map((value, i) => [value, i])),
+    []
+  );
 
-  useEffect(() => {
-    let filtered = products;
-
-    if (selectedCategory !== 'All') {
-      filtered = filtered.filter(p => inCategory(p, selectedCategory));
-    }
-
-    if (searchQuery) {
-      filtered = filtered.filter(p =>
-        (p.name || '').toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    setFilteredProducts(filtered);
-  }, [selectedCategory, searchQuery, products]);
-
-  const fetchProducts = async () => {
-    try {
-      /* Wholesale figures live in `productPricing` (staff-only), not on the
-         world-readable product document. Fetched alongside, never after. */
-      // allSettled, not all: a failed pricing read must not blank the entire
-      // price list. Losing the trade column is bad; losing every row is worse.
-      const [productsResult, pricingResult] = await Promise.allSettled([
-        getDocs(collection(db, 'products')),
-        fetchTradePricingMap(),
-      ]);
-
-      if (productsResult.status === 'rejected') throw productsResult.reason;
-
-      let pricingMap = new Map();
-      if (pricingResult.status === 'fulfilled') {
-        pricingMap = pricingResult.value;
-      } else {
-        console.error('Error fetching trade pricing:', pricingResult.reason);
-        toast.error('Trade pricing is unavailable — showing catalogue prices only.');
+  /* One pass: per-category counts for the filter strip. */
+  const categoryCounts = useMemo(() => {
+    const counts = new Map(categories.map((cat) => [cat, 0]));
+    for (const product of products) {
+      counts.set('All', (counts.get('All') || 0) + 1);
+      for (const cat of CATEGORY_VALUES) {
+        if (isProductInCategory(product, cat)) {
+          counts.set(cat, (counts.get(cat) || 0) + 1);
+        }
       }
-
-      const productsList = mergeTradePricing(
-        productsResult.value.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })),
-        pricingMap
-      );
-      setProducts(productsList);
-      setFilteredProducts(productsList);
-    } catch (error) {
-      console.error('Error fetching products:', error);
-    } finally {
-      setLoading(false);
     }
+    return counts;
+  }, [products]);
+
+  const query = searchQuery.trim().toLowerCase();
+
+  const filteredProducts = useMemo(() => {
+    const list = products.filter((product) => {
+      if (!inCategory(product, selectedCategory)) return false;
+      if (statusFilter === 'available' && product.outOfStock) return false;
+      if (statusFilter === 'out' && !product.outOfStock) return false;
+      if (query && !(product.name || '').toLowerCase().includes(query)) return false;
+      return true;
+    });
+    /* Stable catalogue order: canonical category group, then name. */
+    return [...list].sort(
+      (a, b) => rankOf(a, rankByValue) - rankOf(b, rankByValue)
+        || String(a.name || '').localeCompare(String(b.name || ''))
+    );
+  }, [products, selectedCategory, statusFilter, query, rankByValue]);
+
+  const showCategories = selectedCategory === 'All';
+  const isFiltered = Boolean(query) || selectedCategory !== 'All' || statusFilter !== 'all';
+  const busy = productsLoading || pricingLoading;
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setSelectedCategory('All');
+    setStatusFilter('all');
   };
 
-  const productsByCategory = categories
-    .filter(cat => cat !== 'All')
-    .map(cat => ({
-      category: cat,
-      products: products.filter(p => inCategory(p, cat))
-    }))
-    .filter(group => group.products.length > 0);
-
-  const countFor = (cat) =>
-    cat === 'All' ? products.length : products.filter(p => inCategory(p, cat)).length;
-
-  const isFiltered = Boolean(searchQuery) || selectedCategory !== 'All';
-
-  if (loading) {
-    return (
-      <div className="admin-page" style={{ background: 'var(--surface-page)' }}>
-        <div className="shell py-8">
-          <span className="label-caps">Wholesale</span>
-          <h1 className="section-title mt-1 mb-6">Price List</h1>
-          <div className="p-4" style={PANEL}>
-            <TableSkeleton rows={8} cols={4} label="Loading price list" />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const filterSummary = [
+    query ? `"${searchQuery.trim()}"` : null,
+    selectedCategory !== 'All' ? categoryDisplayName(selectedCategory) : null,
+    statusFilter === 'available' ? 'Available' : statusFilter === 'out' ? 'Out of Stock' : null,
+  ].filter(Boolean).join(' · ');
 
   return (
     <div className="admin-page" style={{ background: 'var(--surface-page)' }}>
@@ -196,71 +199,114 @@ const PriceList = () => {
         title="Price List"
         backFallback="/dashboard"
         controls={(
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="ax-btn no-print"
-          >
-            <Printer aria-hidden="true" />
-            <span className="hidden sm:inline">Print price list</span>
-            <span className="sm:hidden">Print</span>
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={busy}
+              className="ax-btn no-print"
+              title="Refresh product and pricing data"
+            >
+              <RefreshCw aria-hidden="true" className={busy ? 'animate-spin' : undefined} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="ax-btn no-print"
+            >
+              <Printer aria-hidden="true" />
+              <span className="hidden sm:inline">Print price list</span>
+              <span className="sm:hidden">Print</span>
+            </button>
+          </>
         )}
       />
-      <motion.div
-        variants={pageVariants(reduced)}
-        initial="initial"
-        animate="animate"
-        className="pricelist-print-area"
-      >
+      <div className="pricelist-print-area">
         <div className="shell py-6 md:py-8">
           {/* Print-only masthead. Screen users already have the page header. */}
           <div className="pl-print-head">
             <p className="pl-print-brand">Crackers Hyderabad</p>
             <p className="pl-print-meta">
               Price List
-              {selectedCategory !== 'All' ? ` — ${categoryDisplayName(selectedCategory)}` : ''} · {new Date().toLocaleDateString()}
+              {filterSummary ? ` — ${filterSummary}` : ''} · {filteredProducts.length} products · {new Date().toLocaleDateString()}
             </p>
           </div>
 
-          <header
-            className="no-print mb-5 flex flex-col gap-1 border-b pb-5"
-            style={{ borderColor: 'var(--hairline)' }}
-          >
-            <div className="min-w-0">
-              <span className="label-caps">Wholesale</span>
-              <h1 className="section-title mt-1">Price List</h1>
-              <p className="tabular mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
-                Showing {filteredProducts.length} of {products.length} products
-              </p>
-            </div>
-          </header>
+          <p className="tabular no-print mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
+            Wholesale pricing and catalogue overview
+            {!productsLoading && (
+              <> · Showing {filteredProducts.length} of {products.length} products</>
+            )}
+          </p>
 
-          {/* ---- Filters (screen only) ------------------------------------ */}
-          <div className="no-print mb-6 space-y-4">
-            <div className="relative max-w-md">
-              <label htmlFor="pricelist-search" className="sr-only">
-                Search products by name
-              </label>
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
-                style={{ color: 'var(--text-subtle)' }}
-                aria-hidden="true"
-              />
-              <input
-                id="pricelist-search"
-                type="text"
-                placeholder="Search products..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="input-premium pl-10 text-sm"
-              />
-            </div>
+          {/* ---- Toolbar (screen only) -------------------------------------- */}
+          <div className="no-print mt-4 rounded-[var(--r-lg)] border p-3" style={{ background: 'var(--surface-card)', borderColor: 'var(--hairline)' }}>
+            {productsLoading ? (
+              <div className="flex flex-col gap-2 sm:flex-row" aria-hidden="true">
+                <Skeleton className="h-10 flex-1" />
+                <Skeleton className="h-10 sm:w-44" />
+                <Skeleton className="h-10 sm:w-36" />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="relative flex-1">
+                  <label htmlFor="pricelist-search" className="sr-only">
+                    Search products by name
+                  </label>
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
+                    style={{ color: 'var(--text-subtle)' }}
+                    aria-hidden="true"
+                  />
+                  <input
+                    id="pricelist-search"
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="input-premium w-full pl-10 text-sm"
+                  />
+                </div>
+                <label className="sr-only" htmlFor="pricelist-category">Category</label>
+                <select
+                  id="pricelist-category"
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="input-premium h-10 text-sm sm:w-44"
+                >
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat === 'All' ? 'All categories' : categoryDisplayName(cat)}
+                    </option>
+                  ))}
+                </select>
+                <label className="sr-only" htmlFor="pricelist-status">Status</label>
+                <select
+                  id="pricelist-status"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="input-premium h-10 text-sm sm:w-36"
+                >
+                  <option value="all">All statuses</option>
+                  <option value="available">Available</option>
+                  <option value="out">Out of Stock</option>
+                </select>
+              </div>
+            )}
+          </div>
 
-            <div>
-              <p className="label-caps mb-2">Category</p>
-              <div className="flex flex-wrap gap-2">
-                {categories.map(cat => {
+          {/* ---- Category strip (screen only) -------------------------------- */}
+          <div className="no-print mt-3" role="group" aria-label="Filter by category">
+            {productsLoading ? (
+              <div className="flex gap-2 overflow-hidden" aria-hidden="true">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <Skeleton key={i} className="h-9 w-28 shrink-0" rounded="var(--r-pill)" />
+                ))}
+              </div>
+            ) : (
+              <div className="scroll-x-pills -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                {categories.map((cat) => {
                   const active = selectedCategory === cat;
                   return (
                     <button
@@ -268,119 +314,92 @@ const PriceList = () => {
                       type="button"
                       aria-pressed={active}
                       onClick={() => setSelectedCategory(cat)}
-                      className={`inline-flex items-center gap-2 rounded-[var(--r-pill)] border px-3.5 text-sm font-semibold transition-colors ${
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-[var(--r-pill)] border px-3 py-1.5 text-[13px] font-semibold transition-colors ${
                         active
                           ? 'border-primary-600 bg-primary-600 text-white'
                           : 'border-[color:var(--hairline-strong)] bg-[color:var(--surface-card)] text-[color:var(--text-body)] hover:border-primary-400'
                       }`}
-                      style={{ minHeight: 44 }}
                     >
                       {cat === 'All' ? 'All' : categoryDisplayName(cat)}
-                      <span
-                        className={`tabular text-xs font-bold ${
-                          active ? 'opacity-80' : 'opacity-70'
-                        }`}
-                      >
-                        {countFor(cat)}
+                      <span className={`tabular text-xs font-bold ${active ? 'opacity-80' : 'opacity-70'}`}>
+                        {categoryCounts.get(cat) || 0}
                       </span>
                     </button>
                   );
                 })}
               </div>
-            </div>
+            )}
           </div>
 
-          {/* ---- Tables ---------------------------------------------------- */}
-          {isFiltered ? (
-            /* An empty result set renders nothing here — the EmptyState below stands alone. */
-            filteredProducts.length > 0 && (
-            <motion.section
-              initial="hidden"
-              animate="visible"
-              variants={revealVariants(reduced, 14)}
-              aria-label="Filtered price list"
-              style={PANEL}
+          {/* ---- Pricing warning (non-blocking) ------------------------------- */}
+          {!pricingLoading && pricingError && !productsLoading && (
+            <div
+              className="no-print mt-3 flex flex-wrap items-center gap-2 rounded-[var(--r-md)] border px-3 py-2 text-xs font-semibold"
+              style={{ borderColor: 'var(--gold-500)', background: 'var(--surface-card)', color: 'var(--text-body)' }}
+              role="status"
             >
-              <div
-                className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3"
-                style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)' }}
-              >
-                <h2 className="flex items-center gap-2 text-sm font-bold" style={{ color: 'var(--text-strong)' }}>
-                  <Layers className="h-4 w-4" style={{ color: 'var(--ember-600)' }} aria-hidden="true" />
-                  {selectedCategory === 'All' ? 'Search results' : categoryDisplayName(selectedCategory)}
-                </h2>
-                <span className="badge badge-neutral tabular">{filteredProducts.length} products</span>
-              </div>
+              <span>Trade pricing unavailable — showing catalogue prices.</span>
+              <button type="button" onClick={refresh} className="underline" style={{ color: 'var(--gold-500)' }}>
+                Retry pricing
+              </button>
+            </div>
+          )}
 
+          {/* ---- Table -------------------------------------------------------- */}
+          <div className="mt-3" style={PANEL}>
+            {productsLoading ? (
+              <div className="p-4">
+                <TableSkeleton rows={10} cols={showCategories ? 5 : 4} label="Loading price list" />
+              </div>
+            ) : productsError ? (
+              <EmptyState
+                icon={Package}
+                title="Unable to load price list"
+                description="The product catalogue could not be loaded."
+                tone="alert"
+                className="m-4"
+                action={(
+                  <button type="button" onClick={refresh} className="ax-btn">
+                    <RefreshCw aria-hidden="true" /> Retry
+                  </button>
+                )}
+              />
+            ) : filteredProducts.length === 0 ? (
+              <EmptyState
+                icon={Package}
+                title="No products found"
+                description={isFiltered ? 'Nothing matches the current search and filters.' : 'The catalogue is empty.'}
+                className="m-4"
+                action={isFiltered ? (
+                  <button type="button" onClick={clearFilters} className="ax-btn">
+                    Clear filters
+                  </button>
+                ) : null}
+              />
+            ) : (
               <div className="scroll-x">
-                <table className="pl-table w-full min-w-[38rem] border-collapse">
-                  <PriceTableHead showCategories />
+                <table className="pl-table w-full min-w-[40rem] border-collapse">
+                  <PriceTableHead showCategories={showCategories} />
                   <tbody>
-                    {filteredProducts.map(product => (
-                      <PriceRow key={product.id} product={product} showCategories />
+                    {filteredProducts.map((product) => (
+                      <PriceRow
+                        key={product.id}
+                        product={product}
+                        showCategories={showCategories}
+                        pricingLoading={pricingLoading}
+                      />
                     ))}
                   </tbody>
                 </table>
               </div>
-            </motion.section>
-            )
-          ) : (
-            <div className="space-y-5">
-              {productsByCategory.map(({ category, products: groupProducts }) => (
-                <motion.section
-                  key={category}
-                  initial="hidden"
-                  animate="visible"
-                  variants={revealVariants(reduced, 12)}
-                  aria-label={`${category} prices`}
-                  style={PANEL}
-                >
-                  <div
-                    className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3"
-                    style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)' }}
-                  >
-                    <h2
-                      className="card-title flex items-center gap-2"
-                      style={{ color: 'var(--text-strong)' }}
-                    >
-                      <span className="h-5 w-5 shrink-0" aria-hidden="true">
-                        <CategoryIcon category={slugForCategory(category)} />
-                      </span>
-                      {displayNameForCategory(category)}
-                    </h2>
-                    <span className="badge badge-neutral tabular">
-                      {groupProducts.length} products
-                    </span>
-                  </div>
-
-                  <div className="scroll-x">
-                    <table className="pl-table w-full min-w-[32rem] border-collapse">
-                      <PriceTableHead showCategories={false} />
-                      <tbody>
-                        {groupProducts.map(product => (
-                          <PriceRow key={product.id} product={product} showCategories={false} />
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </motion.section>
-              ))}
-            </div>
-          )}
-
-          {filteredProducts.length === 0 && (
-            <EmptyState
-              icon={Package}
-              title="No products found"
-              description="Nothing matches the current search and category filter."
-              className="mt-6"
-            />
-          )}
+            )}
+          </div>
         </div>
-      </motion.div>
+      </div>
 
       <style>{`
         .pl-print-head { display: none; }
+        .scroll-x-pills { scrollbar-width: thin; }
 
         @media print {
           @page { margin: 12mm; }

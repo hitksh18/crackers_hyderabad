@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import '../admin-portrait.css';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection } from 'firebase/firestore';
 import { db } from '../firebase';
 import {
   Plus,
@@ -15,84 +15,41 @@ import {
   X,
   Image as ImageIcon,
   Settings,
-  Sparkles,
-  FileText,
-  Tag,
   Boxes,
-  ShoppingBag,
+  Star,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from '../utils/toast';
 import { useNotifications } from '../contexts/NotificationContext';
-import { useAuth } from '../context/AuthContext';
 import { Skeleton, StatCardSkeleton } from '../components/ui/Skeleton';
-import AnimatedCounter from '../components/ui/AnimatedCounter';
 import OrderStatusBadge from '../components/admin/OrderStatusBadge';
+import DualTrendChart from '../components/admin/analytics/DualTrendChart';
+import { cachedGetDocs, ordersCacheTtl } from '../lib/firestoreCache';
 import { displayNameForCategory } from '../lib/categoryIcons';
-import { BILLING_URL } from '../lib/billingUrl';
+import { orderIdOf, orderIdMatches } from '../lib/orderId';
 import AdminTopBar from '../components/admin/AdminTopBar';
 
-const DEFAULT_QUICK_ACTIONS = [
-  { id: 'analytics', to: '/analytics', label: 'Analytics', desc: 'View reports & insights', icon: BarChart3, system: true },
-  { id: 'add-product', to: '/products/add', label: 'Add Product', desc: 'Create new product', icon: Plus, system: true },
-  { id: 'users', to: '/users', label: 'Users', desc: 'Manage user accounts', icon: Users, system: true },
-  { id: 'homepage', to: '/canvas', label: 'Canvas', desc: 'Customize homepage', icon: ImageIcon, system: true },
-  { id: 'categories', to: '/categories', label: 'Categories', desc: 'Manage product categories', icon: Boxes, system: true },
+/* The seven most-used destinations. Fixed — quick actions are shortcuts, not
+   a second navigation system; everything else lives in the sidebar. */
+const QUICK_ACTIONS = [
+  { id: 'analytics', to: '/analytics', label: 'Analytics', desc: 'View sales and performance', icon: BarChart3 },
+  { id: 'add-product', to: '/products/add', label: 'Add Product', desc: 'Create a new product', icon: Plus },
+  { id: 'users', to: '/users', label: 'Users', desc: 'Manage customers and users', icon: Users },
+  { id: 'homepage', to: '/canvas', label: 'Canvas', desc: 'Edit homepage', icon: ImageIcon },
+  { id: 'categories', to: '/categories', label: 'Categories', desc: 'Manage product categories', icon: Boxes },
+  { id: 'site-settings', to: '/site-settings', label: 'Site Settings', desc: 'Configure site/order settings', icon: Settings },
+  { id: 'products', to: '/products', label: 'Manage Products', desc: 'View and manage products', icon: Package },
 ];
-
-const KNOWN_DESTINATIONS = [
-  { value: '/analytics', label: 'Analytics' },
-  { value: '/products/add', label: 'Add Product' },
-  { value: '/users', label: 'Users' },
-  { value: '/canvas', label: 'Canvas / Homepage' },
-  { value: '/orders', label: 'Orders' },
-  { value: BILLING_URL, label: 'Billing' },
-  { value: '/products', label: 'All Products' },
-  { value: '/categories', label: 'Categories' },
-  { value: '/products', label: 'Products (Storefront)' },
-];
-
-const ICON_OPTIONS = [
-  { value: 'BarChart3', label: 'Chart', icon: BarChart3 },
-  { value: 'Plus', label: 'Plus', icon: Plus },
-  { value: 'Users', label: 'Users', icon: Users },
-  { value: 'ImageIcon', label: 'Image', icon: ImageIcon },
-  { value: 'Package', label: 'Package', icon: Package },
-  { value: 'ShoppingCart', label: 'Cart', icon: ShoppingCart },
-  { value: 'FileText', label: 'File', icon: FileText },
-  { value: 'Tag', label: 'Tag', icon: Tag },
-  { value: 'Settings', label: 'Settings', icon: Settings },
-  { value: 'Boxes', label: 'Boxes', icon: Boxes },
-  { value: 'ShoppingBag', label: 'Bag', icon: ShoppingBag },
-];
-
-const iconMap = {
-  BarChart3, Plus, Users, ImageIcon, Package, ShoppingCart, FileText, Tag, Settings, Boxes, ShoppingBag,
-};
-
-const STORAGE_KEY = 'admin_quick_actions_custom';
 
 const AdminDashboard = () => {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [usersCount, setUsersCount] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [globalSearch, setGlobalSearch] = useState('');
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('All');
-  const [customActions, setCustomActions] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
-  });
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [editingAction, setEditingAction] = useState(null);
-  const [formData, setFormData] = useState({ label: '', desc: '', to: '', icon: 'Package' });
+  const [salesRange, setSalesRange] = useState(7);
 
   const { markAllAsRead, recentOrders } = useNotifications();
-  const { user, loading: authLoading } = useAuth();
-  const [adminName, setAdminName] = useState(null);
 
   /* Portrait-desktop composition (portrait PC monitors) shows more list
      rows instead of stretching few rows across a tall viewport. Gated on
@@ -111,82 +68,47 @@ const AdminDashboard = () => {
     return () => mq.removeEventListener('change', onChange);
   }, []);
 
+
+  /* Products and orders load independently through a short-TTL shared cache
+     (see lib/firestoreCache): returning from Canvas reuses the data instead
+     of re-downloading it, and each widget renders as soon as its own dataset
+     lands rather than blocking the whole page. */
+  const [productsReady, setProductsReady] = useState(false);
+  const [ordersReady, setOrdersReady] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
-    const resolveName = async () => {
-      if (authLoading) return;
-      if (!user) {
-        if (!cancelled) setAdminName('Admin');
-        return;
-      }
-      // 1. displayName
-      const display = user.displayName?.trim();
-      if (display) {
-        if (!cancelled) setAdminName(display);
-        return;
-      }
-      // 2. Firestore users/{uid} name
-      try {
-        const snap = await getDoc(doc(db, 'users', user.uid));
-        const storedName = snap.exists() ? (snap.data().name || snap.data().displayName || '').trim() : '';
-        if (storedName) {
-          if (!cancelled) setAdminName(storedName);
-          return;
-        }
-      } catch {
-        // ignore, fall through
-      }
-      // 3. email prefix
-      const email = user.email || '';
-      if (email.includes('@')) {
-        const prefix = email.split('@')[0].replace(/[._-]+/g, ' ').trim();
-        // Title case
-        const titled = prefix.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-        if (titled) {
-          if (!cancelled) setAdminName(titled);
-          return;
-        }
-      }
-      if (!cancelled) setAdminName('Admin');
-    };
-    resolveName();
-    return () => { cancelled = true; };
-  }, [user, authLoading]);
-
-  const today = useMemo(() => {
-    const d = new Date();
-    return {
-      weekday: d.toLocaleDateString('en-US', { weekday: 'long' }),
-      date: d.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }),
+    cachedGetDocs(collection(db, 'products'), 'products')
+      .then((productsData) => {
+        if (cancelled) return;
+        setProducts(productsData);
+        setProductsReady(true);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('Error fetching products:', error);
+        toast.error('Failed to fetch products');
+        setProductsReady(true);
+      });
+    cachedGetDocs(collection(db, 'orders'), 'orders', { ttl: ordersCacheTtl })
+      .then((ordersData) => {
+        if (cancelled) return;
+        const epochMs = (t) => (t?.seconds ? t.seconds * 1000 : (t?.getTime?.() ?? 0));
+        setOrders(ordersData.sort((a, b) => epochMs(b.createdAt) - epochMs(a.createdAt)));
+        setOrdersReady(true);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('Error fetching orders:', error);
+        toast.error('Failed to fetch orders');
+        setOrdersReady(true);
+      });
+    return () => {
+      cancelled = true;
     };
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    try {
-      const [productsSnap, ordersSnap, usersSnap] = await Promise.all([
-        getDocs(collection(db, 'products')),
-        getDocs(collection(db, 'orders')),
-        getDocs(collection(db, 'users')).catch(() => ({ docs: [] })),
-      ]);
-      const productsData = productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setProducts(productsData);
-      const ordersData = ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const epochMs = (t) => t?.seconds ? t.seconds * 1000 : (t?.getTime?.() ?? 0);
-      setOrders(ordersData.sort((a, b) => epochMs(b.createdAt) - epochMs(a.createdAt)));
-      const uniqueCustomers = new Set(ordersData.map(o => o.customer?.email || o.userEmail || o.userId).filter(Boolean));
-      const usersCountVal = usersSnap.docs ? usersSnap.docs.length : 0;
-      setUsersCount(Math.max(uniqueCustomers.size, usersCountVal) || ordersData.length);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      toast.error('Failed to fetch data');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const dataReady = productsReady && ordersReady;
 
   const topProducts = products
     .filter(p => p.salesCount > 0)
@@ -194,22 +116,71 @@ const AdminDashboard = () => {
     .slice(0, isPortraitDesktop ? 10 : 5);
 
   const totalRevenue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
+  const featuredCount = products.filter(p => p.isFeatured).length;
 
   const kpis = [
     { key: 'revenue', label: 'Total Revenue', short: 'Revenue', value: totalRevenue, display: `₹${totalRevenue.toLocaleString('en-IN')}`, hint: 'All time', icon: TrendingUp, accent: 'var(--ember-600)' },
     { key: 'orders', label: 'Total Orders', short: 'Orders', value: orders.length, display: String(orders.length), hint: 'All time', icon: ShoppingCart, accent: 'var(--gold-500)' },
-    { key: 'products', label: 'Total Products', short: 'Products', value: products.length, display: String(products.length), hint: `${products.filter(p=>p.isFeatured).length} featured`, icon: Package, accent: 'var(--maroon-700)' },
-    { key: 'customers', label: 'Total Customers', short: 'Customers', value: usersCount, display: String(usersCount), hint: 'Registered', icon: Users, accent: 'var(--leaf-600)' },
+    { key: 'products', label: 'Total Products', short: 'Products', value: products.length, display: String(products.length), hint: `${featuredCount} featured`, icon: Package, accent: 'var(--maroon-700)' },
+    { key: 'featured', label: 'Featured Products', short: 'Featured', value: featuredCount, display: String(featuredCount), hint: 'Handpicked', icon: Star, accent: 'var(--leaf-600)' },
   ];
 
-  const allQuickActions = [...DEFAULT_QUICK_ACTIONS, ...customActions.map(c => ({ ...c, icon: iconMap[c.icon] || Package }))];
+  /* Sales Overview buckets, aggregated locally from the same orders above —
+     no new endpoint, no invented numbers. */
+  const dayKeyOf = (ms) => {
+    const d = new Date(ms);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const orderMs = (o) => {
+    const t = o.createdAt;
+    if (t?.seconds) return t.seconds * 1000;
+    if (typeof t === 'string') return Date.parse(t);
+    return t?.getTime?.() ?? NaN;
+  };
+  const salesSeries = useMemo(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const days = [];
+    for (let i = salesRange - 1; i >= 0; i -= 1) {
+      const d = new Date(start);
+      d.setDate(start.getDate() - i);
+      days.push({ day: dayKeyOf(d.getTime()), revenue: 0, orders: 0 });
+    }
+    const byDay = new Map(days.map((row) => [row.day, row]));
+    orders.forEach((o) => {
+      const ms = orderMs(o);
+      if (!Number.isFinite(ms)) return;
+      const row = byDay.get(dayKeyOf(ms));
+      if (!row) return;
+      row.orders += 1;
+      row.revenue += (o.total || 0);
+    });
+    return days;
+  }, [orders, salesRange]);
 
+  const rangeRevenue = salesSeries.reduce((sum, r) => sum + r.revenue, 0);
+  const rangeOrders = salesSeries.reduce((sum, r) => sum + r.orders, 0);
+  const rangeAov = rangeOrders > 0 ? rangeRevenue / rangeOrders : 0;
+  const inr = (v) => `₹${Math.round(v).toLocaleString('en-IN')}`;
+  const salesLines = useMemo(() => [
+    { key: 'revenue', label: 'Revenue', color: '#ec7049', format: (v) => inr(v), axisFormat: (v) => `₹${Math.round(v / 1000)}k` },
+    { key: 'orders', label: 'Orders', color: '#d2a64f', format: (v) => String(Math.round(v)), axisFormat: (v) => String(Math.round(v)) },
+  ], []);
+
+  /* Live Order Feed — the live order stream, falling back to the loaded
+     orders when the stream has not emitted yet. */
+  const feedOrders = (recentOrders.length > 0 ? recentOrders : orders).slice(0, 7);
+
+  /* Order IDs are matched through the shared helper so the dashboard and the
+     Orders page cannot disagree about what an id looks like — and so a search
+     keeps working after the id format is changed. See lib/orderId.js. */
   const filteredOrders = orders.filter(order => {
-    const q = globalSearch.trim().toLowerCase();
-    if (!q) return true;
-    return (order.customer?.name || '').toLowerCase().includes(q)
-      || String(order.shortCode || order.id || '').toLowerCase().includes(q)
-      || (order.status || '').toLowerCase().includes(q);
+    const raw = globalSearch.trim();
+    if (!raw) return true;
+    const textTerm = raw.toLowerCase();
+    return orderIdMatches(order, raw)
+      || (order.customer?.name || '').toLowerCase().includes(textTerm)
+      || (order.status || '').toLowerCase().includes(textTerm);
   }).slice(0, isPortraitDesktop ? 10 : 5);
 
   const filteredTopProducts = topProducts.filter(product => {
@@ -218,53 +189,11 @@ const AdminDashboard = () => {
     return (product.name || '').toLowerCase().includes(q) || (product.category || '').toLowerCase().includes(q);
   });
 
-  const handleAddAction = () => {
-    if (!formData.label.trim() || !formData.to) {
-      toast.error('Name and destination are required');
-      return;
-    }
-    if (editingAction) {
-      const updated = customActions.map(a => a.id === editingAction.id ? { ...a, label: formData.label.trim(), desc: formData.desc.trim(), to: formData.to, icon: formData.icon } : a);
-      setCustomActions(updated);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      toast.success('Quick action updated');
-    } else {
-      const newAction = {
-        id: `custom-${Date.now()}`,
-        label: formData.label.trim(),
-        desc: formData.desc.trim() || 'Quick access',
-        to: formData.to,
-        icon: formData.icon,
-        system: false,
-      };
-      const updated = [...customActions, newAction];
-      setCustomActions(updated);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      toast.success('Quick action added');
-    }
-    setShowAddModal(false);
-    setEditingAction(null);
-    setFormData({ label: '', desc: '', to: '', icon: 'Package' });
-  };
-
-  const handleEdit = (action) => {
-    setEditingAction(action);
-    setFormData({ label: action.label, desc: action.desc, to: action.to, icon: typeof action.icon === 'string' ? action.icon : 'Package' });
-    setShowAddModal(true);
-  };
-
-  const handleDelete = (id) => {
-    const updated = customActions.filter(a => a.id !== id);
-    setCustomActions(updated);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    toast.success('Removed');
-  };
-
   const notificationsForTab = (() => {
     const base = recentOrders.slice(0, 10).map(o => ({
       id: o.id,
       title: o.status === 'Delivered' ? 'Order Delivered' : o.status === 'Cancelled' ? 'Order Cancelled' : 'New Order Received',
-      desc: `Order #${o.shortCode || o.id.slice(0,6)} for ₹${(o.total||0).toLocaleString('en-IN')} by ${o.customer?.name || 'customer'}`,
+      desc: `Order #${orderIdOf(o)} for ₹${(o.total||0).toLocaleString('en-IN')} by ${o.customer?.name || 'customer'}`,
       time: o.createdAt?.toDate ? o.createdAt.toDate().toLocaleString() : 'recently',
       type: 'Orders',
       unread: true,
@@ -276,66 +205,35 @@ const AdminDashboard = () => {
     return base;
   })();
 
-  if (loading) {
-    return (
-      <div className="admin-page flex flex-col bg-[var(--surface-page)] p-6 transition-colors duration-200">
-        <div className="mx-auto w-full max-w-[1800px] space-y-4">
-          <StatCardSkeleton count={4} />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="admin-dashboard admin-page bg-[var(--surface-page)] text-[var(--text-body)] transition-colors duration-200">
       <AdminTopBar searchValue={globalSearch} onSearchChange={setGlobalSearch} onNotificationClick={() => setNotificationOpen(true)} />
 
-      {/* Dashboard Content - viewport fit: header(68) + content(remaining) grid auto/auto/auto/1fr */}
+      {/* Dashboard Content — starts directly with statistics; identity and
+          date live in the top navbar. */}
       <div className="dash-content mx-auto flex w-full max-w-[1800px] flex-col gap-3 px-4 py-3 lg:flex-1 lg:px-8 xl:px-10 lg:py-4">
-        {/* Header + Banner - 65-80px compact */}
-        <div className="dash-topgrid grid shrink-0 gap-3 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="flex min-h-[72px] flex-col justify-center">
-            <p className="text-xs uppercase tracking-[0.14em]" style={{ color: 'var(--text-muted)' }}>Welcome back,</p>
-            <h1 className="mt-1 break-words text-[22px] font-bold leading-none tracking-tight lg:text-[24px]" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>{adminName || 'Admin'}</h1>
-            <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Here&apos;s what&apos;s happening with your store today.</p>
-            <div className="mt-3 lg:hidden">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
-                <input
-                  id="admin-search-mobile"
-                  value={globalSearch}
-                  onChange={(e) => setGlobalSearch(e.target.value)}
-                  placeholder="Search products, orders..."
-                  className="h-9 w-full rounded-full border bg-[var(--surface-sunken)] pl-10 pr-4 text-sm placeholder:text-[var(--text-subtle)] focus:outline-none transition-colors duration-200"
-                  style={{ borderColor: 'var(--hairline)', color: 'var(--text-strong)' }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Calendar / Promo Banner - compact, brand */}
-          <div className="dash-banner relative flex min-h-[72px] items-center overflow-hidden rounded-2xl border p-4 transition-colors duration-200" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', boxShadow: 'var(--shadow-sm)' }}>
-            <div className="absolute inset-0 opacity-20" style={{ background: 'var(--grad-festive)' }} />
-            <div className="absolute inset-0 opacity-10" style={{ background: 'radial-gradient(60% 80% at 85% 20%, var(--gold-400), transparent)' }} />
-            <div className="relative flex w-full items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="grid h-10 w-10 place-items-center rounded-xl text-white" style={{ background: 'var(--grad-ember)' }}>
-                  <Sparkles className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold leading-tight" style={{ color: 'var(--text-strong)' }}>Lighting up celebrations</p>
-                  <p className="text-sm font-semibold leading-tight" style={{ color: 'var(--gold-500)' }}>across Hyderabad!</p>
-                </div>
-              </div>
-              <div className="hidden text-right shrink-0 sm:block">
-                <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{today.weekday}</p>
-                <p className="text-sm font-bold" style={{ color: 'var(--text-strong)' }}>{today.date}</p>
-              </div>
-            </div>
+        {/* Mobile search — the navbar search appears on desktop only. */}
+        <div className="shrink-0 lg:hidden">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
+            <input
+              id="admin-search-mobile"
+              value={globalSearch}
+              onChange={(e) => setGlobalSearch(e.target.value)}
+              placeholder="Search products, orders..."
+              className="h-9 w-full rounded-full border bg-[var(--surface-sunken)] pl-10 pr-4 text-sm placeholder:text-[var(--text-subtle)] focus:outline-none transition-colors duration-200"
+              style={{ borderColor: 'var(--hairline)', color: 'var(--text-strong)' }}
+            />
           </div>
         </div>
 
-        {/* KPI Cards - 80-90px, full width 4 cols */}
+        {/* KPI Cards — skeleton until both datasets land; the rest of the
+            page (quick actions, panels) never waits on them. */}
+        {!dataReady ? (
+          <div className="shrink-0">
+            <StatCardSkeleton count={4} />
+          </div>
+        ) : (
         <div className="dash-kpi-grid grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-3">
           {kpis.map(({ key, label, short, display, hint, icon: Icon, accent }) => (
             <div key={key} className="dash-kpi flex min-h-[88px] min-w-0 flex-col justify-center rounded-2xl border p-4 transition-colors duration-200" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', boxShadow: 'var(--shadow-sm)' }}>
@@ -358,60 +256,98 @@ const AdminDashboard = () => {
             </div>
           ))}
         </div>
+        )}
 
-        {/* Quick Actions - 125-140px compact */}
+        {/* Quick Actions — the seven most-used destinations, fixed */}
         <section className="shrink-0 rounded-2xl border p-3 transition-colors duration-200 lg:p-4" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', boxShadow: 'var(--shadow-sm)' }}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>Quick Actions</h2>
-              <p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>Manage your store with quick access to common tasks.</p>
-            </div>
-            <button onClick={() => { setEditingAction(null); setFormData({ label: '', desc: '', to: '', icon: 'Package' }); setShowAddModal(true); }} className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors duration-200" style={{ background: 'var(--text-strong)', color: 'var(--surface-card)' }}>
-              <Plus className="h-3.5 w-3.5" /> Add Quick Action
-            </button>
-          </div>
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>Quick Actions</h2>
 
-          <div className="dash-qa-grid mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {allQuickActions.map((action) => {
+          <div className="dash-qa-grid mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {QUICK_ACTIONS.map((action) => {
               const Icon = action.icon;
-              const isCustom = !action.system;
-              // Cross-subdomain destinations (Billing lives on
-              // billing.crackershyderabad.com) need a real anchor, not a
-              // React Router Link.
-              const isExternal = /^https?:\/\//.test(action.to || '');
-              const inner = (
-                <>
-                  <span className="grid h-8 w-8 place-items-center rounded-xl" style={{ background: 'var(--surface-card)', border: '1px solid var(--hairline)' }}>
+              return (
+                <Link key={action.id} to={action.to} className="dash-qa group flex min-w-0 items-center gap-3 rounded-2xl border p-3.5 transition hover:scale-[1.01] transition-colors duration-200" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)' }}>
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl" style={{ background: 'var(--surface-card)', border: '1px solid var(--hairline)' }}>
                     <Icon className="h-4 w-4" style={{ color: 'var(--ember-600)' }} />
                   </span>
-                  <span>
-                    <p className="break-words text-sm font-semibold leading-tight" style={{ color: 'var(--text-strong)' }}>{action.label}</p>
-                      <p className="mt-1 hidden line-clamp-2 text-xs leading-tight sm:block" style={{ color: 'var(--text-muted)' }}>{action.desc}</p>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold leading-tight" style={{ color: 'var(--text-strong)' }}>{action.label}</span>
+                    <span className="mt-0.5 hidden truncate text-xs leading-tight sm:block" style={{ color: 'var(--text-muted)' }}>{action.desc}</span>
                   </span>
-                </>
-              );
-              return (
-                <div key={action.id} className="dash-qa group relative flex min-h-[96px] min-w-0 flex-col rounded-2xl border p-4 transition hover:scale-[1.01] transition-colors duration-200" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)' }}>
-                  {isExternal ? (
-                    <a href={action.to} className="flex min-w-0 flex-1 flex-col gap-2.5">{inner}</a>
-                  ) : (
-                    <Link to={action.to} className="flex min-w-0 flex-1 flex-col gap-2.5">{inner}</Link>
-                  )}
-                  {isCustom && (
-                    <div className="absolute right-2 top-2 hidden gap-1 group-hover:flex">
-                      <button onClick={() => handleEdit(action)} className="grid h-6 w-6 place-items-center rounded-full transition-colors duration-200" style={{ background: 'var(--surface-card)', border: '1px solid var(--hairline)' }}>
-                        <Settings className="h-3 w-3" style={{ color: 'var(--text-muted)' }} />
-                      </button>
-                      <button onClick={() => handleDelete(action.id)} className="grid h-6 w-6 place-items-center rounded-full" style={{ background: 'var(--crimson-600)', color: '#fff' }}>
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  )}
-                </div>
+                  <ArrowRight className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" style={{ color: 'var(--text-subtle)' }} />
+                </Link>
               );
             })}
           </div>
         </section>
+
+        {/* Sales Overview + Live Order Feed */}
+        <div className="dash-panels grid shrink-0 gap-3 lg:grid-cols-[1.35fr_0.9fr]">
+          <section className="flex min-w-0 flex-col rounded-2xl border p-4 transition-colors duration-200 lg:p-5" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', boxShadow: 'var(--shadow-sm)' }}>
+            <div className="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>Sales Overview</h2>
+                <p className="text-xs tabular" style={{ color: 'var(--text-muted)' }}>
+                  {inr(rangeRevenue)} • {rangeOrders} orders • AOV {inr(rangeAov)}
+                </p>
+              </div>
+              <div className="flex gap-1 rounded-full border p-1" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)' }} role="group" aria-label="Sales range">
+                {[7, 14, 28].map((days) => (
+                  <button
+                    key={days}
+                    type="button"
+                    onClick={() => setSalesRange(days)}
+                    aria-pressed={salesRange === days}
+                    className="rounded-full px-2.5 py-1 text-[11px] font-bold"
+                    style={salesRange === days
+                      ? { background: 'var(--text-strong)', color: 'var(--surface-card)' }
+                      : { color: 'var(--text-muted)' }}
+                  >
+                    {days}D
+                  </button>
+                ))}
+              </div>
+            </div>
+            {!ordersReady ? (
+              <div className="grid place-items-center rounded-xl border border-dashed py-10 text-center text-sm" style={{ borderColor: 'var(--hairline)', color: 'var(--text-muted)' }}>Loading sales…</div>
+            ) : (
+              <DualTrendChart series={salesSeries} lines={salesLines} dualAxis viewH={210} />
+            )}
+          </section>
+
+          {/* Live Order Feed — the live order stream */}
+          <section className="flex min-h-[240px] min-w-0 flex-col rounded-2xl border p-4 transition-colors duration-200 lg:p-5" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', boxShadow: 'var(--shadow-sm)' }}>
+            <div className="mb-3 flex shrink-0 items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>Live Order Feed</h2>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Newest orders as they arrive</p>
+              </div>
+              <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)', color: 'var(--text-body)' }}>
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--leaf-600)]" aria-hidden="true" />
+                Live
+              </span>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {!ordersReady ? (
+                <div className="grid place-items-center rounded-xl border border-dashed py-10 text-center text-sm" style={{ borderColor: 'var(--hairline)', color: 'var(--text-muted)' }}>Loading orders…</div>
+              ) : feedOrders.length === 0 ? (
+                <div className="grid place-items-center rounded-xl border border-dashed py-10 text-center text-sm" style={{ borderColor: 'var(--hairline)', color: 'var(--text-muted)' }}>No orders yet</div>
+              ) : (
+                <div className="space-y-2">
+                  {feedOrders.map((order) => (
+                    <Link key={order.id} to={`/orders/${order.id}`} className="dash-order-row flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 transition-colors duration-200" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)' }}>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium" style={{ color: 'var(--text-strong)' }}>#{orderIdOf(order)} — {order.customer?.name || 'Customer'}</p>
+                        <p className="text-xs tabular" style={{ color: 'var(--text-muted)' }}>₹{(order.total || 0).toLocaleString('en-IN')} • {order.status || 'Pending'}</p>
+                      </div>
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-subtle)' }} />
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
 
         {/* Recent Orders + Top Products - fill remaining height, internal scroll only if needed */}
         <div className="dash-panels grid gap-3 lg:flex-1 lg:min-h-0 lg:grid-cols-[1.35fr_0.9fr]">
@@ -427,15 +363,17 @@ const AdminDashboard = () => {
               </Link>
             </div>
             <div className="flex-1 overflow-y-auto">
-              {filteredOrders.length === 0 ? (
+              {!ordersReady ? (
+                <div className="grid place-items-center rounded-xl border border-dashed py-10 text-center text-sm" style={{ borderColor: 'var(--hairline)', color: 'var(--text-muted)' }}>Loading orders…</div>
+              ) : filteredOrders.length === 0 ? (
                 <div className="grid place-items-center rounded-xl border border-dashed py-10 text-center text-sm" style={{ borderColor: 'var(--hairline)', color: 'var(--text-muted)' }}>No orders yet</div>
               ) : (
                 <div className="space-y-2">
                   {filteredOrders.map((order) => (
                     <div key={order.id} className="dash-order-row flex items-center justify-between gap-3 rounded-xl border px-3 py-3 transition-colors duration-200" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)' }}>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium" style={{ color: 'var(--text-strong)' }}>#{order.shortCode || order.id.slice(0, 8)} — {order.customer?.name || 'Customer'}</p>
-                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>₹{(order.total||0).toLocaleString('en-IN')} • {order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString() : new Date(order.createdAt).toLocaleDateString()}</p>
+                        <p className="truncate text-sm font-medium" style={{ color: 'var(--text-strong)' }}>#{orderIdOf(order)} — {order.customer?.name || 'Customer'}</p>
+                        <p className="text-xs tabular" style={{ color: 'var(--text-muted)' }}>₹{(order.total||0).toLocaleString('en-IN')} • {order.paymentMode || 'Online'} • {order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString() : new Date(order.createdAt).toLocaleDateString()}</p>
                       </div>
                       <OrderStatusBadge status={order.status || 'Pending'} className="shrink-0" />
                     </div>
@@ -457,14 +395,16 @@ const AdminDashboard = () => {
               </Link>
             </div>
             <div className="flex-1 overflow-y-auto">
-              {filteredTopProducts.length === 0 ? (
+              {!productsReady ? (
+                <div className="grid place-items-center rounded-xl border border-dashed py-10 text-center text-sm" style={{ borderColor: 'var(--hairline)', color: 'var(--text-muted)' }}>Loading products…</div>
+              ) : filteredTopProducts.length === 0 ? (
                 <div className="grid place-items-center rounded-xl border border-dashed py-10 text-center text-sm" style={{ borderColor: 'var(--hairline)', color: 'var(--text-muted)' }}>No sales yet</div>
               ) : (
                 <div className="space-y-2">
                   {filteredTopProducts.map((product, idx) => (
                     <div key={product.id} className="dash-top-row flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors duration-200" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)' }}>
                       <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-xs font-bold" style={{ background: 'var(--surface-card)', border: '1px solid var(--hairline)', color: 'var(--text-strong)' }}>{idx + 1}</span>
-                      <img src={product.imageURL || '/images/website/nav-logo.png'} alt="" className="hidden h-10 w-10 rounded-lg object-cover sm:block" style={{ border: '1px solid var(--hairline)' }} />
+                      <img src={product.imageURL || '/images/website/nav-logo.png'} alt="" loading="lazy" decoding="async" width={40} height={40} className="hidden h-10 w-10 rounded-lg object-cover sm:block" style={{ border: '1px solid var(--hairline)' }} />
                       <div className="min-w-0 flex-1">
                         <p className="break-words text-sm font-medium leading-tight lg:truncate" style={{ color: 'var(--text-strong)' }}>{product.name}</p>
                         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{displayNameForCategory(product.category)} • {product.salesCount} sold</p>
@@ -532,48 +472,6 @@ const AdminDashboard = () => {
         )}
       </AnimatePresence>
 
-      {/* Add Quick Action Modal - theme-aware */}
-      <AnimatePresence>
-        {showAddModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setShowAddModal(false)}>
-            <motion.div
-              initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.96, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md rounded-2xl border p-5 shadow-xl transition-colors duration-200"
-              style={{ background: 'var(--surface-card)', borderColor: 'var(--hairline)' }}
-            >
-              <h3 className="text-sm font-semibold" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>{editingAction ? 'Edit Quick Action' : 'Add Quick Action'}</h3>
-              <div className="mt-4 space-y-3">
-                <div>
-                  <label className="text-xs" style={{ color: 'var(--text-muted)' }}>Name</label>
-                  <input value={formData.label} onChange={(e) => setFormData({ ...formData, label: e.target.value })} placeholder="e.g. Inventory" className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm placeholder:text-[var(--text-subtle)] focus:outline-none transition-colors duration-200" style={{ background: 'var(--surface-sunken)', borderColor: 'var(--hairline)', color: 'var(--text-strong)' }} />
-                </div>
-                <div>
-                  <label className="text-xs" style={{ color: 'var(--text-muted)' }}>Icon</label>
-                  <select value={formData.icon} onChange={(e) => setFormData({ ...formData, icon: e.target.value })} className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none transition-colors duration-200" style={{ background: 'var(--surface-sunken)', borderColor: 'var(--hairline)', color: 'var(--text-strong)' }}>
-                    {ICON_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs" style={{ color: 'var(--text-muted)' }}>Description</label>
-                  <input value={formData.desc} onChange={(e) => setFormData({ ...formData, desc: e.target.value })} placeholder="Short description" className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm placeholder:text-[var(--text-subtle)] focus:outline-none transition-colors duration-200" style={{ background: 'var(--surface-sunken)', borderColor: 'var(--hairline)', color: 'var(--text-strong)' }} />
-                </div>
-                <div>
-                  <label className="text-xs" style={{ color: 'var(--text-muted)' }}>Destination</label>
-                  <select value={formData.to} onChange={(e) => setFormData({ ...formData, to: e.target.value })} className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none transition-colors duration-200" style={{ background: 'var(--surface-sunken)', borderColor: 'var(--hairline)', color: 'var(--text-strong)' }}>
-                    <option value="">Select page</option>
-                    {KNOWN_DESTINATIONS.map(d => <option key={d.value} value={d.value}>{d.label} — {d.value}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="mt-5 flex justify-end gap-2">
-                <button onClick={() => { setShowAddModal(false); setEditingAction(null); }} className="rounded-full border px-4 py-2 text-sm transition-colors duration-200" style={{ borderColor: 'var(--hairline)', color: 'var(--text-muted)' }}>Cancel</button>
-                <button onClick={handleAddAction} className="rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-200" style={{ background: 'var(--text-strong)', color: 'var(--surface-card)' }}>{editingAction ? 'Save' : 'Add'}</button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };
