@@ -2013,17 +2013,35 @@ app.get('/api/admin/analytics/live', requireFirebase, requireAdmin, adminLimiter
    fetch plus the lightweight live poll. Same guard chain as the other
    /api/admin/analytics routes. The legacy /site and /live routes stay. */
 app.get('/api/admin/analytics/commerce', requireFirebase, requireAdmin, adminLimiter, withDb(async (req, res) => {
+  const started = Date.now();
+  /* Hard ceiling so the dashboard can never wait forever: if the merged
+     snapshot is not ready within 9s the page gets a controlled 503 (with a
+     Retry button) instead of a permanently pending request. The frontend's
+     own timeout sits above this (12s). */
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(Object.assign(new Error('Analytics snapshot timed out'), { status: 503 })), 9_000);
+  });
   try {
     const query = { days: req.query.days, from: req.query.from, to: req.query.to };
-    const [traffic, commerce] = await Promise.all([
-      site.siteSnapshot(req.firestore, query),
-      commerceSnapshot(req.firestore, query),
+    const [traffic, commerce] = await Promise.race([
+      Promise.all([
+        site.siteSnapshot(req.firestore, query),
+        commerceSnapshot(req.firestore, query),
+      ]).finally(() => clearTimeout(timer)),
+      timeout,
     ]);
     if (traffic && traffic.error) return res.status(400).json(traffic);
+    console.log(`[commerce] snapshot ${Date.now() - started}ms`);
     return res.json({ ...traffic, commerce });
   } catch (error) {
-    console.error('[commerce] handler failed:', error.message);
-    return res.status(500).json({ error: 'Analytics service error' });
+    clearTimeout(timer);
+    console.error(`[commerce] handler failed after ${Date.now() - started}ms:`, error.message);
+    const status = Number(error && error.status) || 500;
+    const message = status === 503
+      ? 'Analytics took too long to respond. Please try again.'
+      : 'Analytics service error';
+    return res.status(status).json({ error: message });
   }
 }));
 

@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 const STORAGE_KEY = 'theme';
-const DARK_QUERY = '(prefers-color-scheme: dark)';
 
 const ThemeContext = createContext();
 
@@ -22,19 +21,21 @@ const readStoredChoice = () => {
   }
 };
 
-const systemPrefersDark = () => {
-  if (typeof window === 'undefined' || !window.matchMedia) return false;
-  return window.matchMedia(DARK_QUERY).matches;
-};
+/** Storefront default: light. An explicit stored choice is honoured. */
 
 /**
- * Resolve the theme exactly the way the inline script in index.html does:
- * an explicit choice wins, otherwise follow the operating system.
+ * Storefront theme: explicitly LIGHT/WARM always.
+ *
+ * The Crackers Hyderabad shop is a light-brand experience (cream surfaces,
+ * maroon festival accents) — it must never flip to the near-black `.dark`
+ * palette just because the operating system is in dark mode. An explicit
+ * stored choice is still honoured, but the OS is never followed.
+ * (Admin is a separate app with its own theme behaviour — untouched.)
  */
 const resolveInitial = () => {
   const stored = readStoredChoice();
   if (stored) return stored === 'dark';
-  return systemPrefersDark();
+  return false;
 };
 
 const applyTheme = (dark) => {
@@ -52,32 +53,13 @@ applyTheme(initialDark);
 
 export const ThemeProvider = ({ children }) => {
   const [isDark, setIsDark] = useState(initialDark);
-  // Null means "no explicit choice yet — keep following the OS".
+  // Kept for API compatibility; nothing in the storefront reads it to
+  // follow the OS anymore (see resolveInitial above).
   const [choice, setChoice] = useState(readStoredChoice);
 
   useEffect(() => {
     applyTheme(isDark);
   }, [isDark]);
-
-  // Track the OS only until the visitor picks a side themselves.
-  useEffect(() => {
-    if (choice) return undefined;
-    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
-
-    const mql = window.matchMedia(DARK_QUERY);
-    const onChange = (event) => setIsDark(event.matches);
-
-    setIsDark(mql.matches);
-
-    if (mql.addEventListener) {
-      mql.addEventListener('change', onChange);
-      return () => mql.removeEventListener('change', onChange);
-    }
-
-    // Safari < 14 only has the deprecated listener API.
-    mql.addListener(onChange);
-    return () => mql.removeListener(onChange);
-  }, [choice]);
 
   const setTheme = useCallback((next) => {
     const dark = next === 'dark';
@@ -94,10 +76,10 @@ export const ThemeProvider = ({ children }) => {
     setTheme(isDark ? 'light' : 'dark');
   }, [isDark, setTheme]);
 
-  /** Drop back to following the operating system. */
+  /** Reset to the storefront default (light brand palette). */
   const useSystemTheme = useCallback(() => {
     setChoice(null);
-    setIsDark(systemPrefersDark());
+    setIsDark(false);
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {

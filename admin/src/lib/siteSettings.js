@@ -33,9 +33,9 @@ export const DEFAULT_SITE_SETTINGS = {
    the document has no `seo` key yet). Saved under settings/siteSettings.seo;
    every other key on the document is untouched. */
 export const DEFAULT_SEO = {
-  homepageTitle: 'Buy Firecrackers Online in Hyderabad | Crackers Hyderabad',
+  homepageTitle: 'Firecrackers in Hyderabad | Buy Crackers Online | Crackers Hyderabad',
   homepageDescription:
-    'Shop firecrackers online in Hyderabad at Crackers Hyderabad. Explore sparklers, flower pots, ground chakkars, rockets, fancy fireworks and more at great prices.',
+    'Shop firecrackers and Diwali crackers online in Hyderabad. Explore sparklers, flower pots, rockets, ground chakkars, gift boxes and more at Crackers Hyderabad.',
   keywords:
     'firecrackers in Hyderabad, buy firecrackers online Hyderabad, crackers Hyderabad, fireworks Hyderabad, Diwali crackers Hyderabad, firecrackers online Hyderabad, firecracker shop Hyderabad',
   canonicalUrl: 'https://crackershyderabad.com/',
@@ -43,13 +43,13 @@ export const DEFAULT_SEO = {
   contentHeading: 'Firecrackers in Hyderabad',
   content:
     'Looking for quality firecrackers in Hyderabad? Crackers Hyderabad offers a wide selection of fireworks for Diwali celebrations and special occasions. Explore sparklers, flower pots, ground chakkars, rockets, fancy fireworks, crackers and gift boxes at competitive prices.\n\nBrowse our online collection to find fireworks for family celebrations, festive events and Diwali. Our product range makes it easy to compare prices and choose the right crackers for your celebration in Hyderabad.',
-  ogTitle: 'Buy Firecrackers Online in Hyderabad | Crackers Hyderabad',
+  ogTitle: 'Firecrackers in Hyderabad | Buy Crackers Online | Crackers Hyderabad',
   ogDescription:
-    'Shop firecrackers online in Hyderabad at Crackers Hyderabad. Explore sparklers, flower pots, ground chakkars, rockets, fancy fireworks and more at great prices.',
+    'Shop firecrackers and Diwali crackers online in Hyderabad. Explore sparklers, flower pots, rockets, ground chakkars, gift boxes and more at Crackers Hyderabad.',
   ogImage: '/images/website/crackerhyderabadlogo.png',
-  twitterTitle: 'Buy Firecrackers Online in Hyderabad | Crackers Hyderabad',
+  twitterTitle: 'Firecrackers in Hyderabad | Buy Crackers Online | Crackers Hyderabad',
   twitterDescription:
-    'Shop firecrackers online in Hyderabad at Crackers Hyderabad. Explore sparklers, flower pots, ground chakkars, rockets, fancy fireworks and more at great prices.',
+    'Shop firecrackers and Diwali crackers online in Hyderabad. Explore sparklers, flower pots, rockets, ground chakkars, gift boxes and more at Crackers Hyderabad.',
   twitterImage: '/images/website/crackerhyderabadlogo.png',
   structuredData: {
     organization: true,

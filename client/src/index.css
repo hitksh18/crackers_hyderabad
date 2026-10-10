@@ -523,6 +523,39 @@ img {
     box-shadow: var(--glass-toplight-soft), var(--shadow-sm);
   }
 
+  /* Fixed navbars (not sticky): html/body carry overflow-x: clip plus a
+     document scroller, a combination in which this Chrome build never pins
+     position:sticky — the bar scrolled away with the page. Fixed positioning
+     is immune to ancestor overflow. Applies only to actual <nav> bars that
+     opt in with .nav-fixed (summary footers reusing .glass-nav on divs are
+     untouched), keeping ONE navbar source. */
+  nav.glass-nav.nav-fixed {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    transition: background-color 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  }
+  nav.glass-nav.nav-fixed .shell {
+    transition: padding-top 0.25s ease, padding-bottom 0.25s ease;
+  }
+
+  /* Scrolled: solid, blurred, bordered, slightly compact — never heavy. */
+  nav.glass-nav.nav-fixed.nav-scrolled {
+    background: var(--surface-card);
+    box-shadow: var(--shadow-md);
+    border-bottom-color: var(--hairline-strong);
+  }
+  nav.glass-nav.nav-fixed.nav-scrolled.home-nav {
+    background: var(--surface-card);
+    box-shadow: var(--shadow-md);
+  }
+  nav.glass-nav.nav-fixed.nav-scrolled .shell {
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+  }
+
   .card-premium {
     background: var(--surface-card);
     border: 1px solid var(--hairline);

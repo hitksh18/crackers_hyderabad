@@ -129,7 +129,7 @@ export function AxKpiCell({ icon: Icon, label, value, delta, prefix = '', suffix
       </div>
       <div className="ax-kpi-foot">
         {!statik && !noData && <DeltaBadge delta={delta} />}
-        {sub && <span>{sub}</span>}
+        {sub && <span className="ax-kpi-sub">{sub}</span>}
       </div>
     </div>
   );

@@ -17,6 +17,7 @@ import {
   Settings,
   Boxes,
   Star,
+  TicketPercent,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from '../utils/toast';
@@ -29,7 +30,7 @@ import { displayNameForCategory } from '../lib/categoryIcons';
 import { orderIdOf, orderIdMatches } from '../lib/orderId';
 import AdminTopBar from '../components/admin/AdminTopBar';
 
-/* The seven most-used destinations. Fixed — quick actions are shortcuts, not
+/* The eight most-used destinations. Fixed — quick actions are shortcuts, not
    a second navigation system; everything else lives in the sidebar. */
 const QUICK_ACTIONS = [
   { id: 'analytics', to: '/analytics', label: 'Analytics', desc: 'View sales and performance', icon: BarChart3 },
@@ -39,6 +40,7 @@ const QUICK_ACTIONS = [
   { id: 'categories', to: '/categories', label: 'Categories', desc: 'Manage product categories', icon: Boxes },
   { id: 'site-settings', to: '/site-settings', label: 'Site Settings', desc: 'Configure site/order settings', icon: Settings },
   { id: 'products', to: '/products', label: 'Manage Products', desc: 'View and manage products', icon: Package },
+  { id: 'coupons', to: '/coupons', label: 'Create Coupon', desc: 'Create and manage discount coupons', icon: TicketPercent },
 ];
 
 const AdminDashboard = () => {
@@ -258,7 +260,7 @@ const AdminDashboard = () => {
         </div>
         )}
 
-        {/* Quick Actions — the seven most-used destinations, fixed */}
+        {/* Quick Actions — the eight most-used destinations, fixed */}
         <section className="shrink-0 rounded-2xl border p-3 transition-colors duration-200 lg:p-4" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', boxShadow: 'var(--shadow-sm)' }}>
           <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>Quick Actions</h2>
 

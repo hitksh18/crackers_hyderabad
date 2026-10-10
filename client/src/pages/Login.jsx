@@ -16,7 +16,6 @@ import toast from '../utils/toast';
 import Seo from '../components/Seo';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { revealVariants, staggerParent } from '../lib/motion';
-import { ADMIN_URL, BILLING_URL } from '../lib/consoleUrls';
 import GoogleMark from '../components/ui/GoogleMark';
 
 /** Firebase auth codes are not sentences. Turn them into ones. */
@@ -50,25 +49,18 @@ const readableAuthError = (error, fallback) =>
    parked in sessionStorage before leaving and restored on the way back. */
 const FROM_KEY = 'auth_from';
 
-/* Staff consoles live on separate subdomains (Firebase sessions are per
-   origin, so each console asks for its own sign-in). A deep link the visitor
-   was aiming at (`from`) always wins; otherwise each role lands on its own
-   home — customers on the storefront, staff on their console. */
-const getHomePath = (role) => {
-  if (role === 'sales') return BILLING_URL;
-  if (role === 'admin') return `${ADMIN_URL}/dashboard`;
-  return '/';
+/* APP_CONTEXT = "customer": this application never leaves its own origin.
+   Role decides what a session may access, never where the browser goes —
+   so an admin signing in here lands on the storefront, and staff consoles
+   are reached by visiting their own URLs directly. `from` is accepted only
+   as a same-origin path, which also closes any open-redirect reading. */
+const safeInternalPath = (value) => {
+  const path = String(value || '');
+  if (!path.startsWith('/') || path.startsWith('//')) return null;
+  return path;
 };
 
-/* Internal destinations go through React Router; cross-subdomain
-   destinations need a real navigation. */
-const goToDestination = (navigate, destination) => {
-  if (/^https?:\/\//.test(destination)) {
-    window.location.assign(destination);
-    return;
-  }
-  navigate(destination, { replace: true });
-};
+const getHomePath = () => '/';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -102,10 +94,10 @@ const Login = () => {
     if (loading || redirecting) return;
     if (location.pathname !== '/login') return;
     if (authReady && user && userRole) {
-      const destination = from || getHomePath(userRole);
+      const destination = safeInternalPath(from) || getHomePath();
       if (from) sessionStorage.removeItem(FROM_KEY);
       setRedirecting(true);
-      goToDestination(navigate, destination);
+      navigate(destination, { replace: true });
     }
   }, [authReady, user, userRole, loading, redirecting, navigate, from, location.pathname]);
 
@@ -150,10 +142,10 @@ const Login = () => {
       } else {
         const result = await loginWithEmail(email, password);
         if (result?.role) {
-          const destination = from || getHomePath(result.role);
+          const destination = safeInternalPath(from) || getHomePath();
           if (from) sessionStorage.removeItem(FROM_KEY);
           setRedirecting(true);
-          goToDestination(navigate, destination);
+          navigate(destination, { replace: true });
         } else {
           await handleMissingRole();
         }
@@ -183,10 +175,10 @@ const Login = () => {
       if (from) sessionStorage.setItem(FROM_KEY, from);
       const result = await loginWithGoogle();
       if (result?.role) {
-        const destination = from || getHomePath(result.role);
+        const destination = safeInternalPath(from) || getHomePath();
         if (from) sessionStorage.removeItem(FROM_KEY);
         setRedirecting(true);
-        goToDestination(navigate, destination);
+        navigate(destination, { replace: true });
       } else {
         await handleMissingRole();
       }

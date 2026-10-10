@@ -161,45 +161,77 @@ async function buildActivity(db, orders, fromMs) {
       ms: order.updatedMs,
     });
   }
+  /* Recent signups WITHOUT paging the whole Auth user base: the users
+     collection carries createdAt (written at signup) and answers "newest
+     signups" with one indexed query (~90ms) instead of a full listUsers
+     pagination (~750ms+ even for a handful of users). Output shape is
+     identical ({ ms, label }); the Auth listing survives only as a capped
+     fallback if the collection read fails. */
   try {
-    const authUsers = [];
-    let pageToken;
-    do {
-      const result = await getAuth().listUsers(1000, pageToken);
-      result.users.forEach((u) => authUsers.push(u));
-      pageToken = result.pageToken;
-    } while (pageToken);
-    authUsers
-      .map((u) => ({
-        ms: u.metadata?.creationTime ? Date.parse(u.metadata.creationTime) : NaN,
-        label: u.displayName || maskEmail(u.email) || 'New customer',
-      }))
+    const signupsSnap = await db
+      .collection('users')
+      .orderBy('createdAt', 'desc')
+      .limit(100)
+      .get();
+    signupsSnap.docs
+      .map((d) => {
+        const data = d.data() || {};
+        const ms = msOf(data.createdAt);
+        const label = data.displayName || data.name || maskEmail(data.email) || 'New customer';
+        return { ms, label };
+      })
       .filter((u) => Number.isFinite(u.ms) && u.ms >= fromMs)
-      .sort((a, b) => b.ms - a.ms)
       .slice(0, 3)
       .forEach((u) => {
         events.push({ type: 'signup', title: 'New customer account', detail: u.label, ms: u.ms });
       });
   } catch (error) {
-    console.error('[commerce] signups load failed:', error.message);
+    console.error('[commerce] signups collection load failed, falling back to Auth listing:', error.message);
+    try {
+      const authUsers = [];
+      let pageToken;
+      let pages = 0;
+      do {
+        const result = await getAuth().listUsers(1000, pageToken);
+        result.users.forEach((u) => authUsers.push(u));
+        pageToken = result.pageToken;
+        pages += 1;
+      } while (pageToken && pages < 3);
+      authUsers
+        .map((u) => ({
+          ms: u.metadata?.creationTime ? Date.parse(u.metadata.creationTime) : NaN,
+          label: u.displayName || maskEmail(u.email) || 'New customer',
+        }))
+        .filter((u) => Number.isFinite(u.ms) && u.ms >= fromMs)
+        .sort((a, b) => b.ms - a.ms)
+        .slice(0, 3)
+        .forEach((u) => {
+          events.push({ type: 'signup', title: 'New customer account', detail: u.label, ms: u.ms });
+        });
+    } catch (fallbackError) {
+      console.error('[commerce] signups load failed:', fallbackError.message);
+    }
   }
   return events.sort((a, b) => b.ms - a.ms).slice(0, 10);
 }
 
-async function buildAlerts(db, orders, current, summary) {
+async function buildAlerts(db, orders, current, summary, productDocs) {
   const alerts = [];
   try {
-    const productsSnap = await db.collection('products').get();
+    /* Reuses the products snapshot the caller already fetched for the
+       category map — no second full collection scan. */
     const outOfStock = [];
     let noSales = 0;
     const noSalesNames = [];
-    productsSnap.docs.forEach((doc) => {
-      const data = doc.data() || {};
+    (productDocs || []).forEach((doc) => {
+      const data = doc.data ? doc.data() : doc;
+      const id = doc.id || '';
+      if (!data) return;
       if (data.outOfStock === true) {
-        outOfStock.push(String(data.name || doc.id).slice(0, 120));
+        outOfStock.push(String(data.name || id).slice(0, 120));
       }
       if (numberOf(data.salesCount) === 0 && noSalesNames.length < 5) {
-        noSalesNames.push(String(data.name || doc.id).slice(0, 120));
+        noSalesNames.push(String(data.name || id).slice(0, 120));
       }
       if (numberOf(data.salesCount) === 0) noSales += 1;
     });
@@ -260,8 +292,19 @@ async function commerceSnapshot(db, query = {}) {
   const rangeEndMs = dayStartMs(endKey) + 86_400_000 - 1;
 
   let loaded;
+  let productsSnap = { docs: [] };
   try {
-    loaded = await loadOrdersRange(db, rangeStartMs, rangeEndMs);
+    /* The orders range, the products collection and the unfulfilled-orders
+       lookup are independent — one round, not three serial stages. */
+    const [ordersResult, productsResult] = await Promise.all([
+      loadOrdersRange(db, rangeStartMs, rangeEndMs),
+      db.collection('products').get().catch((error) => {
+        console.error('[commerce] products load failed:', error.message);
+        return { docs: [] };
+      }),
+    ]);
+    loaded = ordersResult;
+    productsSnap = productsResult;
   } catch (error) {
     console.error('[commerce] orders load failed:', error.message);
     return {
@@ -277,9 +320,8 @@ async function commerceSnapshot(db, query = {}) {
   const cur = summarizeWindow(orders, current);
   const prev = summarizeWindow(orders, previous);
 
-  let productCategory = new Map();
+  const productCategory = new Map();
   try {
-    const productsSnap = await db.collection('products').get();
     productsSnap.docs.forEach((doc) => {
       const data = doc.data() || {};
       const category = Array.isArray(data.categories) && data.categories[0]
@@ -289,7 +331,7 @@ async function commerceSnapshot(db, query = {}) {
     });
   } catch (error) {
     console.error('[commerce] category map failed:', error.message);
-    productCategory = new Map();
+    productCategory.clear();
   }
 
   const byCategory = new Map();
@@ -358,7 +400,7 @@ async function commerceSnapshot(db, query = {}) {
 
   const [activity, alerts] = await Promise.all([
     buildActivity(db, orders, rangeStartMs),
-    buildAlerts(db, orders, current, cur),
+    buildAlerts(db, orders, current, cur, productsSnap.docs),
   ]);
 
   return {

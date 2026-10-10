@@ -56,6 +56,16 @@ import '../components/admin/analytics/ax-dashboard.css';
 
 const LIVE_POLL_MS = 15_000;
 const SNAPSHOT_POLL_MS = 180_000;
+/* Stale-while-revalidate snapshot cache: revisitng Analytics (or StrictMode's
+   double-invoked effect in dev) reuses a fresh-enough payload instantly and
+   refreshes underneath, instead of blanking the page on every mount. */
+const SNAPSHOT_TTL_MS = 45_000;
+/* Backstop so the page can never sit on skeletons forever: a snapshot fetch
+   that is still outstanding after this long is aborted and surfaced as an
+   error with a Retry button. Must stay above the backend's own timeout. */
+const SNAPSHOT_TIMEOUT_MS = 12_000;
+const snapshotCache = new Map();
+const snapshotInflight = new Map();
 
 const nf = new Intl.NumberFormat('en-IN');
 const inr = (value) => `₹${nf.format(Math.round(Number(value) || 0))}`;
@@ -120,30 +130,93 @@ export default function AdminAnalytics() {
   const [hidden, setHidden] = useState(typeof document === 'undefined' ? false : document.visibilityState === 'hidden');
   const [lastFetchedAt, setLastFetchedAt] = useState(null);
   const snapshotAbort = useRef(null);
+  /* Tracks whether any payload has ever landed: skeletons show only for the
+     first load; refetches (range change, poll, refresh) keep old data. */
+  const snapshotRef = useRef(null);
   const query = useMemo(() => {
     const params = new URLSearchParams();
     if (range.custom) { params.set('from', range.from); params.set('to', range.to); } else { params.set('days', String(range.days)); }
     return params.toString();
   }, [range]);
 
-  /* Single aggregated request: traffic snapshot + commerce block. */
+  /* Single aggregated request: traffic snapshot + commerce block. Served
+     stale-while-revalidate from a 45s module cache: repeat visits (and
+     StrictMode's double effect) share one request, range changes keep the
+     previous data on screen with only the refreshing indicator, and only a
+     first-ever load shows full skeletons.
+     Loading-ownership rules (no path may leave loading true forever):
+     - a follower that finds in-flight work adopts it from the cache when it
+       lands; if the owner died without caching (abort/failure) the follower
+       takes ownership with a fresh request instead of returning silently;
+     - only the current owner (snapshotAbort.current === controller) may
+       touch loading/error state; stale jobs exit quietly. */
   const loadSnapshot = useCallback(async ({ silent = false } = {}) => {
-    snapshotAbort.current?.abort();
-    const controller = new AbortController();
-    snapshotAbort.current = controller;
-    if (silent) setRefreshing(true); else setLoading(true);
-    try {
-      const response = await authFetch(`/api/admin/analytics/commerce?${query}`, { signal: controller.signal });
-      if (!response.ok) throw new Error(await readApiError(response, 'Could not load analytics.'));
-      setSnapshot(await response.json());
-      setLastFetchedAt(Date.now());
+    const key = query;
+    const adopt = (entry) => {
+      setSnapshot(entry.data);
+      snapshotRef.current = entry.data;
+      setLastFetchedAt(entry.at);
       setError('');
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      setError(err.message || 'Could not load analytics.');
-    } finally {
-      if (!controller.signal.aborted) { setLoading(false); setRefreshing(false); }
+      setLoading(false);
+      setRefreshing(false);
+    };
+    const cached = snapshotCache.get(key);
+    if (cached && Date.now() - cached.at < SNAPSHOT_TTL_MS && !silent) {
+      adopt(cached);
+      loadSnapshot({ silent: true });
+      return;
     }
+    for (;;) {
+      const ongoing = snapshotInflight.get(key);
+      if (!ongoing) break;
+      try { await ongoing; } catch { /* the owner surfaces errors */ }
+      const fresh = snapshotCache.get(key);
+      if (fresh && Date.now() - fresh.at < SNAPSHOT_TTL_MS) {
+        adopt(fresh);
+        return;
+      }
+      /* Owner settled without caching (aborted or failed): loop around and
+         take ownership below, unless someone else already did. */
+    }
+    if (snapshotInflight.get(key)) return;
+    const job = (async () => {
+      snapshotAbort.current?.abort();
+      const controller = new AbortController();
+      snapshotAbort.current = controller;
+      let timedOut = false;
+      const timer = setTimeout(() => { timedOut = true; controller.abort(); }, SNAPSHOT_TIMEOUT_MS);
+      const firstLoad = !snapshotRef.current;
+      if (silent || !firstLoad) setRefreshing(true); else setLoading(true);
+      try {
+        const response = await authFetch(`/api/admin/analytics/commerce?${query}`, { signal: controller.signal });
+        if (!response.ok) throw new Error(await readApiError(response, 'Could not load analytics.'));
+        const data = await response.json();
+        if (!data || typeof data !== 'object') throw new Error('Could not load analytics.');
+        snapshotCache.set(key, { at: Date.now(), data });
+        /* A newer request may have taken over while we were in flight — only
+           the current owner updates state. */
+        if (snapshotAbort.current !== controller) return;
+        setSnapshot(data);
+        snapshotRef.current = data;
+        setLastFetchedAt(Date.now());
+        setError('');
+      } catch (err) {
+        if (snapshotAbort.current !== controller) return;
+        if (err && err.name === 'AbortError') {
+          /* Unmount abort: nothing to show. Timeout abort while current: the
+             backend was too slow — surface it instead of hanging. */
+          if (timedOut) setError('Analytics is taking too long to respond. Please try again.');
+          else return;
+        } else {
+          setError(err && err.message ? err.message : 'Could not load analytics.');
+        }
+      } finally {
+        clearTimeout(timer);
+        if (snapshotAbort.current === controller) { setLoading(false); setRefreshing(false); }
+      }
+    })();
+    snapshotInflight.set(key, job);
+    try { await job; } finally { if (snapshotInflight.get(key) === job) snapshotInflight.delete(key); }
   }, [query]);
   const loadLive = useCallback(async (signal) => {
     try {
@@ -175,6 +248,9 @@ export default function AdminAnalytics() {
 
   const totals = snapshot?.totals;
   const deltas = snapshot?.deltas || {};
+  /* Full skeletons only before the first payload; afterwards sections keep
+     showing their data with the header's refreshing indicator. */
+  const bootLoading = loading && !snapshot;
   const series = useMemo(() => snapshot?.series || [], [snapshot]);
   const commerce = snapshot?.commerce;
   const summary = commerce?.summary;
@@ -279,13 +355,13 @@ export default function AdminAnalytics() {
         controls={(
           <>
             <RangePicker range={range} onChange={setRange} disabled={loading} compact />
-            <button
-              type="button"
-              onClick={() => loadSnapshot({ silent: true })}
-              disabled={loading || refreshing}
-              className="ana-refresh"
-              title="Refresh analytics"
-            >
+              <button
+                type="button"
+                onClick={() => { snapshotCache.delete(query); loadSnapshot({ silent: true }); }}
+                disabled={loading || refreshing}
+                className="ana-refresh"
+                title="Refresh analytics"
+              >
               <span className={refreshing ? 'animate-spin inline-flex' : 'inline-flex'} aria-hidden="true"><RefreshCw size={13} /></span>
               <span>Refresh</span>
             </button>
@@ -318,8 +394,9 @@ export default function AdminAnalytics() {
             <div role="alert" className="ax-note" style={{ borderColor: 'var(--delta-down)' }}>
               <AlertTriangle aria-hidden="true" style={{ color: 'var(--delta-down)' }} />
               <div>
-                <p>{error}</p>
-                <button type="button" onClick={() => loadSnapshot()} className="mt-1 text-xs font-semibold underline" style={{ color: 'var(--maroon)' }}>Try again</button>
+                <p>Analytics couldn&apos;t be loaded.</p>
+                <p className="ax-note-sub">{error}</p>
+                <button type="button" onClick={() => { snapshotCache.delete(query); setError(''); loadSnapshot(); }} className="mt-1 text-xs font-semibold underline" style={{ color: 'var(--maroon)' }}>Retry</button>
               </div>
             </div>
           )}
@@ -329,21 +406,21 @@ export default function AdminAnalytics() {
               <AlertTriangle aria-hidden="true" style={{ color: 'var(--delta-down)' }} />
               <div>
                 <p>Order figures could not be read for this period. Traffic below is unaffected.</p>
-                <button type="button" onClick={() => loadSnapshot()} className="mt-1 text-xs font-semibold underline" style={{ color: 'var(--maroon)' }}>Try again</button>
+                <button type="button" onClick={() => { snapshotCache.delete(query); loadSnapshot(); }} className="mt-1 text-xs font-semibold underline" style={{ color: 'var(--maroon)' }}>Try again</button>
               </div>
             </div>
           )}
 
           {/* KPI panel */}
           <div className="ax-kpis" role="region" aria-label="Key metrics">
-            <AxKpiCell icon={IndianRupee} label="Total Revenue" value={summary?.revenue} delta={summary?.deltas.revenue} prefix="₹" sub="Cancelled orders excluded" spark={sparkFor('revenue')} sparkColor="#ec7049" loading={loading} />
-            <AxKpiCell icon={ShoppingCart} label="Orders" value={summary?.orders} delta={summary?.deltas.orders} spark={sparkFor('orders')} sparkColor="#ec7049" loading={loading} />
-            <AxKpiCell icon={Users} label="Customers" value={summary?.customers} delta={summary?.deltas.customers} sub="Distinct buyers" spark={customersSpark} sparkColor="#d2a64f" loading={loading} />
-            <AxKpiCell icon={Receipt} label="Average Order Value" value={summary?.avgOrderValue} delta={summary?.deltas.avgOrderValue} prefix="₹" loading={loading} />
-            <AxKpiCell icon={Package} label="Items Sold" value={summary?.itemsSold} delta={summary?.deltas.itemsSold} loading={loading} />
-            <AxKpiCell icon={Ban} label="Cancelled Orders" value={summary?.cancelled} sub="In this period" loading={loading} />
-            <AxKpiCell icon={RotateCcw} label="Refunds" statik="Not tracked" sub="No refund events recorded yet" loading={loading} />
-            <AxKpiCell icon={Percent} label="Conversion Rate" value={totals?.conversionRate} delta={deltas.conversionRate} suffix="%" decimals={1} sub="Orders per visit" loading={loading} dash={Boolean(snapshot) && (totals?.sessions ?? 0) === 0} />
+            <AxKpiCell icon={IndianRupee} label="Total Revenue" value={summary?.revenue} delta={summary?.deltas.revenue} prefix="₹" sub="Cancelled orders excluded" spark={sparkFor('revenue')} sparkColor="#ec7049" loading={bootLoading} />
+            <AxKpiCell icon={ShoppingCart} label="Orders" value={summary?.orders} delta={summary?.deltas.orders} spark={sparkFor('orders')} sparkColor="#ec7049" loading={bootLoading} />
+            <AxKpiCell icon={Users} label="Customers" value={summary?.customers} delta={summary?.deltas.customers} sub="Distinct buyers" spark={customersSpark} sparkColor="#d2a64f" loading={bootLoading} />
+            <AxKpiCell icon={Receipt} label="Average Order Value" value={summary?.avgOrderValue} delta={summary?.deltas.avgOrderValue} prefix="₹" loading={bootLoading} />
+            <AxKpiCell icon={Package} label="Items Sold" value={summary?.itemsSold} delta={summary?.deltas.itemsSold} loading={bootLoading} />
+            <AxKpiCell icon={Ban} label="Cancelled Orders" value={summary?.cancelled} sub="In this period" loading={bootLoading} />
+            <AxKpiCell icon={RotateCcw} label="Refunds" statik="Not tracked" sub="No refund events recorded yet" loading={bootLoading} />
+            <AxKpiCell icon={Percent} label="Conversion Rate" value={totals?.conversionRate} delta={deltas.conversionRate} suffix="%" decimals={1} sub="Orders per visit" loading={bootLoading} dash={Boolean(snapshot) && (totals?.sessions ?? 0) === 0} />
           </div>
 
           {/* Hero row */}
@@ -372,14 +449,14 @@ export default function AdminAnalytics() {
                   ...((revMode === 'both' || revMode === 'revenue') ? [{ label: 'Revenue (₹)', color: '#d2a64f' }] : []),
                 ]}
               />
-              {loading
+              {bootLoading
                 ? <Skeleton className="h-[300px] w-full" rounded="var(--r-md)" />
                 : (
                   <Suspense fallback={<Skeleton className="h-[300px] w-full" rounded="var(--r-md)" />}>
                     <DualTrendChart series={series} lines={salesLines} dualAxis={revMode === 'both'} viewH={360} />
                   </Suspense>
                 )}
-              {!loading && (summary?.orders ?? 0) === 0 && (
+              {!bootLoading && (summary?.orders ?? 0) === 0 && (
                 <p className="ax-zero">No data for this period.</p>
               )}
             </AxCard>
@@ -396,7 +473,7 @@ export default function AdminAnalytics() {
                 events={activity}
                 showAll={showAllActivity}
                 onToggle={() => setShowAllActivity((v) => !v)}
-                loading={loading || liveLoading}
+                loading={bootLoading || liveLoading}
               />
             </AxCard>
           </div>
@@ -409,10 +486,10 @@ export default function AdminAnalytics() {
               icon={Tag}
               sub={categoryFilter ? 'Filtering Top Products — click to clear.' : 'Click a category to filter Top Products.'}
             >
-              <AxCategory categories={categories} selected={categoryFilter} onSelect={setCategoryFilter} loading={loading} />
+              <AxCategory categories={categories} selected={categoryFilter} onSelect={setCategoryFilter} loading={bootLoading} />
             </AxCard>
             <AxCard className="ax-s5" title="Order Status" sub="Placed orders in this period.">
-              {loading ? <TableSkeleton rows={7} cols={1} label="Loading statuses" /> : <AxStatus statuses={commerce?.orderStatuses || []} loading={false} />}
+              {bootLoading ? <TableSkeleton rows={7} cols={1} label="Loading statuses" /> : <AxStatus statuses={commerce?.orderStatuses || []} loading={false} />}
             </AxCard>
           </div>
 
@@ -423,7 +500,7 @@ export default function AdminAnalytics() {
             icon={Package}
             action={<Link to="/products" className="ax-viewall" style={{ marginTop: 0 }}>View all<ArrowRight aria-hidden="true" /></Link>}
           >
-            {loading ? <TableSkeleton rows={6} cols={3} label="Loading best sellers" /> : filteredProducts.length === 0 ? (
+            {bootLoading ? <TableSkeleton rows={6} cols={3} label="Loading best sellers" /> : filteredProducts.length === 0 ? (
               <AxEmpty>{categoryFilter ? `No sales in ${categoryFilter} this period.` : 'No product sales in this period.'}</AxEmpty>
             ) : (
               <div className="ax-tablewrap">
@@ -458,7 +535,7 @@ export default function AdminAnalytics() {
           {/* Customers + insights */}
           <div className="ax-grid">
             <AxCard className="ax-s7" title="Top Customers" icon={Users} sub="By spend · contact details masked.">
-              {loading ? <TableSkeleton rows={4} cols={3} label="Loading customers" /> : (commerce?.topCustomers || []).length === 0 ? (
+              {bootLoading ? <TableSkeleton rows={4} cols={3} label="Loading customers" /> : (commerce?.topCustomers || []).length === 0 ? (
                 <AxEmpty>No customer orders in this period.</AxEmpty>
               ) : (
                 <div className="ax-tablewrap">
@@ -491,7 +568,7 @@ export default function AdminAnalytics() {
               )}
             </AxCard>
             <AxCard className="ax-s5" title="Business Insights" sub="Generated from live catalogue and order data.">
-              <AxInsights alerts={commerce?.alerts} loading={loading} />
+              <AxInsights alerts={commerce?.alerts} loading={bootLoading} />
             </AxCard>
           </div>
 
@@ -503,24 +580,24 @@ export default function AdminAnalytics() {
                 <li><span>Pageviews</span><strong>{nf.format(totals?.pageviews ?? 0)}</strong></li>
                 <li><span>Pages / visit</span><strong>{totals?.viewsPerSession ?? 0}</strong></li>
               </ul>
-              {loading
+              {bootLoading
                 ? <Skeleton className="h-[200px] w-full" rounded="var(--r-md)" />
                 : (
                   <Suspense fallback={<Skeleton className="h-[200px] w-full" rounded="var(--r-md)" />}>
                     <DualTrendChart series={series} lines={trafficLines} />
                   </Suspense>
                 )}
-              {!loading && (
+              {!bootLoading && (
                 <p className="ax-zero">New vs returning split is not tracked yet.</p>
               )}
             </AxCard>
             <AxCard className="ax-s5" title="Conversion Funnel" sub="Share carrying on from the step above.">
-              {loading ? <TableSkeleton rows={4} cols={1} label="Loading funnel" /> : (
+              {bootLoading ? <TableSkeleton rows={4} cols={1} label="Loading funnel" /> : (
                 <Suspense fallback={<TableSkeleton rows={4} cols={1} label="Loading funnel" />}>
                   <FunnelChart stages={funnelStages} />
                 </Suspense>
               )}
-              {!loading && !funnelTracked && (
+              {!bootLoading && !funnelTracked && (
                 <p className="ax-zero">Browser-event stages have no data yet. Orders (last step) are exact.</p>
               )}
             </AxCard>
@@ -545,17 +622,17 @@ export default function AdminAnalytics() {
           </div>
           <div className="ax-grid">
             <AxCard className="ax-s6" title="Most Visited Pages" icon={Eye} sub="Top routes this period.">
-              <AxRanked rows={pages} loading={loading} emptyText="No page data yet." />
+              <AxRanked rows={pages} loading={bootLoading} emptyText="No page data yet." />
             </AxCard>
             <AxCard className="ax-s6" title="How They Found The Shop" icon={Link2} sub="Grouped by referring host.">
-              <AxRanked rows={sources} loading={loading} emptyText="No referrer data — direct or hidden arrivals." />
+              <AxRanked rows={sources} loading={bootLoading} emptyText="No referrer data — direct or hidden arrivals." />
             </AxCard>
           </div>
 
           {/* Audience */}
           <div className="ax-grid">
             <AxCard className="ax-s4" title="Devices" icon={Monitor} sub="Visits by device.">
-              {loading
+              {bootLoading
                 ? <TableSkeleton rows={3} cols={2} label="Loading device split" />
                 : deviceTotal === 0
                   ? <AxEmpty>Device tracking unavailable for this period.</AxEmpty>
@@ -572,7 +649,7 @@ export default function AdminAnalytics() {
               sub={selectedCountryName ? `Filtered to ${selectedCountryName}.` : 'Rough indication from language and timezone.'}
               action={!geoEmpty && <AxCsv label="CSV" onClick={exportLocationCsv} />}
             >
-              {loading ? <TableSkeleton rows={5} cols={2} label="Loading locations" /> : geoEmpty ? (
+              {bootLoading ? <TableSkeleton rows={5} cols={2} label="Loading locations" /> : geoEmpty ? (
                 <AxEmpty>Location analytics not configured for this period.</AxEmpty>
               ) : (
                 <>
@@ -601,7 +678,7 @@ export default function AdminAnalytics() {
 
           {/* Heatmap */}
           <AxCard title="When People Browse" sub="Pageviews by weekday and visitor-local time.">
-            {loading ? <Skeleton className="h-[200px] w-full" rounded="var(--r-md)" /> : (
+            {bootLoading ? <Skeleton className="h-[200px] w-full" rounded="var(--r-md)" /> : (
               <div className="ax-heat">
                 <div className="ax-heat-scroll">
                   <Suspense fallback={<Skeleton className="h-[200px] w-full" rounded="var(--r-md)" />}>

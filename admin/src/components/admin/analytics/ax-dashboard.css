@@ -93,8 +93,44 @@
   letter-spacing: -0.015em;
   color: var(--text-strong);
   font-variant-numeric: tabular-nums;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: break-word;
 }
-.ax-kpi-sub { font-size: 12px; color: var(--text-subtle); }
+/* Value + sparkline share one row with its own baseline: supporting text
+   lives in .ax-kpi-foot below, never beside the large value. The row keeps
+   min-width discipline so long currency values wrap instead of running
+   into the neighbouring divider column. */
+.ax-kpi-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.ax-kpi-main > svg {
+  flex: none;
+  margin-left: auto;
+}
+/* Supporting rows stack under the value with their own small type — never
+   the value size, never sharing its baseline. */
+.ax-kpi-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  margin-top: 2px;
+  min-width: 0;
+  max-width: 100%;
+}
+.ax-kpi-sub {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-subtle);
+  overflow-wrap: break-word;
+  min-width: 0;
+  max-width: 100%;
+}
 
 /* ---- 12-column section grid ---- */
 .ax-grid {

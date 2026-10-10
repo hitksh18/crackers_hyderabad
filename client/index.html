@@ -6,8 +6,8 @@
     <link rel="apple-touch-icon" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
-    <title>Buy Firecrackers Online in Hyderabad | Crackers Hyderabad</title>
-    <meta name="description" content="Shop firecrackers online in Hyderabad at Crackers Hyderabad. Explore sparklers, flower pots, ground chakkars, rockets, fancy fireworks and more at great prices." />
+    <title>Firecrackers in Hyderabad | Buy Crackers Online | Crackers Hyderabad</title>
+    <meta name="description" content="Shop firecrackers and Diwali crackers online in Hyderabad. Explore sparklers, flower pots, rockets, ground chakkars, gift boxes and more at Crackers Hyderabad." />
     <meta name="keywords" content="crackers hyderabad, wholesale crackers, fireworks hyderabad, diwali crackers, sparklers, gift boxes, bulk crackers, festival fireworks" />
     <meta name="author" content="Crackers Hyderabad" />
     <!-- Kept media-free so the theme script below owns it; a media-scoped pair
@@ -28,18 +28,15 @@
       .hero-stage { min-height: 540px; background: #070505; }
     </style>
 
-    <!-- Resolve the theme before first paint so dark-mode visitors never see a
-         flash of the light palette. Must stay in step with src/contexts/ThemeContext.jsx. -->
+    <!-- Resolve the theme before first paint. The storefront is explicitly
+         the light/warm brand palette: an explicit stored choice wins,
+         otherwise light — the OS dark-mode preference is never followed.
+         Must stay in step with src/contexts/ThemeContext.jsx. -->
     <script>
       (function () {
         try {
           var stored = localStorage.getItem('theme');
-          var dark =
-            stored === 'dark' ||
-            stored === 'light'
-              ? stored === 'dark'
-              : window.matchMedia &&
-                window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var dark = stored === 'dark';
 
           if (dark) {
             document.documentElement.classList.add('dark');
@@ -55,15 +52,15 @@
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Crackers Hyderabad" />
-    <meta property="og:title" content="Buy Firecrackers Online in Hyderabad | Crackers Hyderabad" />
-    <meta property="og:description" content="Shop firecrackers online in Hyderabad at Crackers Hyderabad. Explore sparklers, flower pots, ground chakkars, rockets, fancy fireworks and more at great prices." />
+    <meta property="og:title" content="Firecrackers in Hyderabad | Buy Crackers Online | Crackers Hyderabad" />
+    <meta property="og:description" content="Shop firecrackers and Diwali crackers online in Hyderabad. Explore sparklers, flower pots, rockets, ground chakkars, gift boxes and more at Crackers Hyderabad." />
     <meta property="og:image" content="https://crackershyderabad.com/images/website/crackerhyderabadlogo.png" />
     <meta property="og:url" content="https://crackershyderabad.com/" />
     <meta property="og:locale" content="en_IN" />
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Buy Firecrackers Online in Hyderabad | Crackers Hyderabad" />
-    <meta name="twitter:description" content="Shop firecrackers online in Hyderabad at Crackers Hyderabad. Explore sparklers, flower pots, ground chakkars, rockets, fancy fireworks and more at great prices." />
+    <meta name="twitter:title" content="Firecrackers in Hyderabad | Buy Crackers Online | Crackers Hyderabad" />
+    <meta name="twitter:description" content="Shop firecrackers and Diwali crackers online in Hyderabad. Explore sparklers, flower pots, rockets, ground chakkars, gift boxes and more at Crackers Hyderabad." />
     <meta name="twitter:image" content="https://crackershyderabad.com/images/website/crackerhyderabadlogo.png" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />

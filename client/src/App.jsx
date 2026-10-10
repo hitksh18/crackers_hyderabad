@@ -110,6 +110,9 @@ function AppContent() {
       </a>
 
       <ScrollToTop />
+      {/* Festive ticker first (scrolls away), then the fixed navbar with its
+          own height spacer — the strip can never slide under or overlap
+          the bar. */}
       {!isLoginPage && showTopBanner && <TopBanner />}
       {!isLoginPage && (isCheckoutPage ? <CheckoutNavbar /> : isCartPage ? <CheckoutNavbar title="Shopping Cart" /> : <Navbar />)}
 

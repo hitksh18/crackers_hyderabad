@@ -70,6 +70,8 @@ const Navbar = () => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [logoUrl, setLogoUrl] = useState(DEFAULT_LOGO);
+  /* Compact solid treatment once the page scrolls (see nav-scrolled CSS). */
+  const [scrolled, setScrolled] = useState(false);
   const profileMenuRef = useRef(null);
   const navRef = useRef(null);
   const cartCount = getCartCount();
@@ -83,6 +85,37 @@ const Navbar = () => {
         link.href = s.branding.faviconUrl;
       }
     });
+  }, []);
+
+  /* Compact the bar once the page scrolls. Passive + rAF-throttled; the
+     state only flips at the threshold so renders stay cheap, while the
+     top offset writes straight to the DOM (no re-render per pixel). */
+  useEffect(() => {
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const y = window.scrollY;
+        setScrolled(y > 24);
+        /* Slide under the festive ticker at page top, pin to viewport top
+           once it scrolls off (TopBanner publishes --top-banner-h; 0 when
+           absent or disabled, so those pages are unaffected). */
+        const el = navRef.current;
+        if (!el) return;
+        const bannerH = Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue('--top-banner-h')
+        ) || 0;
+        const offset = Math.max(0, Math.round(bannerH - y));
+        el.style.top = offset > 0 ? `${offset}px` : '';
+      });
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, []);
 
   /* Publish the measured navbar height so sticky page content can clear it
@@ -182,7 +215,7 @@ const Navbar = () => {
     <>
       <nav
         ref={navRef}
-        className={`glass-nav sticky top-0 z-nav${pathname === '/' ? ' home-nav' : ''}`}
+        className={`glass-nav nav-fixed sticky top-0 z-nav${pathname === '/' ? ' home-nav' : ''}${scrolled ? ' nav-scrolled' : ''}`}
       >
         <span
           aria-hidden="true"
@@ -487,6 +520,10 @@ const Navbar = () => {
           </Suspense>
         </div>
       </nav>
+
+      {/* Spacer reserving the fixed bar's height (published via --nav-h), so
+          pinning the bar never shifts page content. */}
+      <div aria-hidden="true" style={{ height: 'var(--nav-h, 72px)' }} />
 
       <AnimatePresence>
         {mobileMenuOpen && (
