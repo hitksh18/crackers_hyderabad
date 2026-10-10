@@ -4,6 +4,7 @@ import { db } from '../firebase';
 import { cachedGetDocs } from '../lib/firestoreCache';
 import { useAuth } from './AuthContext';
 import { trackFunnel } from '../utils/siteTracker';
+import { trackAddToCart, trackRemoveFromCart } from '../lib/ga4';
 import toast from '../utils/toast';
 
 const couponDroppedNotice = () => {
@@ -54,6 +55,10 @@ export const CartProvider = ({ children }) => {
   const [cartNotice, setCartNotice] = useState(null);
   const [hydrated, setHydrated] = useState(false);
   const storageKeyRef = useRef(storageKey);
+  /* Live mirror for analytics lookups: removeFromCart only receives an id,
+     so the removed item's details come from here. Updated every render. */
+  const cartRef = useRef(cart);
+  cartRef.current = cart;
 
   const notifyCart = (message) => {
     setCartNotice({ message, id: Date.now() });
@@ -155,11 +160,16 @@ export const CartProvider = ({ children }) => {
     // The one funnel step no URL implies. Fire-and-forget, outside the state
     // update so a blocked beacon can never stop a product reaching the cart.
     trackFunnel('addToCart');
+    // GA4 ecommerce (separate system, same user action). Never throws, and a
+    // missing measurement id makes it a silent no-op.
+    trackAddToCart(product, quantity);
   }, []);
 
   const removeFromCart = useCallback((productId) => {
+    const removed = cartRef.current.find((item) => item && item.id === productId);
     setCart((prev) => prev.filter((item) => item.id !== productId));
     notifyCart('Product removed from cart');
+    if (removed) trackRemoveFromCart(removed, removed.quantity);
   }, []);
 
   const updateQuantity = useCallback((productId, quantity) => {

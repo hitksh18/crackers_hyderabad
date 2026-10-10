@@ -782,3 +782,107 @@
   overflow: hidden;
   min-height: 120px;
 }
+
+/* ================= HOMEPAGE SEO GUIDE PREVIEW =================
+   Mirror of the storefront .seo-* block (client/src/index.css) so the
+   Canvas live preview renders the same component with the same look.
+   The component JSX is shared (mirrored file); keep this block in sync
+   with the client copy when either changes. */
+.seo-guide {
+  padding: clamp(28px, 4vw, 60px) clamp(20px, 4vw, 64px);
+}
+.seo-guide-eyebrow {
+  display: flex;
+  justify-content: center;
+}
+.seo-guide-title {
+  text-align: center;
+  margin-top: 14px;
+  color: var(--text-strong);
+}
+.seo-guide-copy {
+  max-width: 1280px;
+  margin: 28px auto 0;
+  display: grid;
+  gap: 16px;
+}
+.seo-guide-copy p {
+  font-size: 1rem;
+  line-height: 1.8;
+  color: var(--text-muted);
+  text-align: justify;
+}
+.seo-guide-sub {
+  display: flex;
+  justify-content: center;
+  margin-top: 48px;
+}
+.seo-cat-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 24px;
+}
+.seo-cat-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 12px 16px;
+  background: var(--surface-raised);
+  border: 1px solid rgba(210, 166, 79, 0.28);
+  border-radius: 16px;
+  color: var(--text-strong);
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+.seo-cat-box:hover {
+  transform: translateY(-2px);
+  border-color: rgba(210, 166, 79, 0.55);
+  box-shadow: 0 10px 28px rgba(195, 58, 20, 0.14), 0 4px 14px rgba(210, 166, 79, 0.12);
+}
+.seo-cat-icon {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: block;
+}
+.seo-cat-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+.seo-cat-arrow {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--gold-400);
+  transition: transform 180ms ease;
+}
+.seo-cat-box:hover .seo-cat-arrow {
+  transform: translateX(3px);
+}
+.seo-faq-title {
+  margin-top: 64px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.seo-faq-list {
+  margin-top: 16px;
+  border-top: 1px solid var(--hairline);
+}
+@media (min-width: 560px) {
+  .seo-cat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .seo-cat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 639px) {
+  .seo-guide-copy p {
+    font-size: 0.9375rem;
+    text-align: left;
+  }
+  .seo-faq-title { margin-top: 48px; }
+}

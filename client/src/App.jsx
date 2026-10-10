@@ -16,6 +16,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { useReducedMotion } from './hooks/useReducedMotion';
 import { pageVariants } from './lib/motion';
 import { trackPageview as trackGaPageview } from './lib/analytics';
+import { initGA4 } from './lib/ga4';
 import { ProductGridSkeleton } from './components/ui/Skeleton';
 import { trackPageview } from './utils/siteTracker';
 
@@ -63,13 +64,19 @@ function AppContent() {
 
   /* Two independent pageview channels, deliberately not merged.
 
-     GA4 skips the initial load because gtag('config') in index.html has
-     already reported it, and it follows the search string because Google's
-     reports treat ?query as part of the page. The first-party tracker does
-     neither: it must see the landing page (that hit carries the session's
-     referrer) and it keys aggregates by path alone, so a query string cannot
-     split one page across many rows. */
+     GA4 skips the initial load because the single gtag('config') issued by
+     initGA4() below has already reported it, and it follows the search
+     string because Google's reports treat ?query as part of the page. The
+     first-party tracker does neither: it must see the landing page (that
+     hit carries the session's referrer) and it keys aggregates by path
+     alone, so a query string cannot split one page across many rows. */
   const firstRouteLoad = useRef(true);
+  /* Single GA4 property (VITE_GA_MEASUREMENT_ID). initGA4 is module-guarded:
+     re-entry across StrictMode remounts is a no-op, and a missing id leaves
+     the shop exactly as before. */
+  useEffect(() => {
+    initGA4();
+  }, []);
   useEffect(() => {
     if (firstRouteLoad.current) {
       firstRouteLoad.current = false;

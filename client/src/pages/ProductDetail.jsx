@@ -25,6 +25,7 @@ import { modalVariants, revealVariants, staggerParent } from '../lib/motion';
 import { inr } from '../lib/currency';
 import { productPath, slugify } from '../lib/productLinks';
 import { trackProductEvent } from '../lib/analytics';
+import { trackViewItem } from '../lib/ga4';
 import Seo, { SITE_URL } from '../components/Seo';
 import toast from '../utils/toast';
 
@@ -145,6 +146,10 @@ const ProductDetail = () => {
             productData.category ||
             null,
         });
+
+        // GA4 view_item for the second property. Deduped inside the helper so
+        // StrictMode remounts cannot double-count the same product view.
+        trackViewItem(productData);
 
         // Related-products + brand lookups reuse the shared 60s catalogue
         // cache (same download Home and /products already made) instead of

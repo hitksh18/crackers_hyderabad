@@ -12,92 +12,73 @@ export const useTheme = () => {
   return context;
 };
 
-const readStoredChoice = () => {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored === 'dark' || stored === 'light' ? stored : null;
-  } catch {
-    return null;
-  }
-};
-
-/** Storefront default: light. An explicit stored choice is honoured. */
-
 /**
- * Storefront theme: explicitly LIGHT/WARM always.
+ * Storefront theme: DARK ONLY.
  *
- * The Crackers Hyderabad shop is a light-brand experience (cream surfaces,
- * maroon festival accents) — it must never flip to the near-black `.dark`
- * palette just because the operating system is in dark mode. An explicit
- * stored choice is still honoured, but the OS is never followed.
+ * The Crackers Hyderabad shop is a dark premium fireworks experience. There
+ * is no light theme, no system-theme following, and no theme switching: the
+ * `dark` class is always applied, a stale `localStorage` light choice is
+ * discarded, and the OS/browser appearance has zero effect. The provider API
+ * is kept (mounted by App.jsx) so no consumer or future import breaks, but
+ * every path resolves to dark.
  * (Admin is a separate app with its own theme behaviour — untouched.)
  */
-const resolveInitial = () => {
-  const stored = readStoredChoice();
-  if (stored) return stored === 'dark';
-  return false;
-};
-
-const applyTheme = (dark) => {
+const applyDarkTheme = () => {
+  if (typeof document === 'undefined') return;
   const root = document.documentElement;
-  root.classList.toggle('dark', dark);
-  root.style.colorScheme = dark ? 'dark' : 'light';
+  root.classList.add('dark');
+  root.style.colorScheme = 'dark';
 
   // Keep the mobile browser chrome in step with the page.
   const meta = document.querySelector('meta[name="theme-color"]:not([media])');
-  if (meta) meta.setAttribute('content', dark ? '#14100E' : '#761713');
+  if (meta) meta.setAttribute('content', '#14100E');
+
+  // Discard an old stored preference (e.g. theme=light from a previous
+  // build). Only this key is touched — cart, auth and app data are never
+  // cleared here.
+  try {
+    if (localStorage.getItem(STORAGE_KEY) !== null) {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  } catch {
+    // The preference simply will not persist if storage is unavailable.
+  }
 };
 
-const initialDark = resolveInitial();
-applyTheme(initialDark);
+applyDarkTheme();
 
 export const ThemeProvider = ({ children }) => {
-  const [isDark, setIsDark] = useState(initialDark);
-  // Kept for API compatibility; nothing in the storefront reads it to
-  // follow the OS anymore (see resolveInitial above).
-  const [choice, setChoice] = useState(readStoredChoice);
+  const [isDark] = useState(true);
 
   useEffect(() => {
-    applyTheme(isDark);
-  }, [isDark]);
+    applyDarkTheme();
+  }, []);
 
-  const setTheme = useCallback((next) => {
-    const dark = next === 'dark';
-    setIsDark(dark);
-    setChoice(next);
-    try {
-      localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      // The preference simply will not persist if storage is unavailable.
-    }
+  /* Kept for API compatibility — dark is the only theme, so these pin it. */
+  const setTheme = useCallback(() => {
+    applyDarkTheme();
   }, []);
 
   const toggleTheme = useCallback(() => {
-    setTheme(isDark ? 'light' : 'dark');
-  }, [isDark, setTheme]);
+    applyDarkTheme();
+  }, []);
 
-  /** Reset to the storefront default (light brand palette). */
+  /** Already dark — just re-applies it. */
   const useSystemTheme = useCallback(() => {
-    setChoice(null);
-    setIsDark(false);
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // Nothing to clean up if storage is unavailable.
-    }
+    applyDarkTheme();
   }, []);
 
   const value = useMemo(
     () => ({
       isDark,
-      theme: isDark ? 'dark' : 'light',
-      /** True while the theme tracks the OS rather than an explicit pick. */
-      followsSystem: choice === null,
+      theme: 'dark',
+      /** The storefront never tracks the OS theme. */
+      followsSystem: false,
       toggleTheme,
       setTheme,
       useSystemTheme,
     }),
-    [isDark, choice, toggleTheme, setTheme, useSystemTheme]
+    [isDark, toggleTheme, setTheme, useSystemTheme]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

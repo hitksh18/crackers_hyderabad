@@ -16,6 +16,7 @@ import Seo from '../components/Seo';
 import toast from '../utils/toast';
 import { PRODUCT_CATEGORIES, isProductInCategory, resolveCategory, categoryDisplayName } from '../config/categories';
 import { readCategoryShowcaseConfig, applyShowcaseOrder } from '../lib/categoryShowcase';
+import { trackSearch } from '../lib/ga4';
 
 /* Categories come from the single source of truth (config/categories.js),
    ordered by the canonical Canvas showcase config (settings/categoryShowcase)
@@ -198,6 +199,10 @@ const Products = () => {
     const qParam = searchParams.get('q');
     if (qParam) {
       setSearchTerm(qParam);
+      // GA4 search: the ?q= navigation IS the submitted search (navbar +
+      // mobile overlay both navigate on submit). Deduped inside the helper
+      // so StrictMode remounts send it once.
+      trackSearch(qParam);
     }
   }, [searchParams]);
 

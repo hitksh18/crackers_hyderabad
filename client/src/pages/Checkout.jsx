@@ -16,6 +16,7 @@ import { revealVariants } from '../lib/motion';
 import { inr } from '../lib/currency';
 import { MINIMUM_ORDER_VALUE } from '../lib/orderThresholds';
 import { normaliseCoords } from '../utils/deliveryLocation';
+import { trackBeginCheckout, trackPurchase, toGAItem } from '../lib/ga4';
 import Seo from '../components/Seo';
 
 const unitPriceOf = (item) => item.discountPrice || item.onlinePrice || item.price || 0;
@@ -426,6 +427,10 @@ const Checkout = () => {
     }
 
     setPlaceError('');
+    /* GA4 begin_checkout: details validated, customer reached the review step.
+       Items + live total only — no customer/contact fields. The helper
+       dedupes rapid re-opens of the dialog. */
+    trackBeginCheckout(cart, getCartTotal());
     setShowConfirm(true);
   };
 
@@ -500,6 +505,20 @@ const Checkout = () => {
       }
 
       const { orderId, shortCode, total, itemCount, notifyToken } = result;
+
+      /* GA4 purchase — fires HERE, not on the order-success page, because this
+         is the only moment with both the server-confirmed order AND the full
+         cart line items (name/category/price/qty). Refreshing /order-success
+         later cannot re-fire: this code runs once per created order, and the
+         helper additionally guards per transaction_id. Value is the server's
+         final total. No customer, contact, payment or address data is sent. */
+      if (orderId) {
+        trackPurchase({
+          transactionId: orderId,
+          value: total,
+          items: cart.map((item) => toGAItem(item, item.quantity)),
+        });
+      }
 
       orderPlacedRef.current = true;
       clearCart();
@@ -1231,7 +1250,6 @@ const Checkout = () => {
               sameAsBilling={false}
               paymentMethod={paymentMethod}
               total={coupon ? coupon.total : getCartTotal()}
-              subtotal={coupon ? coupon.subtotal : getCartTotal()}
               subtotal={coupon ? coupon.subtotal : getCartTotal()}
               coupon={coupon || null}
               minimumValue={minimumValue}

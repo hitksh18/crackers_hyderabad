@@ -431,3 +431,42 @@ export function TrustModal({ title, initial, onSave, onClose }) {
     </div>
   );
 }
+
+const EMPTY_FAQ = { q: '', a: '' };
+
+/** Homepage SEO-guide FAQ editor modal (stored on the seoGuide builder section config). */
+export function FaqModal({ title, initial, onSave, onClose }) {
+  const [form, setForm] = useState({ ...EMPTY_FAQ, ...(initial || {}) });
+  const [error, setError] = useState('');
+  const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+
+  const save = () => {
+    if (!String(form.q || '').trim() || !String(form.a || '').trim()) {
+      setError('Give the entry a question and an answer first.');
+      return;
+    }
+    onSave({ q: String(form.q).trim(), a: String(form.a).trim() });
+  };
+
+  return (
+    <div className="cv-modal-veil" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="cv-modal" role="dialog" aria-modal="true" aria-label={title}>
+        <h3>{title}</h3>
+        <div style={{ height: 12 }} />
+        <Field label="Question">
+          <input className="cv-input" value={form.q} onChange={(e) => set({ q: e.target.value })} placeholder="Where can I buy firecrackers in Hyderabad?" />
+        </Field>
+        <Field label="Answer">
+          <textarea className="cv-textarea" rows={3} value={form.a} onChange={(e) => set({ a: e.target.value })} placeholder="Short, factual answer shown under the question" />
+        </Field>
+        {error && <p className="cv-error">{error}</p>}
+        <div className="cv-modal-actions">
+          <button type="button" className="cv-btn" onClick={onClose}>Cancel</button>
+          <button type="button" className="cv-btn cv-btn-primary" onClick={save}>
+            Save Entry
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

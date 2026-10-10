@@ -10,43 +10,38 @@
     <meta name="description" content="Shop firecrackers and Diwali crackers online in Hyderabad. Explore sparklers, flower pots, rockets, ground chakkars, gift boxes and more at Crackers Hyderabad." />
     <meta name="keywords" content="crackers hyderabad, wholesale crackers, fireworks hyderabad, diwali crackers, sparklers, gift boxes, bulk crackers, festival fireworks" />
     <meta name="author" content="Crackers Hyderabad" />
-    <!-- Kept media-free so the theme script below owns it; a media-scoped pair
-         would follow the OS and contradict an explicit user choice. -->
-    <meta name="theme-color" content="#761713" />
-    <meta name="color-scheme" content="light dark" />
+    <!-- Kept media-free so the browser chrome never follows the OS into a
+         light scheme that contradicts the dark-only storefront. -->
+    <meta name="theme-color" content="#14100E" />
+    <meta name="color-scheme" content="dark" />
     <meta name="robots" content="index, follow" />
 
     <!-- Critical first-paint shell: paints before React, Firebase, fonts or
          product data arrive, and reserves the hero height so the first
-         contentful paint does not shift layout. The base matches the light
-         default; the theme script below flips it to dark before paint when
-         the resolved theme is dark. -->
+         contentful paint does not shift layout. The storefront is dark-only,
+         so the base is the dark surface — the page never flashes light. -->
     <style>
-      html, body { margin: 0; padding: 0; background: #FDF9F0; }
-      html.dark, html.dark body { background: #14100E; }
+      html, body { margin: 0; padding: 0; background: #14100E; }
       #root { min-height: 100svh; }
       .hero-stage { min-height: 540px; background: #070505; }
     </style>
 
-    <!-- Resolve the theme before first paint. The storefront is explicitly
-         the light/warm brand palette: an explicit stored choice wins,
-         otherwise light — the OS dark-mode preference is never followed.
+    <!-- Dark-only guarantee, resolved before first paint. The `dark` class is
+         always applied synchronously here (and re-applied by ThemeContext):
+         the OS appearance and any stale stored light choice are ignored, so
+         there is no light-theme flash — not even for one frame.
          Must stay in step with src/contexts/ThemeContext.jsx. -->
     <script>
       (function () {
         try {
-          var stored = localStorage.getItem('theme');
-          var dark = stored === 'dark';
-
-          if (dark) {
-            document.documentElement.classList.add('dark');
-            document.documentElement.style.colorScheme = 'dark';
-            var meta = document.querySelector('meta[name="theme-color"]');
-            if (meta) meta.setAttribute('content', '#14100E');
-          }
+          localStorage.removeItem('theme');
         } catch (e) {
-          /* Storage blocked — fall through to the light default. */
+          /* Storage blocked — the dark default still applies. */
         }
+        document.documentElement.classList.add('dark');
+        document.documentElement.style.colorScheme = 'dark';
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', '#14100E');
       })();
     </script>
 
@@ -125,14 +120,15 @@
       }
     </script>
 
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-7TK5B2S0WS"></script>
+    <!-- Google tag (gtag.js) — single loader, single property. The property
+         itself is configured exactly once from JS (lib/ga4.js initGA4) using
+         VITE_GA_MEASUREMENT_ID, so there is exactly one gtag('config') on
+         the page. This stub only queues commands until the library loads. -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-M6GVVQSN7T"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-
-      gtag('config', 'G-7TK5B2S0WS');
     </script>
   </head>
   <body>

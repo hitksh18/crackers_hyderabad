@@ -40,39 +40,36 @@
   --crimson-600: #CB2A2A;
   --leaf-600: #2C7A53;
 
-  /* Period-over-period movement on the analytics dashboard. Separate tokens
-     rather than reusing leaf/crimson directly, because these two need to stay
-     legible on the dark surface and the brand scales are fixed hexes. */
-  --delta-up: #2C7A53;
-  --delta-down: #CB2A2A;
-  --delta-flat: #8B8377;
+  /* Period-over-period movement. Lightened to stay legible on the dark
+     storefront surface; the brand scales below are fixed hexes. */
+  --delta-up: #4FB483;
+  --delta-down: #F2716B;
+  --delta-flat: #A79E92;
 
-  /* ---- Surfaces ---- */
-  --surface-page: #FDF9F0;
-  --surface-card: #FFFFFF;
-  --surface-raised: #FFFDF8;
-  --surface-sunken: #F9F1E3;
-  --surface-inverse: #1A1714;
-  --hairline: #EFE3CE;
-  --hairline-strong: #E2D2B7;
+  /* ---- Surfaces (dark storefront base) ---- */
+  --surface-page: #14100E;
+  --surface-card: #1E1815;
+  --surface-raised: #251E1A;
+  --surface-sunken: #17120F;
+  --surface-inverse: #FDF9F0;
+  --hairline: rgba(237, 231, 223, 0.10);
+  --hairline-strong: rgba(237, 231, 223, 0.18);
 
-  /* ---- Glass surfaces. Layered translucent fills + top-light + hairline so
-     the effect reads "premium glass" even where backdrop-filter is unsupported
-     or disabled. Readability always wins over glassiness. ---- */
-  --glass-fill: linear-gradient(152deg, rgba(255, 253, 248, 0.82) 0%, rgba(249, 241, 227, 0.6) 100%);
-  --glass-fill-strong: linear-gradient(160deg, rgba(255, 253, 248, 0.94) 0%, rgba(253, 249, 240, 0.86) 100%);
-  --glass-fill-nav: linear-gradient(180deg, rgba(253, 249, 240, 0.9) 0%, rgba(255, 253, 248, 0.72) 100%);
-  --glass-fill-soft: linear-gradient(152deg, rgba(255, 253, 248, 0.66) 0%, rgba(249, 241, 227, 0.42) 100%);
+  /* ---- Glass surfaces (dark-tinted fills) ---- */
+  --glass-fill: linear-gradient(152deg, rgba(37, 30, 26, 0.8) 0%, rgba(30, 24, 21, 0.55) 100%);
+  --glass-fill-strong: linear-gradient(160deg, rgba(37, 30, 26, 0.94) 0%, rgba(28, 22, 19, 0.88) 100%);
+  --glass-fill-nav: linear-gradient(180deg, rgba(20, 16, 14, 0.92) 0%, rgba(30, 24, 21, 0.72) 100%);
+  --glass-fill-soft: linear-gradient(152deg, rgba(37, 30, 26, 0.66) 0%, rgba(30, 24, 21, 0.4) 100%);
   --glass-blur: blur(20px) saturate(150%);
   --glass-blur-strong: blur(28px) saturate(165%);
   --glass-blur-soft: blur(14px) saturate(140%);
-  --glass-toplight: inset 0 1px 0 rgba(255, 255, 255, 0.85);
-  --glass-toplight-soft: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  --glass-toplight: inset 0 1px 0 rgba(237, 231, 223, 0.12);
+  --glass-toplight-soft: inset 0 1px 0 rgba(237, 231, 223, 0.08);
 
-  /* ---- Text ---- */
-  --text-strong: #1A1714;
-  --text-body: #433E37;
-  --text-muted: #6B6459;
+  /* ---- Text (cream/off-white on the dark storefront) ---- */
+  --text-strong: #F2ECE3;
+  --text-body: #D6CEC3;
+  --text-muted: #A79E92;
   --text-subtle: #8B8377;
   --text-on-dark: #EDE7DF;
   --white-soft: #FFFFFF;
@@ -118,15 +115,18 @@
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
   /* ---- Legacy variable names still referenced by components ---- */
-  --maroon: #C33A14;
-  --cream: #FDF9F0;
-  --muted: #6B6459;
-  --avatar-bg: #F9F1E3;
-  --avatar-icon: #6B6459;
-  --avatar-border: #EFE3CE;
-  --card-bg: #FFFFFF;
+  --maroon: #EC7049;
+  --cream: rgba(237, 231, 223, 0.06);
+  --muted: #A79E92;
+  --avatar-bg: rgba(237, 231, 223, 0.09);
+  --avatar-icon: #D6CEC3;
+  --avatar-border: rgba(237, 231, 223, 0.16);
+  --card-bg: #1E1815;
 }
 
+/* The storefront is dark-only: <html class="dark"> is always present (see
+   index.html + ThemeContext). This block mirrors the base palette above so
+   every `.dark`-scoped rule keeps resolving to the intended dark values. */
 .dark {
   --surface-page: #14100E;
   --surface-card: #1E1815;
@@ -135,22 +135,17 @@
   --surface-inverse: #FDF9F0;
   --hairline: rgba(237, 231, 223, 0.10);
   --hairline-strong: rgba(237, 231, 223, 0.18);
-
-  /* Dark glass — deeper, cooler-tinted fills so translucency still reads
-     against the near-black page without washing out. */
   --glass-fill: linear-gradient(152deg, rgba(37, 30, 26, 0.8) 0%, rgba(30, 24, 21, 0.55) 100%);
   --glass-fill-strong: linear-gradient(160deg, rgba(37, 30, 26, 0.94) 0%, rgba(28, 22, 19, 0.88) 100%);
   --glass-fill-nav: linear-gradient(180deg, rgba(20, 16, 14, 0.92) 0%, rgba(30, 24, 21, 0.72) 100%);
   --glass-fill-soft: linear-gradient(152deg, rgba(37, 30, 26, 0.66) 0%, rgba(30, 24, 21, 0.4) 100%);
   --glass-toplight: inset 0 1px 0 rgba(237, 231, 223, 0.12);
   --glass-toplight-soft: inset 0 1px 0 rgba(237, 231, 223, 0.08);
-
   --text-strong: #F2ECE3;
   --text-body: #D6CEC3;
   --text-muted: #A79E92;
   --text-subtle: #8B8377;
   --white-soft: #FFFFFF;
-
   --maroon: #EC7049;
   --cream: rgba(237, 231, 223, 0.06);
   --muted: #A79E92;
@@ -158,9 +153,6 @@
   --avatar-icon: #D6CEC3;
   --avatar-border: rgba(237, 231, 223, 0.16);
   --card-bg: #1E1815;
-
-  /* Lifted well clear of the dark surface — the light-mode green and red both
-     read as near-black against #14100E. */
   --delta-up: #4FB483;
   --delta-down: #F2716B;
   --delta-flat: #A79E92;
@@ -182,9 +174,7 @@ html {
   -webkit-text-size-adjust: 100%;
   max-width: 100%;
   overflow-x: clip;
-}
-
-html.dark {
+  /* Dark-only storefront — the OS appearance is never followed. */
   color-scheme: dark;
 }
 
@@ -223,33 +213,16 @@ body::after {
 
 body::before {
   background:
-    radial-gradient(40% 44% at 10% 16%, rgba(195, 58, 20, 0.10) 0%, transparent 100%),
-    radial-gradient(34% 38% at 90% 8%, rgba(210, 166, 79, 0.14) 0%, transparent 100%),
-    radial-gradient(42% 46% at 82% 86%, rgba(118, 23, 19, 0.08) 0%, transparent 100%),
-    radial-gradient(30% 32% at 16% 90%, rgba(247, 174, 44, 0.09) 0%, transparent 100%);
-  animation: ember-drift 32s ease-in-out infinite alternate;
-}
-
-body::after {
-  opacity: 0.5;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
-}
-
-.dark body::before {
-  background:
     radial-gradient(40% 44% at 10% 16%, rgba(195, 58, 20, 0.16) 0%, transparent 100%),
     radial-gradient(34% 38% at 90% 8%, rgba(210, 166, 79, 0.09) 0%, transparent 100%),
     radial-gradient(42% 46% at 82% 86%, rgba(58, 11, 12, 0.40) 0%, transparent 100%),
     radial-gradient(30% 32% at 16% 90%, rgba(247, 174, 44, 0.07) 0%, transparent 100%);
+  animation: ember-drift 32s ease-in-out infinite alternate;
 }
 
-.dark body::after {
+body::after {
   opacity: 0.35;
-}
-
-@keyframes ember-drift {
-  0% { transform: translate3d(0, 0, 0) scale(1); }
-  100% { transform: translate3d(3%, -2.5%, 0) scale(1.1); }
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
 }
 
 ::selection {
@@ -262,6 +235,11 @@ body::after {
   color: #FFFFFF;
 }
 
+@keyframes ember-drift {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  100% { transform: translate3d(3%, -2.5%, 0) scale(1.1); }
+}
+
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: var(--surface-sunken); }
 ::-webkit-scrollbar-thumb {
@@ -271,10 +249,6 @@ body::after {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, #A8865C, #8A6A44);
-}
-.dark ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, rgba(148, 37, 31, 0.9), rgba(58, 11, 12, 0.95));
-  border-color: rgba(237, 231, 223, 0.05);
 }
 
 /* Public homepage only (.route-home is toggled on <html> by Home.jsx while
@@ -901,7 +875,7 @@ img {
   }
 }
 
-/* Homepage-only: the header continues the dark hero field instead of reading
+/* Homepage: the header continues the dark hero field instead of reading
    as a floating light card. All other routes keep the regular glass nav. */
 .home-nav {
   background: linear-gradient(180deg, #120908 0%, #0b0606 100%);
@@ -2240,7 +2214,7 @@ img {
    in its own top-layer popup, so it cannot be clipped by a scrolling parent and
    cannot overflow the viewport on a phone. `position/z-index` are here so the
    focus ring is never overlapped by a card, not to layer the list.
-   `color-scheme` keeps that native popup dark instead of a white OS sheet. */
+   `color-scheme` keeps that native popup on the dark sheet. */
 .sort-select {
   appearance: none;
   -webkit-appearance: none;
@@ -2255,7 +2229,7 @@ img {
   font-family: var(--font-body);
   color: var(--text-strong);
   cursor: pointer;
-  color-scheme: light;
+  color-scheme: dark;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B6459' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.6rem center;
@@ -2263,10 +2237,6 @@ img {
   max-width: 100%;
   box-shadow: var(--shadow-xs);
   transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
-}
-
-.dark .sort-select {
-  color-scheme: dark;
 }
 
 .sort-select:hover {
@@ -2929,6 +2899,112 @@ img {
   .mobile-admin-reorder { display: none !important; }
 }
 
+/* =========================================================================
+   HOMEPAGE SEO GUIDE ("Firecrackers in Hyderabad") — full-width dark
+   branded panel just above the footer. Editorial intro, all 12 canonical
+   categories as clickable boxes (same data/icons/routes as the Products
+   pills), and the crawlable FAQ accordion. Static content: no requests,
+   no effects, stable dimensions from first render.
+   ========================================================================= */
+.seo-guide {
+  padding: clamp(28px, 4vw, 60px) clamp(20px, 4vw, 64px);
+}
+.seo-guide-eyebrow {
+  display: flex;
+  justify-content: center;
+}
+.seo-guide-title {
+  text-align: center;
+  margin-top: 14px;
+  color: var(--text-strong);
+}
+.seo-guide-copy {
+  max-width: 1280px;
+  margin: 28px auto 0;
+  display: grid;
+  gap: 16px;
+}
+.seo-guide-copy p {
+  font-size: 1rem;
+  line-height: 1.8;
+  color: var(--text-muted);
+  text-align: justify;
+}
+.seo-guide-sub {
+  display: flex;
+  justify-content: center;
+  margin-top: 48px;
+}
+.seo-cat-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 24px;
+}
+.seo-cat-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 12px 16px;
+  background: var(--surface-raised);
+  border: 1px solid rgba(210, 166, 79, 0.28);
+  border-radius: 16px;
+  color: var(--text-strong);
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+.seo-cat-box:hover {
+  transform: translateY(-2px);
+  border-color: rgba(210, 166, 79, 0.55);
+  box-shadow: 0 10px 28px rgba(195, 58, 20, 0.14), 0 4px 14px rgba(210, 166, 79, 0.12);
+}
+.seo-cat-icon {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: block;
+}
+.seo-cat-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+.seo-cat-arrow {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--gold-400);
+  transition: transform 180ms ease;
+}
+.seo-cat-box:hover .seo-cat-arrow {
+  transform: translateX(3px);
+}
+.seo-faq-title {
+  margin-top: 64px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.seo-faq-list {
+  margin-top: 16px;
+  border-top: 1px solid var(--hairline);
+}
+@media (min-width: 560px) {
+  .seo-cat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .seo-cat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 639px) {
+  .seo-guide-copy p {
+    font-size: 0.9375rem;
+    text-align: left;
+  }
+  .seo-faq-title { margin-top: 48px; }
+}
+
 /* Print — price lists and invoices must come out clean. */
 @media print {
   body::before,
@@ -3428,9 +3504,9 @@ img {
 
 /* =========================================================================
    PRODUCT CATALOGUE WARMTH — scoped to product display only.
-   Light theme keeps its original cream surfaces; these rules add festive
-   depth in dark mode plus a faint ambient wash behind the catalogue shell
-   in both themes. No global backgrounds or tokens are altered here.
+   These rules add festive depth on the dark storefront plus a faint ambient
+   wash behind the catalogue shell. No global backgrounds or tokens are
+   altered here.
    ========================================================================= */
 .shell.products-page {
   background-image: radial-gradient(
@@ -3447,8 +3523,8 @@ img {
    "More Like This" -> the site copyright strip.
 
    Every rule is scoped to .pd-* and reads from the shared design tokens, so
-   the page inherits the black/brown dark theme and the cream light theme
-   without a second set of colours, and no palette value is altered here.
+   the page inherits the dark storefront theme without a second set of
+   colours, and no palette value is altered here.
 
    Spacing is a fixed scale, not a mood: 22px from the navbar, 10-22px inside
    the buy column, then 28-40px between the full-width sections. Nothing

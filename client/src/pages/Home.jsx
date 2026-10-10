@@ -24,6 +24,8 @@ const NewsletterBlock = lazy(() => import('../components/home/NewsletterBlock'))
 const TrackOrderBlock = lazy(() => import('../components/home/TrackOrderBlock'));
 const Footer = lazy(() => import('../components/Footer'));
 import { categoryDefs } from '../components/home/homeData';
+import SeoGuideSection from '../components/home/SeoGuideSection';
+import { resolveSeoGuide, SEO_GUIDE_TYPE } from '../lib/seoGuide';
 
 import { useHomepageSettings } from '../hooks/useHomepageSettings';
 import { readHomepageConfig, DEFAULT_HERO_BANNERS, DEFAULT_PROMO_CARDS } from '../lib/homepage';
@@ -68,91 +70,6 @@ const SEO_CATEGORY_LINKS = SEO_LINK_SLUGS.map((slug) => {
   const def = (categoryDefs || []).find((c) => c.slug === slug);
   return def ? { label: def.name, value: def.link } : null;
 }).filter(Boolean);
-
-/* Default companion copy (short, keyword-natural). When the admin customized
-   the SEO content, its first paragraph stands in instead — the field stays
-   meaningful without ever rendering the full text twice. */
-const DEFAULT_SEO_PARAS = [
-  'Looking for firecrackers in Hyderabad? Crackers Hyderabad brings together a wide selection of fireworks for Diwali, festivals and special celebrations. Explore sparklers, flower pots, ground chakkars, rockets, garlands, fancy fireworks and gift boxes in one convenient online collection.',
-  'Shop Diwali crackers online in Hyderabad and discover fireworks for every kind of celebration. From traditional sparklers and flower pots to rockets, ground chakkars and premium gift boxes, our collection makes it easy to explore and choose your favourite crackers.',
-  'Whether you are planning a family Diwali celebration or looking for festive fireworks in Hyderabad, browse our online fireworks collection and explore different categories in one place.',
-];
-
-/* Compact text links for the SEO companion (labels only; routes above). */
-const SEO_TEXT_LINKS = SEO_CATEGORY_LINKS.map(({ label, value }) => ({ label, value }));
-
-/* One FAQ row: the answer stays in the DOM (collapsed via grid rows, never
-   removed), so it remains crawlable and accessible. */
-const FaqItem = ({ faq, index, defaultOpen }) => {
-  const [open, setOpen] = useState(!!defaultOpen);
-  const panelId = `home-faq-panel-${index}`;
-  return (
-    <div className="border-b" style={{ borderColor: '#E2D2B7' }}>
-      <h3>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-controls={panelId}
-          className="flex min-h-[44px] w-full items-center justify-between gap-3 py-2 text-left text-[15px] font-semibold"
-          style={{ color: '#1A1714' }}
-        >
-          <span>{faq.q}</span>
-          <span
-            aria-hidden="true"
-            className="grid h-6 w-6 shrink-0 place-items-center rounded-full border text-sm font-bold leading-none transition-transform duration-200"
-            style={{
-              borderColor: 'rgba(190, 140, 54, 0.45)',
-              color: '#BE8C36',
-              transform: open ? 'rotate(45deg)' : 'none',
-            }}
-          >
-            +
-          </span>
-        </button>
-      </h3>
-      <div
-        id={panelId}
-        role="region"
-        className="grid transition-[grid-template-rows] duration-200 ease-out"
-        style={{ gridTemplateRows: open ? '1fr' : '0fr' }}
-      >
-        <div className="overflow-hidden">
-          <p className="pb-3 text-sm leading-relaxed" style={{ color: '#433E37' }}>
-            {faq.a}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const HOME_FAQS = [
-  {
-    q: 'Where can I buy firecrackers in Hyderabad?',
-    a: 'You can browse and shop firecrackers online at Crackers Hyderabad, including sparklers, flower pots, rockets, ground chakkars, garlands and gift boxes.',
-  },
-  {
-    q: 'Can I buy crackers online in Hyderabad?',
-    a: 'Yes. Crackers Hyderabad is an online fireworks store serving Hyderabad — order through the website cart and checkout, then track your order online.',
-  },
-  {
-    q: 'What types of firecrackers are available?',
-    a: 'Sparklers, flower pots, ground chakkars, rockets, bombs, garlands, fancy fireworks, kids\u2019 novelties and gift boxes. Use the category links above to browse each range.',
-  },
-  {
-    q: 'Do you sell Diwali crackers?',
-    a: 'Yes — sparklers, flower pots, ground chakkars, rockets, garlands and gift boxes are popular choices for Diwali crackers in Hyderabad and festive occasions.',
-  },
-  {
-    q: 'Do you offer firecracker delivery in Hyderabad?',
-    a: 'Yes. Place your order through the website cart and checkout then track it online — we offer doorstep delivery across Hyderabad.',
-  },
-  {
-    q: 'What categories of fireworks are available?',
-    a: 'Browse Sparklers, Flower Pots, Ground Chakkars, Rockets, Garlands, Fancy Fireworks, Gift Boxes and Bombs — or open the full catalogue to explore the complete fireworks collection.',
-  },
-];
 
 /* Structured data limited to what the page visibly contains: the page
    itself plus the category list linked from it. No ratings, prices,
@@ -432,15 +349,12 @@ const Home = () => {
   // by the showcase `hidden` slugs and sorted by its `order` slugs.
   const visibleCategories = applyShowcaseOrder(categoryDefs, categoryShowcaseConfig);
 
-  /* Companion copy: the default paragraphs, unless the admin customized the
-     SEO content — then its first paragraph stands in, so the field stays
-     meaningful without ever rendering the full text twice. */
-  const seoContentNorm = String(siteSettings?.seo?.content || '').replace(/\s+/g, ' ').trim();
-  const seoDefaultNorm = String(DEFAULT_SEO.content || '').replace(/\s+/g, ' ').trim();
-  const seoParas =
-    seoContentNorm && seoContentNorm !== seoDefaultNorm
-      ? [String(siteSettings.seo.content).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)[0] || DEFAULT_SEO_PARAS[0]]
-      : DEFAULT_SEO_PARAS;
+  /* SEO guide ("Firecrackers in Hyderabad"): resolved from the Canvas
+     builder entry with full fallbacks, so the section renders defaults on
+     first paint and upgrades in place when config arrives — it never waits,
+     never blanks, and never errors. */
+  const seoEntry = (builderConfig?.sections || []).find((s) => s.type === SEO_GUIDE_TYPE);
+  const seoGuide = resolveSeoGuide({ sectionConfig: seoEntry?.config, siteSeo: siteSettings?.seo });
 
   const handleSubscribe = (e) => {
     e.preventDefault();
@@ -633,52 +547,20 @@ const Home = () => {
         )}
       </Suspense>
 
-      {/* Homepage SEO companion: a quiet contained panel just above the
-          footer — one short intro, text category links and a compact FAQ
-          accordion. Rendered on every homepage variant (builder or fallback),
-          visible content, never hidden, and never duplicated. */}
-      <section className="section-pad-sm" style={{ background: 'var(--surface-page)' }} aria-labelledby="home-seo-heading">
-        <div className="shell-wide">
-          <div
-            className="mx-auto max-w-3xl rounded-[var(--r-lg)] border px-5 py-6 sm:px-8 sm:py-7"
-            style={{ borderColor: '#E2D2B7', background: '#FFFDF8' }}
-          >
-            <p className="text-center text-[11px] font-semibold uppercase" style={{ color: '#BE8C36', letterSpacing: '0.22em' }}>
-              Hyderabad • Premium Fireworks
-            </p>
-            <h2 id="home-seo-heading" className="mt-2 text-center text-xl font-semibold sm:text-2xl" style={{ color: '#1A1714' }}>
-              {siteSettings?.seo?.contentHeading || 'Firecrackers in Hyderabad'}
-            </h2>
-            {seoParas.map((para, i) => (
-              <p key={i} className="mx-auto mt-2.5 max-w-xl text-center text-sm leading-relaxed" style={{ color: '#433E37' }}>
-                {para}
-              </p>
-            ))}
-            <nav aria-label="Shop by category" className="mt-3.5 flex flex-wrap items-center justify-center gap-x-1 gap-y-1.5 text-[13px]">
-              {SEO_TEXT_LINKS.map((c, i) => (
-                <span key={c.value} className="inline-flex items-center gap-1">
-                  {i > 0 && <span aria-hidden="true" style={{ color: '#8B8377' }}>|</span>}
-                  <Link
-                    to={`/products?category=${encodeURIComponent(c.value)}`}
-                    className="px-1 font-medium underline-offset-4 hover:underline"
-                    style={{ color: '#C33A14' }}
-                  >
-                    {c.label}
-                  </Link>
-                </span>
-              ))}
-            </nav>
-            <h2 className="mt-6 text-left text-base font-semibold" style={{ color: '#1A1714' }}>
-              Frequently Asked Questions
-            </h2>
-            <div className="mt-1 border-t text-left" style={{ borderColor: '#E2D2B7' }}>
-              {HOME_FAQS.map((f, i) => (
-                <FaqItem key={f.q} faq={f} index={i} defaultOpen={false} />
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Homepage SEO companion, Canvas-controlled (seoGuide builder entry).
+          OFF renders nothing — no container, no gap. The shared component
+          owns the single visual definition (mirrored for Canvas preview). */}
+      {seoEntry?.enabled !== false && (
+        <SeoGuideSection
+          eyebrow={seoGuide.eyebrow}
+          heading={seoGuide.heading}
+          paras={seoGuide.paras}
+          categoryHeading={seoGuide.categoryHeading}
+          categories={seoGuide.categories}
+          faqHeading={seoGuide.faqHeading}
+          faqs={seoGuide.faqs}
+        />
+      )}
 
       <Suspense fallback={null}>
         <Footer />

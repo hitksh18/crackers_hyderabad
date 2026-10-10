@@ -13,6 +13,7 @@ import EmptyState from '../components/ui/EmptyState';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { inr } from '../lib/currency';
 import { MINIMUM_ORDER_VALUE } from '../lib/orderThresholds';
+import { trackViewCart } from '../lib/ga4';
 import {
   staggerParent,
   DURATION,
@@ -79,6 +80,18 @@ const Cart = () => {
 
   const minimumMet =
     !adminSettings.minimumOrderValueEnabled || getCartTotal() >= adminSettings.minimumOrderValue;
+
+  /* GA4 view_cart: the customer actually opened the cart with items in it.
+     Fires once the stored cart has hydrated; the helper dedupes StrictMode
+     remounts. An empty cart sends nothing. */
+  const viewCartSentRef = useRef(false);
+  useEffect(() => {
+    if (!hydrated || viewCartSentRef.current) return undefined;
+    if (cart.length === 0) return undefined;
+    viewCartSentRef.current = true;
+    trackViewCart(cart);
+    return undefined;
+  }, [hydrated, cart]);
 
   /* Viewport lock is MEASURED, not guessed: the announcement banner, navbar
      and paddings above this component vary (the banner loads async), so the
