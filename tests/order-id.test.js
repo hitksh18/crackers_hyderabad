@@ -210,15 +210,18 @@ test('sequence length rules', () => {
   assert.equal(valid({ sequenceLength: 4 }).sequenceLength, 4);
 });
 
-test('the sequence may never go below one that has been issued', () => {
-  // The rule from the brief, with the shop's own numbers.
-  const errors = validateErr(
+test('the sequence may be set below one that has been issued', () => {
+  // Rewinding (reset to 0001, say) is a supported flow, mirroring offline:
+  // uniqueness is enforced at commit time by stepping over taken ids, not by
+  // forbidding the rewind at validation time.
+  const result = orderId.validateConfig(
     { format: 'CH-{YYYY}{MM}{DD}-{SEQUENCE}', prefix: 'CH', sequenceLength: 6, nextSequence: 1 },
     4582
   );
-  assert.equal(errors.nextSequence, 'Next sequence number must be greater than the highest existing sequence.');
+  assert.equal(result.ok, true);
+  assert.equal(result.value.nextSequence, 1);
 
-  // Exactly one above the highest is fine.
+  // Exactly one above the highest is still fine.
   assert.ok(valid({ nextSequence: 4583 }, 4582));
 });
 
@@ -425,6 +428,39 @@ test('the admin preview and the server agree on validation', () => {
       }
     }
   }
+});
+
+test('online fields parse the standard stored shapes', () => {
+  assert.deepEqual(
+    adminPreview.parseOnlineFields({ format: '{PREFIX}-{SEQUENCE}', prefix: 'CHYD26' }),
+    { simple: true, prefix: 'CHYD26', year: '', separator: '-' }
+  );
+  assert.deepEqual(
+    adminPreview.parseOnlineFields({ format: '{PREFIX}26-{SEQUENCE}', prefix: 'CHYD' }),
+    { simple: true, prefix: 'CHYD', year: '26', separator: '-' }
+  );
+  assert.deepEqual(
+    adminPreview.parseOnlineFields({ format: '{PREFIX}26{SEQUENCE}', prefix: 'CHYD' }),
+    { simple: true, prefix: 'CHYD', year: '26', separator: '' }
+  );
+  // Date blocks and reordered tokens belong to the full format editor.
+  assert.equal(
+    adminPreview.parseOnlineFields({ format: 'CH-{YYYY}{MM}{DD}-{SEQUENCE}', prefix: 'CH' }).simple,
+    false
+  );
+  assert.equal(
+    adminPreview.parseOnlineFields({ format: '{SEQUENCE}-{PREFIX}', prefix: 'CH' }).simple,
+    false
+  );
+});
+
+test('online compose renders the documented example', () => {
+  assert.equal(adminPreview.composeOnlineFormat({ year: '26', separator: '-' }), '{PREFIX}26-{SEQUENCE}');
+  const rendered = adminPreview.renderOrderId(
+    { format: adminPreview.composeOnlineFormat({ year: '26', separator: '-' }), prefix: 'CHYD', sequenceLength: 4 },
+    { sequence: 2001 }
+  );
+  assert.equal(rendered, 'CHYD26-2001');
 });
 
 test('the storefront copies of the shared helpers behave like the server', () => {
@@ -789,21 +825,24 @@ test('the sequence never rewinds when an admin raises it', async () => {
   assert.equal(after.shortCode, 'CHYD26-4583');
 });
 
-test('an admin cannot set the sequence below what has been issued', async () => {
-  // This is what the settings API enforces, and the reason the counter is the
-  // floor rather than whatever the browser last sent.
+test('a rewound counter steps over taken ids instead of duplicating them', async () => {
+  // The reset flow: four orders exist (0001-0004), then the admin rewinds to
+  // 1 (mirrors setOnlineCounterTo positioning the counter exactly).
   const db = new FakeFirestore();
   const config = orderId.defaultConfig();
-  for (let i = 0; i < 5; i += 1) await commitOrder(db, { config, orderId: `o${i}` });
+  for (let i = 0; i < 4; i += 1) await commitOrder(db, { config, orderId: `o${i}` });
 
   const highest = Number(db.get('counters', 'orders').value);
-  assert.equal(highest, 5);
+  assert.equal(highest, 4);
 
-  const rejected = validateErr({ format: config.format, prefix: 'CH', sequenceLength: 6, nextSequence: 1 }, highest);
-  assert.match(rejected.nextSequence, /greater than the highest existing sequence/);
+  db.docs.set('counters/orders', { value: 0, version: 2 });
 
-  // Allowed: exactly one past the highest.
-  assert.ok(valid({ format: config.format, prefix: 'CH', sequenceLength: 6, nextSequence: 6 }, highest));
+  const after = await commitOrder(db, { config, orderId: 'next' });
+  assert.equal(after.orderNumber, 5);
+  assert.equal(after.shortCode, 'CHYD26-0005');
+  // The earlier orders still carry exactly what they were given.
+  assert.equal(db.get('orders', 'order-1').shortCode, 'CHYD26-0001');
+  assert.equal(db.get('orders', 'order-4').shortCode, 'CHYD26-0004');
 });
 
 test('zero orders is a valid starting state', () => {

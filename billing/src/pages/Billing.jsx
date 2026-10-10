@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import { collection, getDocs } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../firebase';
@@ -370,8 +370,16 @@ const Billing = () => {
       /* The OFFLINE/STORE ORDER ID minted by the server off the independent
          offline counter (e.g. Ayyapa26-0001) — never the online sequence. The
          same ORDER ID is stored on the order, shown in history/details and
-         printed on the invoice/receipt. */
-      setSavedOrderId(result.shortCode || '');
+         printed on the invoice/receipt.
+
+         flushSync is load-bearing. setSavedOrderId() alone only SCHEDULES a
+         render, and handlePrint() below calls window.print() in this very same
+         tick — the print snapshot was taken while the sheet still held the
+         previous (empty) id, so BillPrintSheet dropped its ORDER ID row and
+         every printed/PDF invoice came out with DATE and TIME but no order id.
+         Flushing first puts the exact server-minted id into the DOM before the
+         snapshot. The id is never regenerated here, only handed through. */
+      flushSync(() => setSavedOrderId(result.shortCode || ''));
 
       toast.success(result.shortCode ? `Bill saved as ${result.shortCode}` : 'Bill saved successfully!');
       /* Save-as-PDF filename: browsers name the file after the document
@@ -381,6 +389,8 @@ const Billing = () => {
       if (result.shortCode) document.title = `Invoice_${result.shortCode}`;
       handlePrint();
       setTimeout(() => { document.title = prevTitle; }, 1000);
+      /* Only after the print snapshot: clearing the register must never reach
+         the sheet before it has been printed. */
       resetWorkspace();
     } catch (error) {
       console.error('Error saving bill:', error);

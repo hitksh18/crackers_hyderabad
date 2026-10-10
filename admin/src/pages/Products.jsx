@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
-import { collection, getDocs, deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { collection, deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
+import { cachedGetDocs } from '../lib/firestoreCache';
 import { GripVertical, Package, Plus, RotateCcw, Search, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from '../utils/toast';
@@ -10,7 +11,7 @@ import ProductRegisterRow from '../components/admin/ProductRegisterRow';
 import AdminHeader from '../components/admin/AdminHeader';
 import EmptyState from '../components/ui/EmptyState';
 import { TableSkeleton } from '../components/ui/Skeleton';
-import { deleteTradePricing, fetchTradePricingMap, mergeTradePricing } from '../lib/tradePricing';
+import { deleteTradePricing, mergeTradePricing } from '../lib/tradePricing';
 import { PRODUCT_CATEGORIES, isProductInCategory } from '../config/categories';
 
 const AllProducts = () => {
@@ -31,25 +32,26 @@ const AllProducts = () => {
 
   const fetchProducts = async () => {
     try {
+      // Shared 60s cache: Dashboard, Orders editor, Categories and Canvas
+      // all read `products` — one download per minute, not one per visit.
+      // Pricing lives in `productPricing` and is cached under its own key.
       const [productsResult, pricingResult] = await Promise.allSettled([
-        getDocs(collection(db, 'products')),
-        fetchTradePricingMap(),
+        cachedGetDocs(collection(db, 'products'), 'products'),
+        cachedGetDocs(collection(db, 'productPricing'), 'productPricing'),
       ]);
 
       if (productsResult.status === 'rejected') throw productsResult.reason;
 
       let pricingMap = new Map();
       if (pricingResult.status === 'fulfilled') {
-        pricingMap = pricingResult.value;
+        const rows = pricingResult.value;
+        pricingMap = new Map((Array.isArray(rows) ? rows : []).map((r) => [r.id, r]));
       } else {
         console.error('Error fetching trade pricing:', pricingResult.reason);
         toast.error('Trade pricing is unavailable — offline prices may be blank.');
       }
 
-      const productsData = mergeTradePricing(
-        productsResult.value.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-        pricingMap
-      );
+      const productsData = mergeTradePricing(productsResult.value, pricingMap);
       setProducts(productsData);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -214,7 +216,7 @@ const AllProducts = () => {
     setDragOverId(null);
   };
 
-  const filteredProducts = products.filter(p => {
+  const filteredProducts = useMemo(() => products.filter(p => {
     const matchesSearch = (p.name || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = filterCategory === 'All' || isProductInCategory(p, filterCategory);
     const matchesStock = filterStock === 'All' ||
@@ -224,13 +226,19 @@ const AllProducts = () => {
       (filterFeatured === 'Featured' && p.isFeatured) ||
       (filterFeatured === 'Not Featured' && !p.isFeatured);
     return matchesSearch && matchesCategory && matchesStock && matchesFeatured;
-  });
+  }), [products, searchQuery, filterCategory, filterStock, filterFeatured]);
 
   // Single source of truth — admin/src/config/categories.js (canonical order).
   const categories = PRODUCT_CATEGORIES;
 
-  const sortedAll = sortProductsByOrder(products);
-  const sortedFiltered = sortProductsByOrder(filteredProducts);
+  const sortedAll = useMemo(() => sortProductsByOrder(products), [products]);
+  const sortedFiltered = useMemo(() => sortProductsByOrder(filteredProducts), [filteredProducts]);
+  /* Row positions without O(n²) findIndex per card. */
+  const positionById = useMemo(() => {
+    const map = new Map();
+    sortedAll.forEach((p, i) => map.set(p.id, i + 1));
+    return map;
+  }, [sortedAll]);
 
   const clearFilters = () => {
     setSearchQuery('');
@@ -244,7 +252,8 @@ const AllProducts = () => {
   if (loading) {
     return (
       <div className="admin-page bg-[var(--surface-page)]">
-        <div className="mx-auto w-full max-w-[1550px] px-4 py-4 lg:px-8">
+        <AdminHeader title="Products" backFallback="/dashboard" />
+        <div className="mx-auto w-full max-w-[1550px] px-4 py-3 lg:px-8">
           <TableSkeleton rows={8} cols={4} label="Loading products" />
         </div>
       </div>
@@ -392,7 +401,7 @@ const AllProducts = () => {
 
             <ul role="list" className="flex flex-col gap-2">
               {sortedFiltered.map((product, index) => {
-                const position = sortedAll.findIndex(p => p.id === product.id) + 1;
+                const position = positionById.get(product.id) ?? (index + 1);
                 return (
                   <ProductRegisterRow
                     key={product.id}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { cachedGetDoc } from '../lib/firestoreCache';
 import { useAuth } from '../context/AuthContext';
 import { configFor } from '../components/admin/userRoles';
 
@@ -27,9 +28,11 @@ export function useAdminIdentity() {
         return;
       }
       try {
-        const snap = await getDoc(doc(db, 'users', user.uid));
-        const storedName = snap.exists()
-          ? (snap.data().name || snap.data().displayName || '').trim()
+        // Shared 60s doc cache: AdminTopBar, Wishlist sync and login flows
+        // all read users/{uid} — without this each mount is a fresh read.
+        const data = await cachedGetDoc(doc(db, 'users', user.uid));
+        const storedName = data
+          ? (data.name || data.displayName || '').trim()
           : '';
         if (storedName) {
           if (!cancelled) setName(storedName);

@@ -528,7 +528,7 @@ const OrderIdSettings = () => {
                 id="order-id-next-sequence"
                 type="number"
                 inputMode="numeric"
-                min={highestUsedSequence + 1}
+                min={1}
                 value={nextSequence}
                 onChange={(e) => { setNextSequence(e.target.value); setTouched((t) => ({ ...t, nextSequence: true })); }}
                 onBlur={() => setTouched((t) => ({ ...t, nextSequence: true }))}
@@ -539,13 +539,15 @@ const OrderIdSettings = () => {
               />
             </FormField>
 
-            {/* The rule behind that floor, stated before it is hit. */}
+            {/* Rewinding is supported: taken ids are stepped over at order time,
+                so resetting below the highest issued sequence can never
+                duplicate an existing order. */}
             <p className="flex items-start gap-2 text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
               <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               <span>
-                The sequence can only move forward. Going backwards would issue an ID that already
-                belongs to another order, and tracking would then show the wrong customer their order.
-                You can jump ahead — useful after restoring a backup — but never back.
+                The sequence may move backwards (for example after resetting the counter) — ids
+                already issued are stepped over automatically, so an existing order can never be
+                duplicated. You can also jump ahead, useful after restoring a backup.
               </span>
             </p>
           </FormSection>

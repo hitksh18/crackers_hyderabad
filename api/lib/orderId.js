@@ -312,12 +312,19 @@ function normalizeConfig(raw) {
  * Validate a submitted configuration.
  *
  * Returns every problem rather than the first, so the admin can fix the form in
- * one pass. `highestUsedSequence` is the floor: an admin may jump the sequence
- * forward (recovering from a bad migration, say) but never back, because a lower
- * number would re-issue an id that already exists and tracking would silently
- * resolve to the wrong customer's order.
+ * one pass.
+ *
+ * There is deliberately NO floor against highestUsedSequence: rewinding the
+ * next sequence (reset to 0001, say) is a supported flow, exactly as on the
+ * offline side. Uniqueness does not depend on the counter never moving
+ * backwards — commitSequencedOrder creates the tracking document (never
+ * overwrites it) inside the same transaction and steps the counter over taken
+ * ids on collision, so a rewound counter can never re-issue an existing id.
  */
 function validateConfig(input, { highestUsedSequence = 0 } = {}) {
+  // highestUsedSequence is accepted (callers report it for display) but is
+  // NOT a validation floor: see the docblock above.
+  void highestUsedSequence;
   const errors = {};
 
   const format = normalizeFormatInput(input?.format);
@@ -366,15 +373,12 @@ function validateConfig(input, { highestUsedSequence = 0 } = {}) {
     errors.sequenceLength = MESSAGES.SEQUENCE_LENGTH_RANGE;
   }
 
-  const floor = Math.max(0, Number(highestUsedSequence) || 0);
   if (!Number.isFinite(nextSequence)) {
     errors.nextSequence = MESSAGES.NEXT_SEQUENCE_INVALID;
   } else if (!Number.isInteger(nextSequence) || nextSequence < 1) {
     errors.nextSequence = MESSAGES.NEXT_SEQUENCE_INVALID;
   } else if (nextSequence > MAX_ORDER_NUMBER) {
     errors.nextSequence = MESSAGES.NEXT_SEQUENCE_TOO_HIGH;
-  } else if (nextSequence <= floor) {
-    errors.nextSequence = MESSAGES.NEXT_SEQUENCE_NOT_INCREASING;
   }
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };

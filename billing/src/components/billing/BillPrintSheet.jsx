@@ -18,12 +18,19 @@ import './BillPrintSheet.css';
  * Chunks are content-sized blocks with no min-height/fixed height, the last
  * chunk never forces a page break — so pagination alone can never emit a
  * blank page. Every row carries break-inside:avoid so a row never splits.
+ *
+ * BRANDING — page 1 and every continuation page render the same logo at the
+ * same explicit size (see --bps-logo in BillPrintSheet.css), the same brand
+ * block, and the same canonical Order ID, so all pages read as one document.
  */
 
 /**
  * The official Ayyapa Fireworks mark ONLY
- * (billing/public/images/website/ayyappa-fireworks-logo.png — copy of
- * billing/images/Ayyappa Fireworks Logo.png). Contained, never stretched.
+ * (billing/public/images/website/ayyappa-fireworks-logo.png — byte-identical
+ * copy of billing/images/Ayyappa Fireworks Logo.png, the source artwork).
+ * One asset, one explicit size: the CSS custom property --bps-logo fixes the
+ * rendered width AND height on every page, so page 1, page 2 and page 3 can
+ * never disagree. object-fit:contain keeps the square artwork undistorted.
  * If the file ever goes missing the mark hides itself and the wordmark
  * beside it carries the brand, so no broken-image icon can print.
  * Never use the online-store logo on this offline invoice.
@@ -77,15 +84,17 @@ const BillPrintSheet = forwardRef(function BillPrintSheet(
   /**
    * The OFFLINE Order ID printed on the receipt — ONE source of truth.
    *
-   * Received as a prop (`offlineOrder.orderId`, minted once on the server
-   * when the bill was saved). This component NEVER generates an id: it
-   * prints exactly what it was given, so Billing UI, Firebase order, order
-   * details, preview, PDF and filename all show the identical string.
+   * Received as a prop (`savedOrderId`, set from `result.shortCode` — the id
+   * minted once on the server when the bill was saved). This component NEVER
+   * generates an id: it prints exactly what it was given, so Billing UI,
+   * Firebase order, order details, preview, PDF and filename all show the
+   * identical string.
    *
-   * The sheet can also be printed before the bill is saved (the print button
-   * is always available), and there is no order yet in that case. Rather than
-   * invent one, the row is omitted — a printed slip with no order id is
-   * honest about not being an order record yet.
+   * Billing flushes that state into the DOM before window.print() (see
+   * saveBill), so the print snapshot always carries the id. The guard below
+   * is defensive only: if no id was ever supplied the row is omitted rather
+   * than invented — a slip with no order id is honest about not being an
+   * order record yet.
    */
   const hasOrderId = typeof orderId === 'string' && orderId.trim().length > 0;
 
@@ -170,7 +179,7 @@ const BillPrintSheet = forwardRef(function BillPrintSheet(
                       <div className="bps-doc-rule" />
                       <div className="bps-meta-list">
                         {hasOrderId && (
-                          <div className="bps-meta-row">
+                          <div className="bps-meta-row bps-meta-row--order">
                             <span className="bps-meta-key">Order ID</span>
                             <span className="bps-meta-val bps-meta-val--order">{orderId.trim()}</span>
                           </div>
@@ -187,20 +196,40 @@ const BillPrintSheet = forwardRef(function BillPrintSheet(
                     </div>
                   </header>
                 ) : (
+                  /* Continuation pages carry the SAME mark at the SAME size as
+                     page 1 — one asset, one CSS size variable — so a page-2
+                     logo can never differ from the page-1 logo. Compact, but
+                     still the full letterhead: brand + tagline on the left,
+                     INVOICE and the canonical ORDER ID on the right, so a sheet
+                     separated from its stack can still be identified. */
                   <header className="bps-header bps-header--cont">
-                    {!markFailed && (
-                      <img
-                        className="bps-brand-mark bps-brand-mark--sm"
-                        src={LOGO_SRC}
-                        alt="Ayyapa Fireworks"
-                        onError={() => setMarkFailed(true)}
-                        draggable={false}
-                      />
-                    )}
-                    <div className="bps-brand-text">
-                      <p className="bps-cont-name">{BRAND_NAME_UPPER}</p>
-                      <p className="bps-cont-sub">INVOICE{hasOrderId ? ` · ${orderId.trim()}` : ''}</p>
-                      <p className="bps-cont-sub">CONTINUED</p>
+                    <div className="bps-brand">
+                      {!markFailed && (
+                        <img
+                          className="bps-brand-mark"
+                          src={LOGO_SRC}
+                          alt="Ayyapa Fireworks"
+                          onError={() => setMarkFailed(true)}
+                          draggable={false}
+                        />
+                      )}
+                      <div className="bps-brand-text">
+                        <p className="bps-cont-name">{BRAND_NAME_UPPER}</p>
+                        <p className="bps-brand-tagline">{BRAND_TAGLINE}</p>
+                      </div>
+                    </div>
+
+                    <div className="bps-doc bps-doc--cont">
+                      <p className="bps-doc-title bps-doc-title--cont">Invoice</p>
+                      <div className="bps-doc-rule" />
+                      <div className="bps-meta-list">
+                        {hasOrderId && (
+                          <div className="bps-meta-row bps-meta-row--order">
+                            <span className="bps-meta-key">Order ID</span>
+                            <span className="bps-meta-val bps-meta-val--order">{orderId.trim()}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </header>
                 )}

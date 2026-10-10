@@ -346,20 +346,24 @@ async function main() {
     assert.match(body.errors.format, /Do not use "#"/);
   });
 
-  await check('a next sequence below the highest issued is refused', async () => {
+  await check('rewinding the online counter steps over taken ids', async () => {
     const settings = await getOrderIdSettings(token);
     const highest = settings.highestUsedSequence;
     assert.ok(highest > 0);
 
-    const { status, body } = await saveOrderIdSettings(token, {
+    // Rewinding is accepted (mirrors the offline reset flow) — the commit
+    // steps over taken tracking codes instead of duplicating them.
+    const { status } = await saveOrderIdSettings(token, {
       format: 'CH-{YYYY}{MM}{DD}-{SEQUENCE}', prefix: 'CH', sequenceLength: 6, nextSequence: 1,
     });
-    assert.equal(status, 400);
-    assert.match(body.errors.nextSequence, /greater than the highest existing sequence/);
+    assert.equal(status, 200);
 
-    // One above the floor is accepted.
+    const order = await placeOrder();
+    assert.equal(order.orderNumber, highest + 1, 'must step over every taken number');
+
+    // One above the highest is accepted too.
     const accepted = await saveOrderIdSettings(token, {
-      format: 'CH-{YYYY}{MM}{DD}-{SEQUENCE}', prefix: 'CH', sequenceLength: 6, nextSequence: highest + 1,
+      format: 'CH-{YYYY}{MM}{DD}-{SEQUENCE}', prefix: 'CH', sequenceLength: 6, nextSequence: highest + 2,
     });
     assert.equal(accepted.status, 200);
   });
@@ -413,7 +417,8 @@ const saved = await saveOrderIdSettings(token, {
     assert.match(next.shortCode, /^CR-\d{8}-000101$/);
   });
 
-  await check('the counter and the storefront share one sequence', async () => {
+  await check('counter bills use the offline counter, never the online one', async () => {
+    const beforeOnline = (await getOrderIdSettings(token)).highestUsedSequence;
     const response = await apiFetch('/api/orders/pos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -425,10 +430,10 @@ const saved = await saveOrderIdSettings(token, {
     });
     const body = await response.json();
     assert.equal(response.status, 201, JSON.stringify(body));
-    assert.match(body.shortCode, /^CR-\d{8}-/);
+    assert.match(body.shortCode, /^Ayyapa26-\d{4}$/, 'POS mints the offline format');
 
     const online = await placeOrder();
-    assert.equal(online.orderNumber, body.orderNumber + 1, 'counter and storefront share the counter');
+    assert.equal(online.orderNumber, beforeOnline + 1, 'POS must not consume online sequence');
   });
 
   await check('a config written straight to Firestore cannot inject unsafe ids', async () => {

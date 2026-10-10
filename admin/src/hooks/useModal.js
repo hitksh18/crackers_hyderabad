@@ -41,9 +41,12 @@ export const useModal = () => {
   /* Await the action before closing: close on success (resolve / truthy),
      keep the modal open on failure (throw / explicit `false`) so the user
      can retry. Duplicate confirms while the request is in flight are
-     ignored. */
+     ignored. The typed-confirmation check lives here too — not only on the
+     confirm button's disabled state — so a mismatched confirmation can never
+     trigger the operation regardless of how the modal is wired. */
   const handleConfirm = async (inputValue) => {
     if (isConfirming) return false;
+    if (modalConfig.requiresInput && inputValue !== modalConfig.expectedInput) return false;
     setIsConfirming(true);
     let ok = true;
     try {

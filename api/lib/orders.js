@@ -91,7 +91,9 @@ const ORDER_SEQUENCE_START = 1;
 const ORDER_NUMBER_MAX = 9999;
 const ORDER_NUMBER_LIMIT_MESSAGE =
   'Order number limit reached. Please update the order ID prefix and reset/start a new sequence.';
-const MAX_ORDER_CREATE_ATTEMPTS = 5;
+/* Matches the offline committer: after a counter reset, stepping over every
+   taken id can take as many attempts as there are taken ids in a row. */
+const MAX_ORDER_CREATE_ATTEMPTS = 20;
 
 /* The live format config, read once per request. `readOrderIdConfig` falls back
    to the documented default when the document is missing or unusable, so order
@@ -227,6 +229,28 @@ async function bumpSequenceFloor(db, sequence) {
     }
     tx.update(ref, { value: target - 1, updatedAt: FieldValue.serverTimestamp() });
   });
+}
+
+/**
+ * Set the ONLINE counter so the next online order mints `sequence`.
+ * Used by Save + Reset. Unlike bumpSequenceFloor this MAY rewind (reset to
+ * 0001 is supported) because commitSequencedOrder steps over taken tracking
+ * codes instead of reusing them — the exact guarantee the offline counter
+ * relies on. Touches counters/orders ONLY; the offline counter is never
+ * read or written here.
+ */
+async function setOnlineCounterTo(db, sequence) {
+  const target = Math.trunc(Number(sequence));
+  if (!Number.isFinite(target) || target < 1 || target > ORDER_NUMBER_MAX) {
+    throw new Error('Next sequence number must be between 1 and 9999.');
+  }
+  const ref = db.collection('counters').doc(ORDER_COUNTER_DOC);
+  // Direct write (admin-only route): reset semantics require exact positioning,
+  // including rewinding. Collision safety is preserved by the commit loop.
+  await ref.set(
+    { value: target - 1, version: ORDER_SEQUENCE_VERSION, updatedAt: FieldValue.serverTimestamp() },
+    { merge: true }
+  );
 }
 
 /** True when a commit failed because the tracking code already exists. */
@@ -1395,6 +1419,7 @@ module.exports = {
   nextOrderNumber,
   readHighestUsedSequence,
   bumpSequenceFloor,
+  setOnlineCounterTo,
   commitSequencedOrder,
   priceCart,
   NOTIFY_TOKEN_TTL_MS,

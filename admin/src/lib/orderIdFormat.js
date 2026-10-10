@@ -57,6 +57,37 @@ export const normalizeFormatInput = (value) =>
 export const normalizePrefixInput = (value) =>
   String(value ?? '').replace(/\s+/g, '').toUpperCase();
 
+/**
+ * Split a stored {format, prefix} into the five Site Settings fields when the
+ * format is exactly `{PREFIX}<literal>{SEQUENCE}` (the shape this form and the
+ * server compose). Anything else (date blocks, reordered tokens) is reported
+ * as non-simple: the full format editor (Settings → Orders → Order ID) owns
+ * those, and saving here would replace them — so the form warns instead.
+ *
+ * The middle literal splits into year + separator by peeling up to 3 trailing
+ * `-`/`_` characters as the separator (mirrors the offline limits).
+ */
+export const parseOnlineFields = ({ format, prefix } = {}) => {
+  const fallback = {
+    simple: false,
+    prefix: normalizePrefixInput(prefix),
+    year: '',
+    separator: '-',
+  };
+  const match = /^\{PREFIX\}([A-Z0-9_-]*)\{SEQUENCE\}$/.exec(normalizeFormatInput(format));
+  if (!match) return fallback;
+  const mid = match[1];
+  const sepMatch = /([-_]{1,3})$/.exec(mid);
+  const separator = sepMatch ? sepMatch[1] : '';
+  const year = mid.slice(0, mid.length - separator.length);
+  if (year.length > 4) return fallback;
+  return { simple: true, prefix: normalizePrefixInput(prefix), year, separator };
+};
+
+/** Compose the stored format from the five fields. Inputs must be cleaned. */
+export const composeOnlineFormat = ({ year = '', separator = '-' } = {}) =>
+  `{PREFIX}${year}${separator}{SEQUENCE}`;
+
 /** Split a format into literal runs and {TOKEN} blocks. */
 export const parseOrderIdFormat = (format) => {
   const parts = [];
@@ -125,8 +156,12 @@ export const renderOrderId = (config, { sequence = 1, now = new Date() } = {}) =
  * The server validates again on save and its answer is the one that counts —
  * this copy exists to avoid a save button that fails after a round trip, not to
  * be the authority. Both report the same messages for the same rules.
+ *
+ * No floor against the highest used sequence (mirrors the server): rewinding
+ * the next number is supported because the commit steps over taken ids.
  */
 export const validateOrderIdConfig = (input, { highestUsedSequence = 0 } = {}) => {
+  void highestUsedSequence;
   const errors = {};
 
   const format = normalizeFormatInput(input?.format);
@@ -177,13 +212,10 @@ export const validateOrderIdConfig = (input, { highestUsedSequence = 0 } = {}) =
     errors.sequenceLength = `Sequence length must be between ${MIN_SEQUENCE_LENGTH} and ${MAX_SEQUENCE_LENGTH} digits.`;
   }
 
-  const floor = Math.max(0, Number(highestUsedSequence) || 0);
   if (!Number.isFinite(nextSequence) || !Number.isInteger(nextSequence) || nextSequence < 1) {
     errors.nextSequence = 'Next sequence number must be a whole number of at least 1.';
   } else if (nextSequence > MAX_ORDER_NUMBER) {
     errors.nextSequence = `Next sequence number must be ${MAX_ORDER_NUMBER} or less — the order number range is 0001 to 9999.`;
-  } else if (nextSequence <= floor) {
-    errors.nextSequence = 'Next sequence number must be greater than the highest existing sequence.';
   }
 
   return { ok: Object.keys(errors).length === 0, errors, maxOrderNumber: MAX_ORDER_NUMBER };

@@ -1,5 +1,6 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { cachedGetDoc, invalidateCache } from './firestoreCache';
 
 const DOC = () => doc(db, 'settings', 'homepageBuilder');
 
@@ -61,9 +62,10 @@ export const DEFAULT_BUILDER_CONFIG = {
 
 export async function readBuilderConfig() {
   try {
-    const snap = await getDoc(DOC());
-    if (!snap.exists()) return { ...DEFAULT_BUILDER_CONFIG, sections: [...DEFAULT_SECTIONS] };
-    const data = snap.data();
+    /* Shared 60s doc cache: Canvas mounts read this on every visit. */
+    const cached = await cachedGetDoc(DOC());
+    if (!cached) return { ...DEFAULT_BUILDER_CONFIG, sections: [...DEFAULT_SECTIONS] };
+    const { id: _cacheId, ...data } = cached;
     const sections = Array.isArray(data.sections) && data.sections.length > 0 ? data.sections : [...DEFAULT_SECTIONS];
     // Ensure all default sections exist (for new installs)
     const existingIds = new Set(sections.map(s => s.id));
@@ -84,6 +86,8 @@ export async function saveBuilderConfig(config, { userEmail } = {}) {
     updatedBy: userEmail || 'admin',
   };
   await setDoc(DOC(), payload);
+  /* Writes bypass the read cache — drop it so the next read sees the save. */
+  invalidateCache('doc:settings/homepageBuilder');
   return payload;
 }
 

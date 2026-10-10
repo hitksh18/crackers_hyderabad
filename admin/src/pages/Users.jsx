@@ -6,6 +6,7 @@ import { authFetch, readApiError } from '../utils/apiClient';
 import { useAuth } from '../context/AuthContext';
 import { roleOptions, roleConfig, configFor, normalizeRole } from '../components/admin/userRoles';
 import AdminHeader from '../components/admin/AdminHeader';
+import { TableSkeleton } from '../components/ui/Skeleton';
 import {
   EditUserModal,
   ConfirmActionModal,
@@ -26,6 +27,39 @@ const getProviderName = (providers) => {
   if (providers.includes('google.com')) return 'Google';
   if (providers.includes('password')) return 'Email';
   return providers[0].replace('.com','');
+};
+
+/* Avatar that never blocks the table and never retries broken URLs:
+   fixed 32/36px box (no layout shift), lazy + async decode, and a single
+   onError swap to an initial-letter fallback. */
+const UserAvatar = ({ photoURL, name, size = 32 }) => {
+  const [failed, setFailed] = useState(false);
+  const initial = String(name || '?').trim().charAt(0).toUpperCase() || '?';
+  if (photoURL && !failed) {
+    return (
+      <img
+        src={photoURL}
+        alt=""
+        aria-hidden="true"
+        loading="lazy"
+        decoding="async"
+        width={size}
+        height={size}
+        onError={() => setFailed(true)}
+        className="rounded-full object-cover"
+        style={{ width: size, height: size, aspectRatio: '1 / 1' }}
+      />
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className="grid place-items-center rounded-full text-xs font-bold"
+      style={{ width: size, height: size, background: 'var(--surface-sunken)', color: 'var(--text-muted)', border: '1px solid var(--hairline)' }}
+    >
+      {initial}
+    </span>
+  );
 };
 
 const UserManagement = () => {
@@ -295,11 +329,17 @@ const UserManagement = () => {
 
   const displayedUsers = getDisplayedUsers();
 
+  /* Shell-first: header + search + filters paint immediately; only the
+     table body shows a skeleton. Previously the whole page was a bare pill
+     until /api/admin/users resolved. */
   if (loading) {
     return (
       <div className="admin-page bg-[var(--surface-page)]">
-        <div className="mx-auto w-full max-w-[1600px] px-4 py-6 lg:px-8">
-          <div className="h-10 w-64 animate-pulse rounded-full" style={{ background: 'var(--surface-sunken)' }} />
+        <AdminHeader title="User Management" backFallback="/dashboard" />
+        <div className="mx-auto w-full max-w-[1600px] px-4 py-3 lg:px-8">
+          <div className="rounded-2xl border p-5" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)' }}>
+            <TableSkeleton rows={8} cols={4} label="Loading users" />
+          </div>
         </div>
       </div>
     );
@@ -390,8 +430,8 @@ const UserManagement = () => {
                     {/* Mobile card */}
                     <div className="lg:hidden">
                       <div className="flex items-start gap-3">
-                        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full" style={{ background: 'var(--surface-sunken)', border: '1px solid var(--hairline)' }}>
-                          {user.photoURL ? <img src={user.photoURL} alt="" loading="lazy" decoding="async" width={36} height={36} className="h-9 w-9 rounded-full object-cover" /> : <RoleIcon className="h-4 w-4" style={{ color: 'var(--text-muted)' }} />}
+                        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full" style={{ background: 'var(--surface-sunken)', border: '1px solid var(--hairline)', width: 36, height: 36, aspectRatio: '1 / 1' }}>
+                          <UserAvatar photoURL={user.photoURL} name={user.displayName || user.profileName} size={36} />
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{user.displayName || user.profileName || 'No name'} {isCurrent && <span className="ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'var(--ember-600)', color: '#fff' }}>You</span>}</p>
@@ -416,8 +456,8 @@ const UserManagement = () => {
                     {/* Desktop grid */}
                     <div className="users-grid hidden lg:grid lg:items-center lg:gap-2">
                       <div className="flex min-w-0 items-center gap-2.5">
-                        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full" style={{ background: 'var(--surface-sunken)', border: '1px solid var(--hairline)' }}>
-                          {user.photoURL ? <img src={user.photoURL} alt="" loading="lazy" decoding="async" width={32} height={32} className="h-8 w-8 rounded-full object-cover" /> : <RoleIcon className="h-4 w-4" style={{ color: 'var(--text-muted)' }} />}
+                        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full" style={{ background: 'var(--surface-sunken)', border: '1px solid var(--hairline)', width: 32, height: 32, aspectRatio: '1 / 1' }}>
+                          <UserAvatar photoURL={user.photoURL} name={user.displayName || user.profileName} size={32} />
                         </div>
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold leading-tight" style={{ color: 'var(--text-strong)' }}>{user.displayName || user.profileName || 'No name'} {isCurrent && <span className="ml-1 rounded-full px-1 py-0.5 text-[10px] font-bold align-middle" style={{ background: 'var(--ember-600)', color: '#fff' }}>You</span>}</p>

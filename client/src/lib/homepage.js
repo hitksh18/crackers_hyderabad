@@ -218,23 +218,40 @@ export const defaultProductBanner = (order) => ({
  * does not exist yet (admin has not saved) or the read fails — the page never
  * blanks out.
  */
+const HOMEPAGE_TTL_MS = 60_000;
+let homepageCache = null;
+let homepageAt = 0;
+let homepageInflight = null;
 export async function readHomepageConfig() {
+  const now = Date.now();
+  if (homepageCache && now - homepageAt < HOMEPAGE_TTL_MS) return homepageCache;
+  if (homepageInflight) return homepageInflight;
+  homepageInflight = (async () => {
+    try {
+      const snap = await getDoc(DOC());
+      if (!snap.exists()) return { ...DEFAULT_HOMEPAGE };
+      const data = snap.data();
+      return {
+        ...DEFAULT_HOMEPAGE,
+        ...data,
+        heroCopy: { ...DEFAULT_HERO_COPY, ...(data.heroCopy || {}) },
+        heroBanners: Array.isArray(data.heroBanners) ? data.heroBanners : DEFAULT_HOMEPAGE.heroBanners,
+        promoCards: Array.isArray(data.promoCards) ? data.promoCards : DEFAULT_HOMEPAGE.promoCards,
+        secondaryBanners: Array.isArray(data.secondaryBanners) ? data.secondaryBanners : [],
+        productBanners: Array.isArray(data.productBanners) ? data.productBanners : [],
+      };
+    } catch (error) {
+      console.error('Error reading homepage config:', error);
+      return { ...DEFAULT_HOMEPAGE };
+    }
+  })();
   try {
-    const snap = await getDoc(DOC());
-    if (!snap.exists()) return { ...DEFAULT_HOMEPAGE };
-    const data = snap.data();
-    return {
-      ...DEFAULT_HOMEPAGE,
-      ...data,
-      heroCopy: { ...DEFAULT_HERO_COPY, ...(data.heroCopy || {}) },
-      heroBanners: Array.isArray(data.heroBanners) ? data.heroBanners : DEFAULT_HOMEPAGE.heroBanners,
-      promoCards: Array.isArray(data.promoCards) ? data.promoCards : DEFAULT_HOMEPAGE.promoCards,
-      secondaryBanners: Array.isArray(data.secondaryBanners) ? data.secondaryBanners : [],
-      productBanners: Array.isArray(data.productBanners) ? data.productBanners : [],
-    };
-  } catch (error) {
-    console.error('Error reading homepage config:', error);
-    return { ...DEFAULT_HOMEPAGE };
+    const result = await homepageInflight;
+    homepageCache = result;
+    homepageAt = Date.now();
+    return result;
+  } finally {
+    homepageInflight = null;
   }
 }
 

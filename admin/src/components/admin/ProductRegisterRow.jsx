@@ -109,9 +109,16 @@ const ProductRegisterRow = ({
           {product.imageURL ? (
             <img
               src={product.imageURL}
-              alt={product.name}
+              alt=""
+              aria-hidden="true"
               draggable={false}
+              loading="lazy"
+              decoding="async"
+              width={56}
+              height={56}
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
               className="h-full w-full object-contain p-1"
+              style={{ aspectRatio: '1 / 1' }}
             />
           ) : (
             <ImagePlaceholder compact />

@@ -3,6 +3,13 @@ import { db } from '../firebase';
 
 const DOC = () => doc(db, 'settings', 'siteSettings');
 
+/* 60s in-memory reuse + inflight dedup: Navbar, Footer, TopBanner and Home
+   all read the same doc on one page load — one network read, not four. */
+const SITE_TTL_MS = 60_000;
+let siteCache = null;
+let siteAt = 0;
+let siteInflight = null;
+
 export const DEFAULT_SITE_SETTINGS = {
   branding: {
     logoUrl: '/images/website/nav-logo.png',
@@ -27,28 +34,81 @@ export const DEFAULT_SITE_SETTINGS = {
   updatedBy: null,
 };
 
+/* Homepage SEO defaults — mirrored from admin/src/lib/siteSettings.js (the
+   apps are separate builds with no shared package; keep the two copies
+   identical). The storefront only READS `seo`; all edits happen in admin. */
+export const DEFAULT_SEO = {
+  homepageTitle: 'Buy Firecrackers Online in Hyderabad | Crackers Hyderabad',
+  homepageDescription:
+    'Shop firecrackers online in Hyderabad at Crackers Hyderabad. Explore sparklers, flower pots, ground chakkars, rockets, fancy fireworks and more at great prices.',
+  keywords:
+    'firecrackers in Hyderabad, buy firecrackers online Hyderabad, crackers Hyderabad, fireworks Hyderabad, Diwali crackers Hyderabad, firecrackers online Hyderabad, firecracker shop Hyderabad',
+  canonicalUrl: 'https://crackershyderabad.com/',
+  homepageH1: 'Buy Firecrackers Online in Hyderabad',
+  contentHeading: 'Firecrackers in Hyderabad',
+  content:
+    'Looking for quality firecrackers in Hyderabad? Crackers Hyderabad offers a wide selection of fireworks for Diwali celebrations and special occasions. Explore sparklers, flower pots, ground chakkars, rockets, fancy fireworks, crackers and gift boxes at competitive prices.\n\nBrowse our online collection to find fireworks for family celebrations, festive events and Diwali. Our product range makes it easy to compare prices and choose the right crackers for your celebration in Hyderabad.',
+  ogTitle: 'Buy Firecrackers Online in Hyderabad | Crackers Hyderabad',
+  ogDescription:
+    'Shop firecrackers online in Hyderabad at Crackers Hyderabad. Explore sparklers, flower pots, ground chakkars, rockets, fancy fireworks and more at great prices.',
+  ogImage: '/images/website/crackerhyderabadlogo.png',
+  twitterTitle: 'Buy Firecrackers Online in Hyderabad | Crackers Hyderabad',
+  twitterDescription:
+    'Shop firecrackers online in Hyderabad at Crackers Hyderabad. Explore sparklers, flower pots, ground chakkars, rockets, fancy fireworks and more at great prices.',
+  twitterImage: '/images/website/crackerhyderabadlogo.png',
+  structuredData: {
+    organization: true,
+    website: true,
+    webpage: true,
+    localBusiness: false,
+  },
+};
+
+export const normalizeSeoSettings = (seo) => ({
+  ...DEFAULT_SEO,
+  ...(seo || {}),
+  structuredData: {
+    ...DEFAULT_SEO.structuredData,
+    ...((seo || {}).structuredData || {}),
+  },
+});
+
 export async function readSiteSettings() {
+  const now = Date.now();
+  if (siteCache && now - siteAt < SITE_TTL_MS) return siteCache;
+  if (siteInflight) return siteInflight;
+  siteInflight = (async () => {
+    try {
+      const snap = await getDoc(DOC());
+      if (!snap.exists()) return { ...DEFAULT_SITE_SETTINGS };
+      const data = snap.data();
+      return {
+        ...DEFAULT_SITE_SETTINGS,
+        ...data,
+        branding: { ...DEFAULT_SITE_SETTINGS.branding, ...(data.branding || {}) },
+        contact: { ...DEFAULT_SITE_SETTINGS.contact, ...(data.contact || {}) },
+        socialLinks: { ...DEFAULT_SITE_SETTINGS.socialLinks, ...(data.socialLinks || {}) },
+        announcementBar: {
+          ...DEFAULT_SITE_SETTINGS.announcementBar,
+          ...(data.announcementBar || {}),
+          messages: normalizeAnnouncementMessages(
+            (data.announcementBar || {}).messages ?? DEFAULT_SITE_SETTINGS.announcementBar.messages
+          ),
+        },
+        seo: normalizeSeoSettings(data.seo),
+      };
+    } catch (error) {
+      console.error('Error reading site settings:', error);
+      return { ...DEFAULT_SITE_SETTINGS };
+    }
+  })();
   try {
-    const snap = await getDoc(DOC());
-    if (!snap.exists()) return { ...DEFAULT_SITE_SETTINGS };
-    const data = snap.data();
-    return {
-      ...DEFAULT_SITE_SETTINGS,
-      ...data,
-      branding: { ...DEFAULT_SITE_SETTINGS.branding, ...(data.branding || {}) },
-      contact: { ...DEFAULT_SITE_SETTINGS.contact, ...(data.contact || {}) },
-      socialLinks: { ...DEFAULT_SITE_SETTINGS.socialLinks, ...(data.socialLinks || {}) },
-      announcementBar: {
-        ...DEFAULT_SITE_SETTINGS.announcementBar,
-        ...(data.announcementBar || {}),
-        messages: normalizeAnnouncementMessages(
-          (data.announcementBar || {}).messages ?? DEFAULT_SITE_SETTINGS.announcementBar.messages
-        ),
-      },
-    };
-  } catch (error) {
-    console.error('Error reading site settings:', error);
-    return { ...DEFAULT_SITE_SETTINGS };
+    const result = await siteInflight;
+    siteCache = result;
+    siteAt = Date.now();
+    return result;
+  } finally {
+    siteInflight = null;
   }
 }
 

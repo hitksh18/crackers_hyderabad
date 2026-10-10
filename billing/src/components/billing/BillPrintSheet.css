@@ -40,6 +40,13 @@
   --bps-line-soft: #ece6dc;
   --bps-cream: #fffdf9;
   --bps-cream-2: #faf6ef;
+
+  /* ONE logo box for the whole invoice. Width AND height are declared here so
+     no page can fall back to the artwork's natural dimensions: page 1 = page 2
+     = page 3 = 48x48. The source mark is square (1254x1254), and
+     object-fit:contain on .bps-brand-mark keeps the ratio even if the artwork
+     is ever swapped for a non-square one. */
+  --bps-logo: 48px;
 }
 
 @media print {
@@ -246,10 +253,13 @@
 }
 
 /* The official Ayyapa Fireworks mark ONLY (never the online-store logo).
-   Contained box so the artwork is letterboxed, never stretched. */
+   Fixed box driven by --bps-logo, applied by this ONE rule to every page:
+   the same class on page 1 and on every continuation page, so the size can
+   never drift between pages. Contained, so the artwork is letterboxed and
+   never stretched. */
 .bps-brand-mark {
-  width: 72px;
-  height: 72px;
+  width: var(--bps-logo);
+  height: var(--bps-logo);
   flex: none;
   display: block;
   object-fit: contain;
@@ -319,6 +329,7 @@
 
 .bps-meta-row {
   display: flex;
+  align-items: baseline;
   justify-content: flex-end;
   gap: 10px;
 }
@@ -337,10 +348,15 @@
 
 /* The canonical Order ID: letters and hyphens as well as digits, so it keeps
    tabular figures off (they misalign under proportional glyphs) and gets the
-   maroon accent the rest of the sheet uses for the one number that matters. */
+   maroon accent the rest of the sheet uses for the one number that matters.
+   Set a full step larger than DATE/TIME — this is the number the customer
+   quotes back, and it must not read as a footnote. Identical treatment on
+   page 1 and on every continuation page. */
 .bps-meta-val--order {
+  font-size: 13px;
+  font-weight: 800;
   font-variant-numeric: normal;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   color: var(--bps-maroon);
 }
 
@@ -693,14 +709,14 @@
 
 /* ── Continuation header (pages 2+) ────────────────────────────────────── */
 
+/* Built from the SAME blocks as page 1 — .bps-brand, .bps-brand-mark (the
+   same --bps-logo box) and .bps-doc — only the type sizes step down. Nothing
+   here is allowed to resize the mark: there is deliberately no `--sm`
+   variant of .bps-brand-mark any more, because a second size rule is exactly
+   how page 2 ended up with a different-sized logo than page 1. */
 .bps-header--cont {
   align-items: center;
   padding-bottom: 9px;
-}
-
-.bps-brand-mark--sm {
-  width: 36px;
-  height: 36px;
 }
 
 .bps-cont-name {
@@ -709,13 +725,14 @@
   font-weight: 800;
   letter-spacing: 0.06em;
   color: var(--bps-charcoal);
+  white-space: nowrap;
 }
 
-.bps-cont-sub {
-  margin: 2px 0 0;
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--bps-muted);
+.bps-doc-title--cont {
+  font-size: 13px;
+  letter-spacing: 0.14em;
+}
+
+.bps-doc--cont .bps-doc-rule {
+  margin: 5px 0 6px;
 }

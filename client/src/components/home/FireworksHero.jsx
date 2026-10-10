@@ -914,10 +914,12 @@ const FireworksHero = ({ copy } = {}) => {
         <p className="fx-eyebrow fx-rise" style={{ '--d': '0.15s' }}>
           <span>{c.eyebrow}</span>
         </p>
-        <h1 className="fx-title fx-rise" style={{ '--d': '0.3s' }} aria-label={`${c.titleA} ${c.titleB}`}>
+        {/* Display type only — the page H1 lives once in Home.jsx, so this
+            stays a styled paragraph and the hero looks pixel-identical. */}
+        <p className="fx-title fx-rise" style={{ '--d': '0.3s' }}>
           <span className="fx-title-crackers">{c.titleA}</span>
           <span className="fx-title-hyd">{c.titleB}</span>
-        </h1>
+        </p>
         <p className="fx-sub fx-rise" style={{ '--d': '0.45s' }}>
           {c.sub}
         </p>

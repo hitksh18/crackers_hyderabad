@@ -1,5 +1,6 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { cachedGetDoc, invalidateCache } from './firestoreCache';
 
 /**
  * Homepage configuration — the single shared source of truth for the homepage
@@ -220,9 +221,10 @@ export const defaultProductBanner = (order) => ({
  */
 export async function readHomepageConfig() {
   try {
-    const snap = await getDoc(DOC());
-    if (!snap.exists()) return { ...DEFAULT_HOMEPAGE };
-    const data = snap.data();
+    /* Shared 60s doc cache: Canvas mounts read this on every visit. */
+    const cached = await cachedGetDoc(DOC());
+    if (!cached) return { ...DEFAULT_HOMEPAGE };
+    const { id: _cacheId, ...data } = cached;
     return {
       ...DEFAULT_HOMEPAGE,
       ...data,
@@ -252,5 +254,7 @@ export async function saveHomepageConfig(config, { status = 'draft', userEmail }
     updatedBy: userEmail || 'admin',
   };
   await setDoc(DOC(), payload);
+  /* Writes bypass the read cache — drop it so the next read sees the save. */
+  invalidateCache('doc:settings/homepageConfig');
   return payload;
 }

@@ -17,17 +17,38 @@ import { db } from '../firebase';
  */
 
 /** Read the showcase config; null when missing/unreadable (caller falls back). */
+const SHOWCASE_TTL_MS = 60_000;
+let showcaseCache = null;
+let showcaseAt = 0;
+let showcaseInflight = null;
 export async function readCategoryShowcaseConfig() {
+  const now = Date.now();
+  if (showcaseCache && now - showcaseAt < SHOWCASE_TTL_MS) return showcaseCache;
+  if (showcaseInflight) return showcaseInflight;
+  showcaseInflight = (async () => {
+    try {
+      const snap = await getDoc(doc(db, 'settings', 'categoryShowcase'));
+      if (!snap.exists()) return null;
+      const data = snap.data() || {};
+      return {
+        hidden: Array.isArray(data.hidden) ? data.hidden : [],
+        order: Array.isArray(data.order) ? data.order : [],
+      };
+    } catch {
+      return null;
+    }
+  })();
   try {
-    const snap = await getDoc(doc(db, 'settings', 'categoryShowcase'));
-    if (!snap.exists()) return null;
-    const data = snap.data() || {};
-    return {
-      hidden: Array.isArray(data.hidden) ? data.hidden : [],
-      order: Array.isArray(data.order) ? data.order : [],
-    };
-  } catch {
-    return null;
+    const result = await showcaseInflight;
+    // Cache only successful non-null reads; a null (missing doc) is cheap
+    // to re-check and may appear after Canvas publishes.
+    if (result) {
+      showcaseCache = result;
+      showcaseAt = Date.now();
+    }
+    return result;
+  } finally {
+    showcaseInflight = null;
   }
 }
 

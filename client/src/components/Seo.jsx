@@ -18,6 +18,11 @@ const Seo = ({
   description,
   canonical,
   image = SITE_IMAGE,
+  /* Optional social overrides (homepage SEO settings). When omitted, the
+     page title/description/image double as the share metadata, as before. */
+  ogTitle,
+  ogDescription,
+  twitterImage,
   noindex = false,
   jsonLd = null,
 }) => {
@@ -37,22 +42,26 @@ const Seo = ({
     upsert('link[rel="canonical"]', 'link', { rel: 'canonical', href: url });
 
     const ogImage = image.startsWith('http') ? image : `${SITE_URL}${image}`;
-    upsert('meta[property="og:title"]', 'meta', { property: 'og:title', content: title || document.title });
-    if (description) {
-      upsert('meta[property="og:description"]', 'meta', { property: 'og:description', content: description });
+    const twRaw = twitterImage || image;
+    const twImage = twRaw.startsWith('http') ? twRaw : `${SITE_URL}${twRaw}`;
+    const shareTitle = ogTitle || title || document.title;
+    const shareDescription = ogDescription || description;
+    upsert('meta[property="og:title"]', 'meta', { property: 'og:title', content: shareTitle });
+    if (shareDescription) {
+      upsert('meta[property="og:description"]', 'meta', { property: 'og:description', content: shareDescription });
     }
     upsert('meta[property="og:url"]', 'meta', { property: 'og:url', content: url });
     upsert('meta[property="og:image"]', 'meta', { property: 'og:image', content: ogImage });
-    upsert('meta[name="twitter:title"]', 'meta', { name: 'twitter:title', content: title || document.title });
-    if (description) {
-      upsert('meta[name="twitter:description"]', 'meta', { name: 'twitter:description', content: description });
+    upsert('meta[name="twitter:title"]', 'meta', { name: 'twitter:title', content: shareTitle });
+    if (shareDescription) {
+      upsert('meta[name="twitter:description"]', 'meta', { name: 'twitter:description', content: shareDescription });
     }
-    upsert('meta[name="twitter:image"]', 'meta', { name: 'twitter:image', content: ogImage });
+    upsert('meta[name="twitter:image"]', 'meta', { name: 'twitter:image', content: twImage });
     upsert('meta[name="robots"]', 'meta', {
       name: 'robots',
       content: noindex ? 'noindex, nofollow' : 'index, follow',
     });
-  }, [canonical, description, image, noindex, pathname, title]);
+  }, [canonical, description, image, noindex, ogDescription, ogTitle, pathname, title, twitterImage]);
 
   return jsonLd ? (
     Array.isArray(jsonLd) ? (

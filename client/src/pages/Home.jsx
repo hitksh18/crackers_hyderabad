@@ -1,7 +1,8 @@
-import { Fragment, Suspense, lazy, useEffect, useRef, useState } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { collection } from 'firebase/firestore';
 import { db } from '../firebase';
-import { useNavigate } from 'react-router-dom';
+import { cachedGetDocs } from '../lib/firestoreCache';
 
 import ScrollReveal from '../components/ui/ScrollReveal';
 import { Skeleton } from '../components/ui/Skeleton';
@@ -30,7 +31,7 @@ import { readBuilderConfig } from '../lib/homepageBuilder';
 import { readCategoryShowcaseConfig, applyShowcaseOrder } from '../lib/categoryShowcase';
 import { readSiteSettings, firstAnnouncementText } from '../lib/siteSettings';
 import { resolveTrustCards } from '../lib/trustIcons';
-import Seo from '../components/Seo';
+import Seo, { SITE_URL } from '../components/Seo';
 import toast from '../utils/toast';
 
 const DEFAULT_CONTENT = {
@@ -44,6 +45,151 @@ const DEFAULT_CONTENT = {
 const DEFAULT_STRIP = {
   banner1Text: 'Your trusted online fireworks store in Hyderabad — from premium gift boxes to everyday sparklers',
   banner1Enabled: true,
+};
+
+const HOME_TITLE = 'Buy Firecrackers Online in Hyderabad | Crackers Hyderabad';
+const HOME_DESCRIPTION =
+  'Shop firecrackers online in Hyderabad at Crackers Hyderabad. Explore sparklers, flower pots, ground chakkars, rockets, fancy fireworks and more at great prices.';
+
+/* Internal links to the real category routes (/products?category=<value>).
+   Names and values mirror config/categories.js — never invented URLs. */
+const SEO_CATEGORY_LINKS = [
+  { label: 'Shop Sparkles', value: 'Sparkles' },
+  { label: 'Shop Flower Pots', value: 'Flower Pots' },
+  { label: 'Shop Ground Chakkars', value: 'Ground Chakkars' },
+  { label: 'Shop Rockets', value: 'Rockets' },
+  { label: 'Shop Sky Shots', value: 'Sky Shots' },
+  { label: 'Shop Gift Boxes', value: 'Gift Boxes' },
+];
+
+const HOME_FAQS = [
+  {
+    q: 'Where can I buy firecrackers in Hyderabad?',
+    a: 'You can buy firecrackers online right here at Crackers Hyderabad. Browse the catalogue, add fireworks to your cart and check out online — popular picks include sparklers, flower pots, ground chakkars, rockets and gift boxes.',
+  },
+  {
+    q: 'Can I buy crackers online in Hyderabad?',
+    a: 'Yes. Crackers Hyderabad is an online fireworks store serving Hyderabad — order through the website cart and checkout, then track your order online.',
+  },
+  {
+    q: 'What types of firecrackers are available?',
+    a: 'Sparklers, flower pots, ground chakkars, rockets, bombs, garlands, fancy fireworks, kids\u2019 novelties and gift boxes. Use the category links above to browse each range.',
+  },
+  {
+    q: 'Do you sell Diwali crackers?',
+    a: 'Yes — sparklers, flower pots, ground chakkars, rockets and gift boxes are popular choices for Diwali celebrations and festive occasions.',
+  },
+];
+
+/* Structured data limited to what the page visibly contains: the page
+   itself plus the category list linked from it. No ratings, prices,
+   hours, address or phone — none of that is on this page. */
+const buildHomeJsonLd = (seo) => {
+  const sd = seo?.structuredData || {};
+  const blocks = [];
+  if (sd.webpage !== false) {
+    blocks.push({
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      name: seo?.homepageTitle || HOME_TITLE,
+      description: seo?.homepageDescription || HOME_DESCRIPTION,
+      url: `${SITE_URL}/`,
+      inLanguage: 'en-IN',
+    });
+  }
+  blocks.push({
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: 'Firecracker categories',
+    itemListElement: SEO_CATEGORY_LINKS.map((c, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: c.label.replace(/^Shop /, ''),
+      url: `${SITE_URL}/products?category=${encodeURIComponent(c.value)}`,
+    })),
+  });
+  return blocks;
+};
+
+/* LocalBusiness only from visible/verified settings data (name, URL, logo,
+   contact email shown in the footer, service area). Toggle-gated, off by
+   default — never invents phone, street address or hours. */
+const buildLocalBusinessJsonLd = (siteSettings) => {
+  const email = siteSettings?.contact?.email || '';
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Store',
+    name: 'Crackers Hyderabad',
+    url: `${SITE_URL}/`,
+    image: `${SITE_URL}/images/website/crackerhyderabadlogo.png`,
+    ...(email ? { email } : {}),
+    address: {
+      '@type': 'PostalAddress',
+      addressLocality: 'Hyderabad',
+      addressRegion: 'Telangana',
+      addressCountry: 'IN',
+    },
+    areaServed: 'Hyderabad, Telangana, India',
+  };
+};
+
+/* Homepage head metadata driven by Site Settings → SEO (settings document
+   `settings/siteSettings.seo`), with the long-standing strings as fallback
+   so the page never renders broken metadata while settings load. */
+const HomeSeo = ({ siteSettings }) => {
+  const seo = siteSettings?.seo || null;
+  const sd = seo?.structuredData || {};
+  const title = seo?.homepageTitle || HOME_TITLE;
+  const description = seo?.homepageDescription || HOME_DESCRIPTION;
+  const canonical = seo?.canonicalUrl || '/';
+  const image = seo?.ogImage || '/images/website/crackerhyderabadlogo.png';
+
+  /* Site-wide static JSON-LD (index.html) honours the admin toggles on this
+     page only: removal restores on re-enable, and defaults leave the tags
+     exactly as shipped. */
+  const removedStatic = useRef(new Map());
+  useEffect(() => {
+    if (!siteSettings) return undefined;
+    const apply = (id, on) => {
+      const el = document.getElementById(id);
+      if (on) {
+        if (!el && removedStatic.current.has(id)) {
+          const fresh = document.createElement('script');
+          fresh.id = id;
+          fresh.type = 'application/ld+json';
+          fresh.textContent = removedStatic.current.get(id);
+          document.head.appendChild(fresh);
+        }
+        return;
+      }
+      if (el) {
+        if (!removedStatic.current.has(id)) removedStatic.current.set(id, el.textContent);
+        el.remove();
+      }
+    };
+    apply('ld-store', sd.organization !== false);
+    apply('ld-website', sd.website !== false);
+    return undefined;
+  }, [siteSettings, sd.organization, sd.website]);
+
+  const jsonLd = (() => {
+    const blocks = buildHomeJsonLd(seo);
+    if (sd.localBusiness) blocks.push(buildLocalBusinessJsonLd(siteSettings));
+    return blocks;
+  })();
+
+  return (
+    <Seo
+      title={title}
+      description={description}
+      canonical={canonical}
+      image={image}
+      ogTitle={seo?.ogTitle || undefined}
+      ogDescription={seo?.ogDescription || undefined}
+      twitterImage={seo?.twitterImage || undefined}
+      jsonLd={jsonLd}
+    />
+  );
 };
 
 const Home = () => {
@@ -126,20 +272,22 @@ const Home = () => {
 
   /* Catalogue hydration — heavy collection reads (full product list, promos,
      deals). These progressively enhance the below-fold rails, counts and deal
-     grids; the hero never waits for them. */
+     grids; the hero never waits for them. Products/promos/deals are shared
+     via a 60s cache with /products and the cart revalidation, so Home →
+     Products navigation reuses the same download. */
   useEffect(() => {
     let cancelled = false;
     const fetchCatalogue = async () => {
       try {
-        const [productsSnap, promoSnap, dealsSnap] = await Promise.all([
-          getDocs(collection(db, 'products')).catch(() => ({ docs: [] })),
-          getDocs(collection(db, 'promotionalBanners')).catch(() => ({ docs: [] })),
-          getDocs(collection(db, 'festiveDeals')).catch(() => ({ docs: [] })),
+        const [products, promos, deals] = await Promise.all([
+          cachedGetDocs(collection(db, 'products'), 'products').catch(() => []),
+          cachedGetDocs(collection(db, 'promotionalBanners'), 'promotionalBanners').catch(() => []),
+          cachedGetDocs(collection(db, 'festiveDeals'), 'festiveDeals').catch(() => []),
         ]);
         if (cancelled) return;
-        setAllProducts(productsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-        setPromotionalBanners(promoSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.enabled !== false).sort((a, b) => (b.order || 0) - (a.order || 0)));
-        setFestiveDeals(dealsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => d.enabled !== false).sort((a, b) => (a.order || 0) - (b.order || 0)));
+        setAllProducts(Array.isArray(products) ? products : []);
+        setPromotionalBanners((Array.isArray(promos) ? promos : []).filter(d => d.enabled !== false).sort((a, b) => (b.order || 0) - (a.order || 0)));
+        setFestiveDeals((Array.isArray(deals) ? deals : []).filter(d => d.enabled !== false).sort((a, b) => (a.order || 0) - (b.order || 0)));
       } catch (e) {
         console.error(e);
       } finally {
@@ -155,17 +303,17 @@ const Home = () => {
     (b.salesCount || 0) - (a.salesCount || 0) ||
     (a.name || '').localeCompare(b.name || '');
 
-  const featuredProducts = allProducts
+  const featuredProducts = useMemo(() => allProducts
     .filter(p => p.isFeatured)
-    .concat(allProducts.filter(p => !p.isFeatured).sort(byAdminOrder));
+    .concat(allProducts.filter(p => !p.isFeatured).sort(byAdminOrder)), [allProducts]);
 
-  const bestSellers = [...allProducts]
+  const bestSellers = useMemo(() => [...allProducts]
     .sort(
       (a, b) =>
         (b.salesCount || 0) - (a.salesCount || 0) ||
         (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999) ||
         (a.name || '').localeCompare(b.name || '')
-    );
+    ), [allProducts]);
 
   /* Canvas-editable copy. Every field falls back to the long-standing
      hardcoded editorial, so a homepage saved before the canvas still
@@ -189,13 +337,22 @@ const Home = () => {
   // announcement/stable bars below hero removed from public display per spec — keep config/fetch intact
   void firstAnnouncementText; void siteSettings; void strip;
 
-  const countInCategory = (matchNames) => {
-    return allProducts.filter(p => {
-      if (Array.isArray(p.categories)) {
-        return p.categories.some(cat => matchNames.some(m => m.toLowerCase() === String(cat).toLowerCase()));
+  const categoryCounts = useMemo(() => {
+    const map = new Map();
+    for (const p of allProducts) {
+      const cats = Array.isArray(p.categories) ? p.categories : (p.category ? [p.category] : []);
+      for (const c of cats) {
+        const key = String(c).toLowerCase();
+        map.set(key, (map.get(key) || 0) + 1);
       }
-      return matchNames.some(m => m.toLowerCase() === String(p.category || '').toLowerCase());
-    }).length;
+    }
+    return map;
+  }, [allProducts]);
+
+  const countInCategory = (matchNames) => {
+    let n = 0;
+    for (const m of (matchNames || [])) n += categoryCounts.get(String(m).toLowerCase()) || 0;
+    return n;
   };
 
   // Canonical ordering shared with /products: base categoryDefs filtered
@@ -333,7 +490,11 @@ const Home = () => {
 
   return (
     <div className="min-h-screen">
-      <Seo title="Crackers Hyderabad — Premium Fireworks & Wholesale Crackers" description="Premium fireworks and wholesale crackers in Hyderabad. Gift boxes, sparklers, rockets, flower pots and festival collections at wholesale pricing, with order tracking and doorstep delivery." canonical="/" />
+      <HomeSeo siteSettings={siteSettings} />
+      {/* Single page H1 for assistive tech and crawlers. The hero keeps its
+          visual display type (now a styled paragraph, not a heading), so the
+          premium design is pixel-identical while the document has one H1. */}
+      <h1 className="sr-only">{siteSettings?.seo?.homepageH1 || 'Buy Firecrackers Online in Hyderabad'}</h1>
 
       {/* First viewport: paints synchronously on first render — never inside
           the Suspense boundary below, so lazy below-fold chunks can never
@@ -388,6 +549,61 @@ const Home = () => {
           </>
         )}
       </Suspense>
+
+      {/* Homepage SEO companion: editorial copy, real category links and a
+          compact FAQ. Rendered on every homepage variant (builder or
+          fallback), above the footer — visible content, never hidden. */}
+      <section className="section-pad" style={{ background: 'var(--surface-card)' }} aria-labelledby="home-seo-heading">
+        <div className="shell-wide">
+          <div className="mx-auto max-w-3xl">
+            <p className="section-eyebrow justify-center">Hyderabad</p>
+            <h2 id="home-seo-heading" className="section-title mt-3 text-center">
+              {siteSettings?.seo?.contentHeading || 'Firecrackers in Hyderabad'}
+            </h2>
+            {(siteSettings?.seo?.content
+              ? String(siteSettings.seo.content).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)
+              : [
+                  'Looking for quality firecrackers in Hyderabad? Crackers Hyderabad offers a wide selection of fireworks for Diwali celebrations and special occasions. Explore sparklers, flower pots, ground chakkars, rockets, fancy fireworks, crackers and gift boxes at competitive prices.',
+                  'Browse our online collection to find fireworks for family celebrations, festive events and Diwali. Our product range makes it easy to compare prices and choose the right crackers for your celebration in Hyderabad.',
+                ]
+            ).map((para, i) => (
+              <p key={i} className={i === 0 ? 'mt-4 leading-relaxed' : 'mt-3 leading-relaxed'} style={{ color: 'var(--text-body)' }}>
+                {para}
+              </p>
+            ))}
+            <p className="mt-3 leading-relaxed" style={{ color: 'var(--text-body)' }}>
+              Browse our online collection to find fireworks for family celebrations, festive
+              events and Diwali. Our product range makes it easy to compare prices and choose
+              the right crackers for your celebration in Hyderabad.
+            </p>
+            <nav aria-label="Shop by category" className="mt-6 flex flex-wrap justify-center gap-2">
+              {SEO_CATEGORY_LINKS.map((c) => (
+                <Link
+                  key={c.value}
+                  to={`/products?category=${encodeURIComponent(c.value)}`}
+                  className="inline-flex items-center rounded-[var(--r-pill)] border px-4 py-2 text-sm font-semibold transition-colors"
+                  style={{ borderColor: 'var(--hairline-strong)', background: 'var(--surface-page)', color: 'var(--text-body)' }}
+                >
+                  {c.label}
+                </Link>
+              ))}
+            </nav>
+            <h2 className="section-title mt-10 text-center">Frequently Asked Questions</h2>
+            <div className="mt-4 flex flex-col gap-4">
+              {HOME_FAQS.map((f) => (
+                <div key={f.q}>
+                  <h3 className="text-base font-semibold" style={{ color: 'var(--text-strong)' }}>
+                    {f.q}
+                  </h3>
+                  <p className="mt-1 text-sm leading-relaxed" style={{ color: 'var(--text-body)' }}>
+                    {f.a}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
 
       <Suspense fallback={null}>
         <Footer />

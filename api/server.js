@@ -46,7 +46,7 @@ const {
   consumeNotifyToken,
   isValidEmail,
   readHighestUsedSequence,
-  bumpSequenceFloor,
+  setOnlineCounterTo,
   priceCart,
 } = require('./lib/orders');
 const {
@@ -1453,11 +1453,10 @@ app.put(
 
       await writeOrderIdConfig(db, validation.value, { userEmail: req.caller?.email });
 
-      /* Only ever RAISE the counter, never lower it. Bumping after the write is
-         safe because `bumpSequenceFloor` is monotonic: if a checkout slipped in
-         between the read above and this call, the floor lands above it rather
-         than rewinding under it. */
-      await bumpSequenceFloor(db, validation.value.nextSequence);
+      /* Position the ONLINE counter exactly (never the offline one). Rewinds
+         are allowed on purpose (reset flow); taken ids are stepped over at
+         commit time, so a rewound counter can never re-issue an existing id. */
+      await setOnlineCounterTo(db, validation.value.nextSequence);
 
       console.log(
         `[orderId] format updated to "${validation.value.format}" (prefix ${validation.value.prefix}, seq ${validation.value.sequenceLength}) by ${req.caller?.email || req.caller?.uid}`
@@ -1473,6 +1472,41 @@ app.put(
     } catch (error) {
       console.error('[orderId] failed to save config:', error);
       return res.status(500).json({ error: 'Could not save the Order ID settings' });
+    }
+  })
+);
+
+app.post(
+  '/api/admin/order-id/reset',
+  requireFirebase,
+  requireAdmin,
+  adminLimiter,
+  withDb(async (req, res) => {
+    try {
+      const db = req.firestore;
+      const nextSequence = Math.trunc(Number(req.body?.nextSequence ?? req.body?.nextNumber));
+      if (!Number.isInteger(nextSequence) || nextSequence < 1 || nextSequence > 9999) {
+        return res.status(400).json({ error: 'Next sequence must be a whole number between 1 and 9999.' });
+      }
+      // ONLINE counter only. Existing orders are NOT changed — only the number
+      // used for the next NEW online order is reset. Taken ids are stepped
+      // over at commit time, so resetting to 0001 never overwrites existing
+      // orders. The OFFLINE counter (counters/offlineOrders) is never touched.
+      await setOnlineCounterTo(db, nextSequence);
+      const [{ config }] = await Promise.all([readOrderIdConfig(db)]);
+      const updated = { ...config, nextSequence };
+      await writeOrderIdConfig(db, updated, { userEmail: req.caller?.email });
+      console.log(`[orderId] counter reset to ${nextSequence} by ${req.caller?.email || req.caller?.uid}`);
+      const highestUsedSequence = await readHighestUsedSequence(db);
+      return res.json({
+        success: true,
+        config: updated,
+        highestUsedSequence,
+        preview: buildOrderIdPreview(updated, nextSequence),
+      });
+    } catch (error) {
+      console.error('[orderId] reset failed:', error);
+      return res.status(500).json({ error: 'Could not reset the online counter' });
     }
   })
 );

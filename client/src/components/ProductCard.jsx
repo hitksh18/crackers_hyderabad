@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ShoppingCart,
@@ -182,8 +183,13 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
                 src={product.imageURL}
                 alt={product.name}
                 loading="lazy"
+                decoding="async"
+                width={400}
+                height={320}
                 draggable={false}
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
                 className="h-full w-full object-contain p-4 transition-transform duration-500 ease-out-expo group-hover:scale-[1.05]"
+                style={{ aspectRatio: '5 / 4' }}
               />
             ) : (
               <ImagePlaceholder />
@@ -631,4 +637,6 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
   );
 };
 
-export default ProductCard;
+/* Memoized: the grid renders 100+ cards and every cart/wishlist change
+   re-renders the parent — without memo each card re-renders too. */
+export default memo(ProductCard);

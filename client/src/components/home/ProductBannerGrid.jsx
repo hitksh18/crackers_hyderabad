@@ -22,23 +22,22 @@ export default function ProductBannerGrid({ banners }) {
               to={`/product/${b.productSlug || b.productId}`}
               aria-label={b.productName || b.alt || 'Product offer'}
               className="group block overflow-hidden transition-transform duration-300 ease-out-expo hover:-translate-y-1"
-              style={{ borderRadius: 'var(--r-xl)', background: FIELD, boxShadow: 'var(--shadow-md)' }}
+              style={{ borderRadius: 'var(--r-xl)', background: FIELD, boxShadow: 'var(--shadow-md)', aspectRatio: '16 / 9' }}
             >
-              {b.imageMobile && (
+              {/* <picture> downloads ONE file: mobile below sm, desktop at sm+.
+                  The old two-<img> + hidden pattern fetched both. */}
+              <picture>
+                {b.imageMobile && <source media="(max-width: 639px)" srcSet={b.imageMobile} />}
                 <img
-                  src={b.imageMobile}
-                  alt=""
-                  aria-hidden="true"
+                  src={b.image}
+                  alt={b.alt || b.productName || ''}
                   loading="lazy"
-                  className={`aspect-video w-full sm:hidden ${b.fit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                  decoding="async"
+                  width={640}
+                  height={360}
+                  className={`aspect-video w-full ${b.fit === 'contain' ? 'object-contain' : 'object-cover'}`}
                 />
-              )}
-              <img
-                src={b.image}
-                alt={b.alt || b.productName || ''}
-                loading="lazy"
-                className={`aspect-video w-full ${b.imageMobile ? 'hidden sm:block' : ''} ${b.fit === 'contain' ? 'object-contain' : 'object-cover'}`}
-              />
+              </picture>
             </Link>
           ))}
         </div>

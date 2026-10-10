@@ -45,10 +45,10 @@ const StockCell = ({ outOfStock }) => (
   <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold">
     <span
       aria-hidden="true"
-      className="h-1.5 w-1.5 shrink-0 rounded-full"
+      className="pl-dot h-1.5 w-1.5 shrink-0 rounded-full"
       style={{ background: outOfStock ? 'var(--delta-down, #f2716b)' : 'var(--delta-up, #4fb483)' }}
     />
-    <span style={{ color: outOfStock ? 'var(--delta-down, #f2716b)' : 'var(--delta-up, #4fb483)' }}>
+    <span className={outOfStock ? 'pl-oos' : 'pl-avail'} style={{ color: outOfStock ? 'var(--delta-down, #f2716b)' : 'var(--delta-up, #4fb483)' }}>
       {outOfStock ? 'Out of Stock' : 'Available'}
     </span>
   </span>
@@ -75,42 +75,51 @@ const CategoryBadges = ({ product }) => {
   );
 };
 
+/* Indian currency display only — values are untouched. Integers render
+   without decimals (₹1,493); genuine paise keep up to 2 trimmed decimals. */
+const formatINR = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  return `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+};
+
 const PriceRow = ({ product, showCategories, pricingLoading }) => (
   <tr
-    className="border-t transition-colors hover:bg-primary-50 dark:hover:bg-primary-900/15"
+    className="pl-row border-t transition-colors hover:bg-primary-50 dark:hover:bg-primary-900/15"
     style={{ borderColor: 'var(--hairline)' }}
   >
+    {/* Full product name — wraps to 2–3 lines, never truncated. */}
     <td
-      className="max-w-0 truncate px-4 py-2 text-[13px] font-semibold"
-      style={{ color: 'var(--text-strong)' }}
+      className="pl-name px-4 py-2.5 align-top text-[13px] font-semibold"
+      style={{ color: 'var(--text-strong)', lineHeight: 1.4 }}
       title={product.name}
     >
       {product.name}
     </td>
 
     {showCategories && (
-      <td className="px-4 py-2">
+      <td className="pl-cat px-4 py-2.5 align-top">
         <CategoryBadges product={product} />
       </td>
     )}
 
-    <td className="price tabular whitespace-nowrap px-4 py-2 text-right text-[13px]" style={{ color: 'var(--text-body)' }}>
-      {pricingLoading ? <PriceSkeleton /> : `₹${product.offlineMRP || product.price || 0}`}
+    <td className="price tabular whitespace-nowrap px-4 py-2.5 text-right align-top text-[13px]" style={{ color: 'var(--text-body)' }}>
+      {pricingLoading ? <PriceSkeleton /> : formatINR(product.offlineMRP || product.price || 0)}
     </td>
 
-    <td className="price tabular whitespace-nowrap px-4 py-2 text-right text-[13px]">
+    <td className="price tabular whitespace-nowrap px-4 py-2.5 text-right align-top text-[13px]">
       {pricingLoading ? (
         <PriceSkeleton />
       ) : product.offlineDiscountPrice ? (
         <span className="font-bold" style={{ color: 'var(--leaf-600)' }}>
-          ₹{product.offlineDiscountPrice}
+          {formatINR(product.offlineDiscountPrice)}
         </span>
       ) : (
         <span style={{ color: 'var(--text-subtle)' }}>—</span>
       )}
     </td>
 
-    <td className="whitespace-nowrap px-4 py-2 text-right">
+    <td className="pl-status whitespace-nowrap px-4 py-2.5 text-right align-top">
       <StockCell outOfStock={product.outOfStock} />
     </td>
   </tr>
@@ -224,12 +233,16 @@ const PriceList = () => {
       />
       <div className="pricelist-print-area">
         <div className="shell py-6 md:py-8">
-          {/* Print-only masthead. Screen users already have the page header. */}
+          {/* Print-only masthead (page 1). Screen users already have the page header.
+              Continuation pages are identified by the repeated table header
+              plus the "Crackers Hyderabad · Price List · Page X of Y" footer
+              on every page. */}
           <div className="pl-print-head">
-            <p className="pl-print-brand">Crackers Hyderabad</p>
+            <p className="pl-print-brand">CRACKERS HYDERABAD</p>
+            <p className="pl-print-title">PRICE LIST</p>
             <p className="pl-print-meta">
-              Price List
-              {filterSummary ? ` — ${filterSummary}` : ''} · {filteredProducts.length} products · {new Date().toLocaleDateString()}
+              Generated: {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · {filteredProducts.length} Products
+              {filterSummary ? ` · ${filterSummary}` : ''}
             </p>
           </div>
 
@@ -377,8 +390,28 @@ const PriceList = () => {
                 ) : null}
               />
             ) : (
-              <div className="scroll-x">
-                <table className="pl-table w-full min-w-[40rem] border-collapse">
+              <div className="pl-scroll">
+                {/* Fixed layout + colgroup: the name column owns ~half the
+                    width on screen and in print; prices/status stay compact
+                    and right aligned. When a category is selected the category
+                    column is hidden and its share goes to the name column. */}
+                <table className="pl-table w-full border-collapse">
+                  {showCategories ? (
+                    <colgroup>
+                      <col style={{ width: '46%' }} />
+                      <col style={{ width: '22%' }} />
+                      <col style={{ width: '11%' }} />
+                      <col style={{ width: '11%' }} />
+                      <col style={{ width: '10%' }} />
+                    </colgroup>
+                  ) : (
+                    <colgroup>
+                      <col style={{ width: '58%' }} />
+                      <col style={{ width: '14%' }} />
+                      <col style={{ width: '14%' }} />
+                      <col style={{ width: '14%' }} />
+                    </colgroup>
+                  )}
                   <PriceTableHead showCategories={showCategories} />
                   <tbody>
                     {filteredProducts.map((product) => (
@@ -401,8 +434,39 @@ const PriceList = () => {
         .pl-print-head { display: none; }
         .scroll-x-pills { scrollbar-width: thin; }
 
+        /* ---- Screen table: fixed layout, wrapping names, sticky head ---- */
+        .pl-table { table-layout: fixed; }
+        .pl-table thead th {
+          position: sticky;
+          top: 0;
+          z-index: 1;
+          background: var(--surface-sunken);
+        }
+        .pl-name {
+          overflow-wrap: break-word;
+          word-break: normal;
+          hyphens: none;
+        }
+        /* Desktop: no horizontal scroll — the table fits the content width. */
+        .pl-scroll { overflow: visible; }
+        /* Small screens: allow the table to scroll horizontally instead of
+           crushing the columns. Desktop is unaffected. */
+        @media (max-width: 767px) {
+          .pl-scroll { overflow-x: auto; }
+          .pl-scroll .pl-table { min-width: 40rem; }
+        }
+
         @media print {
-          @page { margin: 12mm; }
+          @page {
+            size: A4 landscape;
+            margin: 10mm 9mm 13mm 9mm;
+            @bottom-center {
+              content: "Crackers Hyderabad · Price List · Page " counter(page) " of " counter(pages);
+              font-size: 8px;
+              color: #777777;
+              font-family: Arial, Helvetica, sans-serif;
+            }
+          }
 
           body * { visibility: hidden !important; }
 
@@ -414,32 +478,128 @@ const PriceList = () => {
             left: 0;
             top: 0;
             width: 100%;
+            background: #FFFFFF !important;
           }
 
+          /* Full printable width — release the screen shell constraints. */
+          .pricelist-print-area .shell {
+            width: 100% !important;
+            max-width: none !important;
+            padding: 0 !important;
+          }
+          .pricelist-print-area .pl-scroll { overflow: visible !important; }
+
+          /* Compact page-1 masthead with a thin brand accent line. */
           .pl-print-head {
             display: block;
-            margin-bottom: 10px;
-            padding-bottom: 8px;
-            border-bottom: 2px solid #000000;
+            margin-bottom: 5px;
+            padding-bottom: 4px;
+            border-bottom: 2px solid #B3401F;
           }
 
           .pl-print-brand {
-            font-size: 18px;
-            font-weight: 700;
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
             margin: 0;
+            color: #111111 !important;
+            font-family: Arial, Helvetica, sans-serif;
+          }
+
+          .pl-print-title {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.22em;
+            margin: 1px 0 0 0;
+            color: #B3401F !important;
+            font-family: Arial, Helvetica, sans-serif;
           }
 
           .pl-print-meta {
-            font-size: 11px;
-            margin: 2px 0 0 0;
+            font-size: 9px;
+            margin: 1px 0 0 0;
+            color: #555555 !important;
+            font-family: Arial, Helvetica, sans-serif;
           }
 
-          .pl-table { font-size: 11px; min-width: 0 !important; }
-          .pl-table th,
-          .pl-table td { padding: 5px 6px !important; }
+          /* Compact professional table: dark text, subtle borders, zebra. */
+          .pl-table {
+            width: 100% !important;
+            min-width: 0 !important;
+            table-layout: fixed !important;
+            font-size: 10px;
+            font-family: Arial, Helvetica, sans-serif;
+            border-collapse: collapse;
+            background: #FFFFFF !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
           .pl-table thead { display: table-header-group; }
-          .pl-table tr { break-inside: avoid; }
-          .pl-table .badge { border: 0 !important; background: transparent !important; padding: 0 !important; }
+          .pl-table thead th {
+            position: static !important;
+            background: #E4E4E4 !important;
+            color: #111111 !important;
+            font-weight: 800;
+            font-size: 9px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            border-top: 1px solid #888888 !important;
+            border-bottom: 2px solid #555555 !important;
+            border-left: 1px solid #BBBBBB !important;
+            border-right: 1px solid #BBBBBB !important;
+            padding: 4px 6px !important;
+          }
+          .pl-table thead th:nth-child(3),
+          .pl-table thead th:nth-child(4) { text-align: right !important; }
+          .pl-table tbody td {
+            background: #FFFFFF !important;
+            color: #111111 !important;
+            border: 1px solid #CCCCCC !important;
+            box-shadow: none !important;
+            padding: 3px 6px !important;
+            vertical-align: top !important;
+          }
+          /* Alternating rows for scanability (needs the exact-adjust above). */
+          .pl-table tbody tr:nth-child(even) td { background: #F5F5F5 !important; }
+          .pl-table tr { break-inside: avoid; page-break-inside: avoid; }
+          .pl-table tr:hover td { background: #FFFFFF !important; }
+          .pl-table tbody tr:nth-child(even):hover td { background: #F5F5F5 !important; }
+
+          /* Complete names in print — never ellipsis, wrap to more lines. */
+          .pl-table .pl-name,
+          .pl-table td.truncate {
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            overflow-wrap: break-word !important;
+            word-break: normal !important;
+            font-size: 11px !important;
+            font-weight: 600 !important;
+            line-height: 1.35 !important;
+            color: #111111 !important;
+          }
+          /* Category wraps too; badges flatten to plain text. */
+          .pl-table .pl-cat {
+            overflow-wrap: break-word !important;
+            color: #333333 !important;
+          }
+          /* MRP secondary, sale price emphasized — both tabular. */
+          .pl-table .price { color: #444444 !important; font-weight: 400 !important; }
+          .pl-table .price .font-bold { color: #111111 !important; font-weight: 800 !important; }
+          .pl-table .badge {
+            border: 0 !important;
+            background: transparent !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+            color: #333333 !important;
+            font-weight: 400 !important;
+          }
+          /* Status centered with a clear text indicator. */
+          .pl-table thead th:last-child { text-align: center !important; }
+          .pl-table .pl-status { text-align: center !important; }
+          .pl-table .pl-avail { color: #1A7A3C !important; font-weight: 700 !important; }
+          .pl-table .pl-oos { color: #B02020 !important; font-weight: 700 !important; }
+          .pl-table .pl-dot { display: none !important; }
         }
       `}</style>
     </div>

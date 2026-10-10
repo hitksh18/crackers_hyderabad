@@ -132,6 +132,12 @@ const EmailAutomation = () => {
   const [logEvent, setLogEvent] = useState('');
   const [logStatus, setLogStatus] = useState('');
   const [logSearch, setLogSearch] = useState('');
+  /* Debounced search: every keystroke must not fire /logs?q=. */
+  const [debouncedLogSearch, setDebouncedLogSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedLogSearch(logSearch.trim()), 400);
+    return () => clearTimeout(t);
+  }, [logSearch]);
 
   const [testTo, setTestTo] = useState('');
   const [testing, setTesting] = useState(false);
@@ -139,6 +145,9 @@ const EmailAutomation = () => {
   const [sending, setSending] = useState(false);
   const [confirmSend, setConfirmSend] = useState(false);
 
+  /* Stable: selecting a template must not refetch the whole page.
+     Previously `load` depended on `templateEvent`, so every template
+     <select> change re-GET /api/admin/email-automation. */
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -155,8 +164,9 @@ const EmailAutomation = () => {
       setSavedBranding(JSON.stringify(data.branding || null));
       setEmailStatus(data.emailStatus || null);
       setLastTriggered(data.lastTriggered || {});
-      if (data.events?.length > 0 && !data.events.some((e) => e.key === templateEvent)) {
-        setTemplateEvent(data.events[0].key);
+      if (data.events?.length > 0) {
+        const keys = new Set(data.events.map((e) => e.key));
+        setTemplateEvent((prev) => (prev && keys.has(prev) ? prev : data.events[0].key));
       }
     } catch (error) {
       console.error('[automation] load failed:', error);
@@ -164,7 +174,7 @@ const EmailAutomation = () => {
     } finally {
       setLoading(false);
     }
-  }, [templateEvent]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -176,7 +186,7 @@ const EmailAutomation = () => {
       const params = new URLSearchParams();
       if (logEvent) params.set('event', logEvent);
       if (logStatus) params.set('status', logStatus);
-      if (logSearch.trim()) params.set('q', logSearch.trim());
+      if (debouncedLogSearch) params.set('q', debouncedLogSearch);
       const response = await authFetch(`/api/admin/email-automation/logs?${params.toString()}`);
       if (!response.ok) throw new Error(await readApiError(response, 'Failed to load logs'));
       const data = await response.json();
@@ -186,7 +196,7 @@ const EmailAutomation = () => {
     } finally {
       setLogsLoading(false);
     }
-  }, [logEvent, logStatus, logSearch]);
+  }, [logEvent, logStatus, debouncedLogSearch]);
 
   useEffect(() => {
     if (tab === 'logs') loadLogs();
@@ -359,7 +369,23 @@ const EmailAutomation = () => {
       <AdminHeader title="Email Automation" />
       <main className="mx-auto w-full max-w-[1800px] px-4 pb-16 pt-6 lg:px-8 xl:px-10">
         {loading ? (
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading Email Automation…</p>
+          <div aria-label="Loading Email Automation" aria-busy="true">
+            <div className="mb-4 rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)' }}>
+              <div className="h-3 w-40 animate-pulse rounded-full" style={{ background: 'var(--surface-sunken)' }} />
+              <div className="mt-2 h-3 w-72 max-w-full animate-pulse rounded-full" style={{ background: 'var(--surface-sunken)' }} />
+            </div>
+            <div className="mb-4 flex gap-1 overflow-hidden rounded-full border p-1" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)' }} aria-hidden="true">
+              {TABS.map((t) => (
+                <span key={t.id} className="h-9 w-24 flex-none animate-pulse rounded-full" style={{ background: 'var(--surface-card)' }} />
+              ))}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-24 animate-pulse rounded-2xl border" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)' }} />
+              ))}
+            </div>
+            <p className="sr-only">Loading Email Automation…</p>
+          </div>
         ) : loadError ? (
           <div>
             <p className="text-sm font-semibold" style={{ color: 'var(--crimson-600)' }}>{loadError}</p>

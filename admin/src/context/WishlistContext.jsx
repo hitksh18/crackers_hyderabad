@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { cachedGetDoc } from '../lib/firestoreCache';
 import { useAuth } from '../context/AuthContext';
 
 const STORAGE_KEY = 'crackers_wishlist';
@@ -40,9 +41,10 @@ export const WishlistProvider = ({ children }) => {
     let cancelled = false;
     const syncFromCloud = async () => {
       try {
-        const snap = await getDoc(doc(db, 'users', user.uid));
-        if (snap.exists()) {
-          const cloudIds = Array.isArray(snap.data().wishlist) ? snap.data().wishlist : [];
+        // Shared doc cache: same users/{uid} AdminTopBar reads.
+        const data = await cachedGetDoc(doc(db, 'users', user.uid));
+        if (data) {
+          const cloudIds = Array.isArray(data.wishlist) ? data.wishlist : [];
           if (!cancelled) {
             setWishlist(prev => {
               const cloudOnly = removedDuringSyncRef.current.size
@@ -82,8 +84,12 @@ export const WishlistProvider = ({ children }) => {
 
   const isWishlisted = useCallback((id) => wishlist.includes(id), [wishlist]);
 
+  const value = useMemo(() => ({
+    wishlist, toggleWishlist, isWishlisted, wishlistCount: wishlist.length,
+  }), [wishlist, toggleWishlist, isWishlisted]);
+
   return (
-    <WishlistContext.Provider value={{ wishlist, toggleWishlist, isWishlisted, wishlistCount: wishlist.length }}>
+    <WishlistContext.Provider value={value}>
       {children}
     </WishlistContext.Provider>
   );

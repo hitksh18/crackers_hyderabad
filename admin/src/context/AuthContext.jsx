@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import {
   signInWithPopup,
   GoogleAuthProvider,
@@ -242,7 +242,7 @@ export const AuthProvider = ({ children }) => {
     };
   }, [fetchUserRole]);
 
-  const loginWithGoogle = async () => {
+  const loginWithGoogle = useCallback(async () => {
     const provider = new GoogleAuthProvider();
     try {
       const result = await signInWithPopup(auth, provider);
@@ -270,7 +270,7 @@ export const AuthProvider = ({ children }) => {
       );
       throw error;
     }
-  };
+  }, [fetchUserRole]);
 
   /**
    * Link the signed-in account to a Google identity (Profile page).
@@ -278,7 +278,7 @@ export const AuthProvider = ({ children }) => {
    * session to whatever Google account is chosen, silently replacing the
    * current user — a real risk for staff sessions.
    */
-  const linkWithGoogle = async () => {
+  const linkWithGoogle = useCallback(async () => {
     const provider = new GoogleAuthProvider();
     try {
       if (!auth.currentUser) {
@@ -295,9 +295,9 @@ export const AuthProvider = ({ children }) => {
       );
       throw error;
     }
-  };
+  }, [fetchUserRole]);
 
-  const loginWithEmail = async (email, password) => {
+  const loginWithEmail = useCallback(async (email, password) => {
     try {
       const result = await signInWithEmailAndPassword(auth, email, password);
       
@@ -312,9 +312,9 @@ export const AuthProvider = ({ children }) => {
       );
       throw error;
     }
-  };
+  }, [fetchUserRole]);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     try {
       await firebaseSignOut(auth);
       setUserRole(null);
@@ -326,9 +326,9 @@ export const AuthProvider = ({ children }) => {
       toast.error(error.message);
       throw error;
     }
-  };
+  }, []);
 
-  const value = {
+  const value = useMemo(() => ({
     user,
     isAdmin,
     isSales,
@@ -342,7 +342,7 @@ export const AuthProvider = ({ children }) => {
     loginWithEmail,
     signOut,
     refreshRole,
-  };
+  }), [user, isAdmin, isSales, isStaff, userRole, roleError, loading, authReady, loginWithGoogle, linkWithGoogle, loginWithEmail, signOut, refreshRole]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

@@ -29,26 +29,26 @@ export default function SecondaryBannerGrid({ banners }) {
       <div className="shell-wide">
         <div className={`grid gap-3 sm:gap-4 ${cols}`}>
           {list.map((b) => {
+            const src = b.imageDesktop || b.image;
             const frame = (
               <span
                 className="block h-full w-full overflow-hidden"
-                style={{ borderRadius: 'var(--r-xl)', background: FIELD, boxShadow: 'var(--shadow-md)' }}
+                style={{ borderRadius: 'var(--r-xl)', background: FIELD, boxShadow: 'var(--shadow-md)', aspectRatio: '16 / 9' }}
               >
-                {b.imageMobile && (
+                {/* <picture> downloads ONE file: mobile below sm, desktop at sm+.
+                    The old two-<img> + hidden pattern fetched both. */}
+                <picture>
+                  {b.imageMobile && <source media="(max-width: 639px)" srcSet={b.imageMobile} />}
                   <img
-                    src={b.imageMobile}
-                    alt=""
-                    aria-hidden="true"
+                    src={src}
+                    alt={b.alt || ''}
                     loading="lazy"
-                    className={`aspect-video w-full sm:hidden ${fitClass(b)}`}
+                    decoding="async"
+                    width={640}
+                    height={360}
+                    className={`aspect-video w-full ${fitClass(b)}`}
                   />
-                )}
-                <img
-                  src={b.imageDesktop || b.image}
-                  alt={b.alt || ''}
-                  loading="lazy"
-                  className={`aspect-video w-full ${b.imageMobile ? 'hidden sm:block' : ''} ${fitClass(b)}`}
-                />
+                </picture>
               </span>
             );
             return b.ctaLink ? (

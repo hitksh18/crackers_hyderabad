@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { collection, getDocs, doc, writeBatch } from 'firebase/firestore';
+import { collection, doc, writeBatch } from 'firebase/firestore';
 import { useSearchParams } from 'react-router-dom';
 import {
   Check, GripVertical, LayoutGrid, List,
   PackageSearch, RotateCcw, SearchX,
 } from 'lucide-react';
 import { db } from '../firebase';
+import { cachedGetDocs } from '../lib/firestoreCache';
 import ProductCard from '../components/ProductCard';
 import CategoryIcon from '../components/CategoryIconPack';
 import EmptyState from '../components/ui/EmptyState';
@@ -173,9 +174,10 @@ const Products = () => {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const snapshot = await getDocs(collection(db, 'products'));
-        const productsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setProducts(productsData);
+        // Shared 60s cache with Home + cart revalidation: navigating
+        // Home ↔ Products reuses one download, filtering stays local.
+        const productsData = await cachedGetDocs(collection(db, 'products'), 'products');
+        setProducts(Array.isArray(productsData) ? productsData : []);
       } catch (error) {
         console.error('Error fetching products:', error);
       } finally {

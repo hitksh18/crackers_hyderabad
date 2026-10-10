@@ -52,6 +52,9 @@ function AppContent() {
   const isProductsPage = location.pathname === '/products';
   const isCheckoutPage = location.pathname === '/checkout';
   const isCartPage = location.pathname === '/cart';
+  /* Focused authentication screen: no storefront chrome (banner, navbar,
+     footer strip, WhatsApp float) on /login. */
+  const isLoginPage = location.pathname === '/login';
   /* The scrolling announcement bar sits above the navbar on the storefront
      routes that show it. Product detail is one of them, so it gets the exact
      same TopBanner instance as the home page. */
@@ -107,8 +110,8 @@ function AppContent() {
       </a>
 
       <ScrollToTop />
-      {showTopBanner && <TopBanner />}
-      {isCheckoutPage ? <CheckoutNavbar /> : isCartPage ? <CheckoutNavbar title="Shopping Cart" /> : <Navbar />}
+      {!isLoginPage && showTopBanner && <TopBanner />}
+      {!isLoginPage && (isCheckoutPage ? <CheckoutNavbar /> : isCartPage ? <CheckoutNavbar title="Shopping Cart" /> : <Navbar />)}
 
       <main
         id="main-content"
@@ -161,16 +164,18 @@ function AppContent() {
       {/* The desktop cart is a fixed-viewport workspace — the footer strip
           stays out of its way on lg so it can never push the page into a
           document scroll. Mobile keeps the footer with its natural scroll. */}
-      {!isHomePage && (
+      {!isHomePage && !isLoginPage && (
         <div className={isCartPage ? 'lg:hidden' : undefined}>
           <Suspense fallback={null}>
             <SimpleCopyright />
           </Suspense>
         </div>
       )}
-      <Suspense fallback={null}>
-        <WhatsAppButton />
-      </Suspense>
+      {!isLoginPage && (
+        <Suspense fallback={null}>
+          <WhatsAppButton />
+        </Suspense>
+      )}
       <CustomToast />
     </>
   );

@@ -1,6 +1,7 @@
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { collection } from 'firebase/firestore';
 import { db } from '../firebase';
+import { cachedGetDocs } from '../lib/firestoreCache';
 import { useAuth } from './AuthContext';
 import { trackFunnel } from '../utils/siteTracker';
 import toast from '../utils/toast';
@@ -91,18 +92,14 @@ export const CartProvider = ({ children }) => {
     setCart(stored);
     setHydrated(true);
 
-    // Revalidate against the live catalogue once per hydrate: a product
-    // deleted in Admin no longer exists in Firestore, so silently drop it
-    // from the cart (and persist the cleaned cart) instead of rendering a
-    // stale deleted product after refresh. Fail-open: if the catalogue read
-    // itself fails, keep the cart untouched — checkout re-prices from live
-    // products server-side regardless.
+    // Revalidate against the live catalogue once per hydrate, via the shared
+    // 60s cache (same download Home and /products use) — not a 4th full scan.
     let cancelled = false;
     (async () => {
       try {
-        const snap = await getDocs(collection(db, 'products'));
+        const live = await cachedGetDocs(collection(db, 'products'), 'products');
         if (cancelled) return;
-        const liveIds = new Set(snap.docs.map((d) => d.id));
+        const liveIds = new Set((Array.isArray(live) ? live : []).map((d) => d.id));
         setCart((prev) => {
           if (prev.every((item) => !item || liveIds.has(item.id))) return prev;
           const cleaned = prev.filter((item) => item && liveIds.has(item.id));
@@ -138,7 +135,9 @@ export const CartProvider = ({ children }) => {
 
   // Every mutation uses the functional form so two updates landing in the same
   // tick (double-tapping add-to-cart) cannot clobber one another.
-  const addToCart = (product, quantity = 1) => {
+  // useCallback keeps the provider value stable so ProductCards don't
+  // re-render when unrelated state changes.
+  const addToCart = useCallback((product, quantity = 1) => {
     setCart((prev) => {
       const existingItem = prev.find((item) => item.id === product.id);
 
@@ -156,31 +155,39 @@ export const CartProvider = ({ children }) => {
     // The one funnel step no URL implies. Fire-and-forget, outside the state
     // update so a blocked beacon can never stop a product reaching the cart.
     trackFunnel('addToCart');
-  };
+  }, []);
 
-  const removeFromCart = (productId) => {
+  const removeFromCart = useCallback((productId) => {
     setCart((prev) => prev.filter((item) => item.id !== productId));
     notifyCart('Product removed from cart');
-  };
+  }, []);
 
-  const updateQuantity = (productId, quantity) => {
+  const updateQuantity = useCallback((productId, quantity) => {
     if (quantity <= 0) {
-      removeFromCart(productId);
+      setCart((prev) => prev.filter((item) => item.id !== productId));
+      notifyCart('Product removed from cart');
       return;
     }
 
     setCart((prev) => prev.map((item) => (item.id === productId ? { ...item, quantity } : item)));
-  };
+  }, []);
 
-  const clearCart = () => {
+  const clearCart = useCallback(() => {
     setCart([]);
-    clearCouponState();
+    setCoupon(null);
+    setCouponInput('');
+    setCouponError('');
+    try {
+      sessionStorage.removeItem(COUPON_SESSION_KEY);
+    } catch {
+      // Storage unavailable — in-memory state still clears.
+    }
     try {
       localStorage.removeItem(storageKeyRef.current);
     } catch {
       // Nothing to clean up if storage is unavailable.
     }
-  };
+  }, []);
 
   /*
    * Shared applied-coupon state — the single authority for Cart and Checkout.
@@ -193,17 +200,6 @@ export const CartProvider = ({ children }) => {
   const [couponInput, setCouponInput] = useState('');
   const [couponError, setCouponError] = useState('');
   const [couponApplying, setCouponApplying] = useState(false);
-
-  const clearCouponState = () => {
-    setCoupon(null);
-    setCouponInput('');
-    setCouponError('');
-    try {
-      sessionStorage.removeItem(COUPON_SESSION_KEY);
-    } catch {
-      // Storage unavailable — in-memory state still clears.
-    }
-  };
 
   const unitPriceOf = (item) => item.discountPrice || item.onlinePrice || item.price || 0;
 
@@ -233,7 +229,7 @@ export const CartProvider = ({ children }) => {
     return { subtotal, discountAmount: amount, total: Math.round((subtotal - amount) * 100) / 100 };
   };
 
-  const validateCouponCode = async (code, { silent = false, email, phone } = {}) => {
+  const validateCouponCode = useCallback(async (code, { silent = false, email, phone } = {}) => {
     const trimmed = String(code || '').trim();
     if (!trimmed) {
       if (!silent) setCouponError('Enter a coupon code.');
@@ -273,9 +269,9 @@ export const CartProvider = ({ children }) => {
     } finally {
       setCouponApplying(false);
     }
-  };
+  }, [cart]);
 
-  const applyCoupon = async (code, options = {}) => {
+  const applyCoupon = useCallback(async (code, options = {}) => {
     const applied = await validateCouponCode(code ?? couponInput, options);
     if (!applied) {
       setCoupon(null);
@@ -289,15 +285,23 @@ export const CartProvider = ({ children }) => {
       // Storage unavailable — the coupon still applies for this page.
     }
     return applied;
-  };
+  }, [validateCouponCode, couponInput]);
 
-  const removeCoupon = () => {
-    clearCouponState();
-  };
+  const removeCoupon = useCallback(() => {
+    setCoupon(null);
+    setCouponInput('');
+    setCouponError('');
+    try {
+      sessionStorage.removeItem(COUPON_SESSION_KEY);
+    } catch {
+      // Storage unavailable — in-memory state still clears.
+    }
+  }, []);
 
   /* Cart edits re-resolve the coupon in two steps: an instant local
      re-estimate so every +/- updates totals synchronously, then the silent
-     server revalidation (authoritative — restores or drops as needed). */
+     server revalidation (authoritative — restores or drops as needed).
+     Debounced 500ms so rapid +/- taps revalidate once, not per tap. */
   const cartSignature = cart.map((item) => `${item.id}:${item.quantity}`).join('|');
   useEffect(() => {
     if (!hydrated) return undefined;
@@ -317,30 +321,35 @@ export const CartProvider = ({ children }) => {
       }
     }
     let cancelled = false;
-    validateCouponCode(stored, { silent: true }).then((fresh) => {
-      if (cancelled) return;
-      if (fresh) {
-        setCoupon(fresh);
-      } else if (coupon) {
-        setCoupon(null);
-        couponDroppedNotice();
-      }
-    });
+    const timer = setTimeout(() => {
+      validateCouponCode(stored, { silent: true }).then((fresh) => {
+        if (cancelled) return;
+        if (fresh) {
+          setCoupon(fresh);
+        } else if (coupon) {
+          setCoupon(null);
+          couponDroppedNotice();
+        }
+      });
+    }, 500);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, cartSignature]);
 
-  const getCartTotal = () =>
+  const getCartTotal = useCallback(() =>
     cart.reduce((total, item) => {
       const price = item.discountPrice || item.onlinePrice || item.price || 0;
       return total + price * item.quantity;
-    }, 0);
+    }, 0), [cart]);
 
-  const getCartCount = () => cart.reduce((count, item) => count + item.quantity, 0);
+  const getCartCount = useCallback(() => cart.reduce((count, item) => count + item.quantity, 0), [cart]);
 
-  const value = {
+  /* Stable provider value: without this every cart render mints a new object
+     and re-renders all 100+ ProductCards, even when the cart is untouched. */
+  const value = useMemo(() => ({
     cart,
     /*
      * Whether `cart` has actually been read from storage yet. Exposed because an
@@ -367,7 +376,7 @@ export const CartProvider = ({ children }) => {
     validateCouponCode,
     applyCoupon,
     removeCoupon,
-  };
+  }), [cart, hydrated, cartNotice, addToCart, removeFromCart, updateQuantity, clearCart, getCartTotal, getCartCount, coupon, couponInput, couponError, couponApplying, validateCouponCode, applyCoupon, removeCoupon]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };

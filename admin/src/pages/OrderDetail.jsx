@@ -306,11 +306,8 @@ const AdminOrderDetail = () => {
   if (loading) {
     return (
       <div className="admin-page">
+        <AdminHeader title="Order" backFallback="/orders" />
         <div className="shell section-pad-sm">
-          <div className="mb-8 space-y-3">
-            <Skeleton className="h-3 w-28" />
-            <Skeleton className="h-10 w-80" />
-          </div>
           <div className="space-y-4">
             <Skeleton className="h-40 w-full" rounded="var(--r-lg)" />
             <Skeleton className="h-72 w-full" rounded="var(--r-lg)" />

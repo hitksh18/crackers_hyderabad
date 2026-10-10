@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import '../admin-portrait.css';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, getDocs, getDoc, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { invalidateCache } from '../lib/firestoreCache';
-import { cachedGetDocs } from '../lib/firestoreCache';
+import { collection, getDoc, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { invalidateCache, cachedGetDocs, ordersCacheTtl } from '../lib/firestoreCache';
 import { db } from '../firebase';
 import { Link } from 'react-router-dom';
 import { Eye, FileText, StickyNote, Trash2, Search, ChevronDown } from 'lucide-react';
@@ -85,8 +84,9 @@ const Orders = () => {
 
   const fetchOrders = async () => {
     try {
-      const snapshot = await getDocs(collection(db, 'orders'));
-      const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Shared 30s cache with Dashboard: Dashboard ↔ Orders round-trips
+      // reuse the same download instead of re-fetching the full collection.
+      const ordersData = await cachedGetDocs(collection(db, 'orders'), 'orders', { ttl: ordersCacheTtl });
       setOrders(ordersData.sort((a, b) => {
         const dateA = a.createdAt?.toDate?.() || new Date(0);
         const dateB = b.createdAt?.toDate?.() || new Date(0);
@@ -495,12 +495,15 @@ const Orders = () => {
     </Link>
   );
 
+  /* Shell-first: header + toolbar paint immediately; only the table
+     section shows a skeleton while orders load. Previously the entire page
+     (including search/filters) was blocked behind `loading`. */
   if (loading) {
     return (
       <div className="admin-page bg-[var(--surface-page)]">
-        <div className="mx-auto w-full max-w-[1550px] px-4 py-4 lg:px-8">
-          <Skeleton className="h-3 w-28" />
-          <Skeleton className="mt-2 h-6 w-64" />
+        <AdminHeader title="Orders" backFallback="/dashboard" />
+        <div className="mx-auto w-full max-w-[1550px] px-4 pt-3 lg:px-8">
+          <Skeleton className="h-10 w-full max-w-[360px]" />
           <div className="mt-3 rounded-2xl border p-5" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)' }}>
             <TableSkeleton rows={7} cols={5} label="Loading orders" />
           </div>
@@ -512,12 +515,12 @@ const Orders = () => {
   return (
     <div className="admin-page bg-[var(--surface-page)] text-[var(--text-body)] transition-colors duration-200 overflow-x-hidden">
       <CustomModal
+        {...modalConfig}
         isOpen={isOpen}
         onClose={closeModal}
         onConfirm={handleConfirm}
         busy={isConfirming}
         busyText={modalConfig.pendingText}
-        {...modalConfig}
       />
 
       {/* Shared Admin navbar: Back | Orders | actions + avatar.

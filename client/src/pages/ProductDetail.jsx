@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { cachedGetDocs } from '../lib/firestoreCache';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Award, BadgeCheck, Check, Heart, Minus, Package, PackageSearch,
@@ -145,17 +146,21 @@ const ProductDetail = () => {
             null,
         });
 
-        const productsSnap = await getDocs(collection(db, 'products'));
-        const allProducts = productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Related-products + brand lookups reuse the shared 60s catalogue
+        // cache (same download Home and /products already made) instead of
+        // two more full collection scans.
+        const [allProductsRaw, brandsList] = await Promise.all([
+          cachedGetDocs(collection(db, 'products'), 'products').catch(() => []),
+          cachedGetDocs(collection(db, 'brands'), 'brands').catch(() => []),
+        ]);
+        const allProducts = Array.isArray(allProductsRaw) ? allProductsRaw : [];
 
         let related = [];
 
         const productBrand = typeof productData.brand === 'string' ? productData.brand : (productData.brand?.name || null);
 
-        const brandsSnap = await getDocs(collection(db, 'brands'));
         const brandsMap = {};
-        brandsSnap.docs.forEach(bDoc => {
-          const b = { id: bDoc.id, ...bDoc.data() };
+        (Array.isArray(brandsList) ? brandsList : []).forEach((b) => {
           brandsMap[b.name] = b;
         });
 
@@ -463,7 +468,12 @@ const ProductDetail = () => {
                     src={product.imageURL}
                     alt={product.name}
                     draggable={false}
+                    loading="eager"
+                    fetchPriority="high"
+                    decoding="async"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     className="h-full w-full object-contain transition-transform duration-700 ease-out"
+                    style={{ aspectRatio: '1 / 1' }}
                   />
                 ) : (
                   <ImagePlaceholder />

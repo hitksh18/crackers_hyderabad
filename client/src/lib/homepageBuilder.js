@@ -59,20 +59,37 @@ export const DEFAULT_BUILDER_CONFIG = {
   updatedBy: null,
 };
 
+const BUILDER_TTL_MS = 60_000;
+let builderCache = null;
+let builderAt = 0;
+let builderInflight = null;
 export async function readBuilderConfig() {
+  const now = Date.now();
+  if (builderCache && now - builderAt < BUILDER_TTL_MS) return builderCache;
+  if (builderInflight) return builderInflight;
+  builderInflight = (async () => {
+    try {
+      const snap = await getDoc(DOC());
+      if (!snap.exists()) return { ...DEFAULT_BUILDER_CONFIG, sections: [...DEFAULT_SECTIONS] };
+      const data = snap.data();
+      const sections = Array.isArray(data.sections) && data.sections.length > 0 ? data.sections : [...DEFAULT_SECTIONS];
+      // Ensure all default sections exist (for new installs)
+      const existingIds = new Set(sections.map(s => s.id));
+      const missing = DEFAULT_SECTIONS.filter(s => !existingIds.has(s.id));
+      const merged = [...sections, ...missing].sort((a, b) => (a.order ?? 999) - (b.order ?? 999)).map((s, i) => ({ ...s, order: i }));
+      return { ...DEFAULT_BUILDER_CONFIG, ...data, sections: merged };
+    } catch (error) {
+      console.error('Error reading builder config:', error);
+      return { ...DEFAULT_BUILDER_CONFIG, sections: [...DEFAULT_SECTIONS] };
+    }
+  })();
   try {
-    const snap = await getDoc(DOC());
-    if (!snap.exists()) return { ...DEFAULT_BUILDER_CONFIG, sections: [...DEFAULT_SECTIONS] };
-    const data = snap.data();
-    const sections = Array.isArray(data.sections) && data.sections.length > 0 ? data.sections : [...DEFAULT_SECTIONS];
-    // Ensure all default sections exist (for new installs)
-    const existingIds = new Set(sections.map(s => s.id));
-    const missing = DEFAULT_SECTIONS.filter(s => !existingIds.has(s.id));
-    const merged = [...sections, ...missing].sort((a, b) => (a.order ?? 999) - (b.order ?? 999)).map((s, i) => ({ ...s, order: i }));
-    return { ...DEFAULT_BUILDER_CONFIG, ...data, sections: merged };
-  } catch (error) {
-    console.error('Error reading builder config:', error);
-    return { ...DEFAULT_BUILDER_CONFIG, sections: [...DEFAULT_SECTIONS] };
+    const result = await builderInflight;
+    builderCache = result;
+    builderAt = Date.now();
+    return result;
+  } finally {
+    builderInflight = null;
   }
 }
 

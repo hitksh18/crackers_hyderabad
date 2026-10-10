@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -26,10 +26,14 @@ import { exportCsv } from '../utils/csv';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { pageVariants } from '../lib/motion';
 import { Skeleton, TableSkeleton } from '../components/ui/Skeleton';
-import DualTrendChart from '../components/admin/analytics/DualTrendChart';
-import FunnelChart from '../components/admin/analytics/FunnelChart';
-import TrafficHeatmap from '../components/admin/analytics/TrafficHeatmap';
-import DeviceDonut from '../components/admin/analytics/DeviceDonut';
+/* Heavy chart code splits out of the initial admin bundle: the Analytics
+   shell (header, KPIs, skeletons) paints first, charts hydrate per-section.
+   Each usage is wrapped in Suspense with a same-size Skeleton so there is
+   no layout shift while the chunk loads. */
+const DualTrendChart = lazy(() => import('../components/admin/analytics/DualTrendChart'));
+const FunnelChart = lazy(() => import('../components/admin/analytics/FunnelChart'));
+const TrafficHeatmap = lazy(() => import('../components/admin/analytics/TrafficHeatmap'));
+const DeviceDonut = lazy(() => import('../components/admin/analytics/DeviceDonut'));
 import RangePicker from '../components/admin/analytics/RangePicker';
 import AdminHeader from '../components/admin/AdminHeader';
 import { StatusBars } from '../components/admin/analytics/CommerceWidgets';
@@ -370,7 +374,11 @@ export default function AdminAnalytics() {
               />
               {loading
                 ? <Skeleton className="h-[300px] w-full" rounded="var(--r-md)" />
-                : <DualTrendChart series={series} lines={salesLines} dualAxis={revMode === 'both'} viewH={360} />}
+                : (
+                  <Suspense fallback={<Skeleton className="h-[300px] w-full" rounded="var(--r-md)" />}>
+                    <DualTrendChart series={series} lines={salesLines} dualAxis={revMode === 'both'} viewH={360} />
+                  </Suspense>
+                )}
               {!loading && (summary?.orders ?? 0) === 0 && (
                 <p className="ax-zero">No data for this period.</p>
               )}
@@ -497,13 +505,21 @@ export default function AdminAnalytics() {
               </ul>
               {loading
                 ? <Skeleton className="h-[200px] w-full" rounded="var(--r-md)" />
-                : <DualTrendChart series={series} lines={trafficLines} />}
+                : (
+                  <Suspense fallback={<Skeleton className="h-[200px] w-full" rounded="var(--r-md)" />}>
+                    <DualTrendChart series={series} lines={trafficLines} />
+                  </Suspense>
+                )}
               {!loading && (
                 <p className="ax-zero">New vs returning split is not tracked yet.</p>
               )}
             </AxCard>
             <AxCard className="ax-s5" title="Conversion Funnel" sub="Share carrying on from the step above.">
-              {loading ? <TableSkeleton rows={4} cols={1} label="Loading funnel" /> : <FunnelChart stages={funnelStages} />}
+              {loading ? <TableSkeleton rows={4} cols={1} label="Loading funnel" /> : (
+                <Suspense fallback={<TableSkeleton rows={4} cols={1} label="Loading funnel" />}>
+                  <FunnelChart stages={funnelStages} />
+                </Suspense>
+              )}
               {!loading && !funnelTracked && (
                 <p className="ax-zero">Browser-event stages have no data yet. Orders (last step) are exact.</p>
               )}
@@ -543,7 +559,11 @@ export default function AdminAnalytics() {
                 ? <TableSkeleton rows={3} cols={2} label="Loading device split" />
                 : deviceTotal === 0
                   ? <AxEmpty>Device tracking unavailable for this period.</AxEmpty>
-                  : <DeviceDonut devices={devices} />}
+                  : (
+                    <Suspense fallback={<TableSkeleton rows={3} cols={2} label="Loading device split" />}>
+                      <DeviceDonut devices={devices} />
+                    </Suspense>
+                  )}
             </AxCard>
             <AxCard
               className="ax-s8"
@@ -584,7 +604,9 @@ export default function AdminAnalytics() {
             {loading ? <Skeleton className="h-[200px] w-full" rounded="var(--r-md)" /> : (
               <div className="ax-heat">
                 <div className="ax-heat-scroll">
-                  <TrafficHeatmap grid={snapshot?.grid || []} />
+                  <Suspense fallback={<Skeleton className="h-[200px] w-full" rounded="var(--r-md)" />}>
+                    <TrafficHeatmap grid={snapshot?.grid || []} />
+                  </Suspense>
                 </div>
               </div>
             )}

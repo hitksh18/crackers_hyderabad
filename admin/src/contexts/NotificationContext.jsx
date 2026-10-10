@@ -1,4 +1,4 @@
-import { createContext, createElement, useContext, useState, useEffect } from 'react';
+import { createContext, createElement, useContext, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Bell } from 'lucide-react';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -28,6 +28,11 @@ export const NotificationProvider = ({ children }) => {
     const saved = localStorage.getItem('notificationsLastSeen');
     return saved ? new Date(saved).getTime() : Date.now();
   });
+  /* markAllAsRead must not resubscribe the Firestore listener: the timestamp
+     is read via ref inside the snapshot callback, so the effect deps stay
+     stable ([user, userRole]) and "mark read" never re-downloads 50 orders. */
+  const lastSeenRef = useRef(lastSeenTimestamp);
+  lastSeenRef.current = lastSeenTimestamp;
 
   useEffect(() => {
     // Only staff may read the unfiltered order feed — Firestore rules enforce
@@ -38,7 +43,7 @@ export const NotificationProvider = ({ children }) => {
     const ordersQuery = query(
       ordersRef,
       orderBy('createdAt', 'desc'),
-      limit(50)
+      limit(20)
     );
 
     const unsubscribe = onSnapshot(ordersQuery, (snapshot) => {
@@ -51,7 +56,7 @@ export const NotificationProvider = ({ children }) => {
         orders.push(orderData);
 
         const orderDate = orderData.createdAt?.toDate();
-        if (orderDate && orderDate.getTime() > lastSeenTimestamp) {
+        if (orderDate && orderDate.getTime() > lastSeenRef.current) {
           newOrdersCount++;
           
           if (orderDate.getTime() > now - 5000) {
@@ -75,22 +80,23 @@ export const NotificationProvider = ({ children }) => {
     });
 
     return () => unsubscribe();
-  }, [user, userRole, lastSeenTimestamp]);
+  }, [user, userRole]);
 
-  const markAllAsRead = () => {
+  const markAllAsRead = useCallback(() => {
     const now = Date.now();
+    lastSeenRef.current = now;
     setLastSeenTimestamp(now);
     setUnreadCount(0);
-    localStorage.setItem('notificationsLastSeen', new Date(now).toISOString());
-  };
+    try { localStorage.setItem('notificationsLastSeen', new Date(now).toISOString()); } catch { /* ignore */ }
+  }, []);
 
-  const value = {
+  const value = useMemo(() => ({
     unreadCount,
     recentOrders,
     liveOrderCount,
     serverStatus,
     markAllAsRead
-  };
+  }), [unreadCount, recentOrders, liveOrderCount, serverStatus, markAllAsRead]);
 
   return (
     <NotificationContext.Provider value={value}>

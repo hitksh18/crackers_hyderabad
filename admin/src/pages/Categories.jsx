@@ -189,9 +189,9 @@ const AdminCategories = () => {
   if (loading) {
     return (
       <div className="admin-page bg-[var(--surface-page)]">
-        <div className="mx-auto w-full max-w-[1600px] px-4 py-6 lg:px-8">
-          <div className="h-9 w-44 animate-pulse rounded-full" style={{ background: 'var(--surface-sunken)' }} />
-          <div className="cat-grid mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <AdminHeader title="Categories" backFallback="/dashboard" />
+        <div className="mx-auto w-full max-w-[1600px] px-4 py-3 lg:px-8">
+          <div className="cat-grid mt-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} className="h-[100px] w-full" rounded="var(--r-md)" />
             ))}
