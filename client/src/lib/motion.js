@@ -112,8 +112,12 @@ export const sheetVariants = (reduced) => ({
   },
 });
 
-/** Standard `whileInView` config — reveal once, slightly before the edge. */
-export const inViewOnce = { once: true, amount: 0.15, margin: '0px 0px -60px 0px' };
+/** Standard `whileInView` config — reveal once, slightly before the edge.
+   Positive bottom margin fires as the section approaches (not after it has
+   scrolled 60px past the edge); the tiny amount keeps tall sections from
+   waiting. Animation itself is unchanged — content just stops depending on
+   a late observer tick to become visible. */
+export const inViewOnce = { once: true, amount: 0.05, margin: '0px 0px 120px 0px' };
 
 /** Interactive feedback for buttons and cards. */
 export const tapFeedback = (reduced) =>
