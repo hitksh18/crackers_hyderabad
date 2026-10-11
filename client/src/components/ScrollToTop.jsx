@@ -58,11 +58,26 @@ const ScrollToTop = () => {
     }
     lockManualRestoration();
     let cancelled = false;
+    let raf1 = 0;
+    let raf2 = 0;
     // A bare "#" carries no target — treat it as a plain landing.
     if (hash && hash.length > 1) scrollToHash(hash, () => cancelled);
-    else scrollToTop();
+    else {
+      scrollToTop();
+      // Re-assert after hydration settles: lazily loaded chunks and images
+      // can shift layout (or steal position) after the first paint. Still
+      // instant, still top-only — hash landings and back/forward outcomes
+      // keep their existing behavior.
+      raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          if (!cancelled) scrollToTop();
+        });
+      });
+    }
     return () => {
       cancelled = true;
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
       try {
         if (prev && 'scrollRestoration' in window.history) {
           window.history.scrollRestoration = prev;

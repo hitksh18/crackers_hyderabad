@@ -43,7 +43,20 @@ function getMediaRoot() {
 }
 
 function getPublicBase() {
-  return (process.env.MEDIA_PUBLIC_BASE || DEFAULT_PUBLIC_BASE).replace(/\/+$/, '');
+  const configured = (process.env.MEDIA_PUBLIC_BASE || '').replace(/\/+$/, '');
+  if (configured) {
+    // A loopback/LAN base in production mints image URLs that only load on
+    // the uploading machine (the current production breakage). Fall back to
+    // the public uploads origin instead of persisting broken URLs.
+    if (process.env.NODE_ENV === 'production' && isLocalPublicUrl(configured)) {
+      console.warn(
+        `[media] MEDIA_PUBLIC_BASE is ${configured} in production — using ${DEFAULT_PUBLIC_BASE} so uploads stay publicly reachable.`
+      );
+      return DEFAULT_PUBLIC_BASE;
+    }
+    return configured;
+  }
+  return DEFAULT_PUBLIC_BASE;
 }
 
 function normalizeDir(dir) {

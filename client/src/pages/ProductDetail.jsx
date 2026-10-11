@@ -23,6 +23,7 @@ import { ProductDetailSkeleton } from '../components/ui/Skeleton';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { modalVariants, revealVariants, staggerParent } from '../lib/motion';
 import { inr } from '../lib/currency';
+import { normalizeImageUrl, logBrokenImageUrl } from '../lib/normalizeImageUrl';
 import { productPath, slugify } from '../lib/productLinks';
 import { buildBrandLookup, resolveBrand, withResolvedBrands } from '../lib/resolveBrand';
 import { trackProductEvent } from '../lib/analytics';
@@ -249,6 +250,18 @@ const ProductDetail = () => {
     addToCart(product, quantity);
   };
 
+  /* History-aware back: returns through browser history so a Products →
+     details visit lands back on Products (a POP navigation, which restores
+     its scroll position); direct entries without in-app history fall back
+     to /products. Same mechanism as the admin header back button. */
+  const goBack = () => {
+    const idx = window.history.state && typeof window.history.state.idx === 'number'
+      ? window.history.state.idx
+      : 0;
+    if (idx > 0) navigate(-1);
+    else navigate('/products');
+  };
+
   const handleShare = async () => {
     const shareData = {
       title: product.name,
@@ -310,14 +323,15 @@ const ProductDetail = () => {
   const originalPrice = product.onlinePrice || product.price;
   const hasDiscount = product.discountPrice && product.discountPrice < originalPrice;
   const brandName = brandInfo.name || (typeof product.brand === 'string' ? product.brand : (product.brand?.name || null));
-  const brandLogo = brandInfo.logo || product.brand?.logo || null;
+  const brandLogo = normalizeImageUrl(brandInfo.logo || product.brand?.logo || null);
   const outOfStock = product.outOfStock === true;
   const wished = isWishlisted(product.id);
   const stockLeft = typeof product.stock === 'number' ? product.stock : null;
 
   /* Image gallery: existing imageURL plus the optional imageURL2.
      Single-image products get a one-item gallery — no arrows, no swipe. */
-  const gallery = [product.imageURL, product.imageURL2].filter(Boolean);
+  /* Production-safe URLs (localhost-era stored URLs re-base to /uploads). */
+  const gallery = [product.imageURL, product.imageURL2].map(normalizeImageUrl).filter(Boolean);
   const hasMultipleImages = gallery.length > 1;
   const showImage = (index) => {
     if (!hasMultipleImages) return;
@@ -427,7 +441,7 @@ const ProductDetail = () => {
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: product.name,
-    image: product.imageURL || undefined,
+    image: normalizeImageUrl(product.imageURL) || undefined,
     description: product.description || undefined,
     brand: { '@type': 'Brand', name: brandInfo.name || 'Crackers Hyderabad' },
     offers: {
@@ -473,10 +487,25 @@ const ProductDetail = () => {
           title={`${product.name} | Crackers Hyderabad`}
           description={(product.description || product.name).slice(0, 155)}
           canonical={productUrl}
-          image={product.imageURL || undefined}
+          image={normalizeImageUrl(product.imageURL) || undefined}
           jsonLd={[productJsonLd, breadcrumbJsonLd]}
         />
       )}
+
+      {/* Compact history back — same subtle language as the TrackOrder
+          "Back to Home" link; hero layout below is untouched. */}
+      <div className="pd-shell">
+        <button
+          type="button"
+          onClick={goBack}
+          aria-label="Go back to products"
+          className="inline-flex items-center gap-2 text-sm font-semibold"
+          style={{ color: 'var(--text-muted)', minHeight: '44px' }}
+        >
+          <ArrowLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
+          Back
+        </button>
+      </div>
 
       {/* ============ HERO — image + buying column only ============ */}
       <motion.section
@@ -497,16 +526,16 @@ const ProductDetail = () => {
               <div className="pd-media-inner">
                 {/* ONE main image only — the selected gallery image replaces
                     the previous one, never overlays it. */}
-                {(gallery[activeImage] || product.imageURL) ? (
+                {gallery[activeImage] ? (
                   <img
-                    key={gallery[activeImage] || product.imageURL}
-                    src={gallery[activeImage] || product.imageURL}
+                    key={gallery[activeImage]}
+                    src={gallery[activeImage]}
                     alt={product.name}
                     draggable={false}
                     loading="eager"
                     fetchPriority="high"
                     decoding="async"
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    onError={(e) => { logBrokenImageUrl(gallery[activeImage]); e.currentTarget.style.display = 'none'; }}
                     className="h-full w-full object-contain transition-transform duration-700 ease-out"
                     style={{ aspectRatio: '1 / 1' }}
                   />
@@ -930,13 +959,13 @@ const ProductDetail = () => {
               <X className="h-6 w-6" strokeWidth={2.2} aria-hidden="true" />
             </button>
 
-            {(gallery[activeImage] || product.imageURL) ? (
+            {(gallery[activeImage]) ? (
               <motion.img
                 variants={modalVariants(reduced)}
                 initial="hidden"
                 animate="visible"
                 exit="exit"
-                src={gallery[activeImage] || product.imageURL}
+                src={gallery[activeImage]}
                 alt={product.name}
                 draggable={false}
                 className="max-h-full max-w-full rounded-[var(--r-xl)] object-contain"

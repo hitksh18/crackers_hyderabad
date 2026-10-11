@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { ArchFrame, Diya } from '../ui/Ornaments';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { productPath } from '../../lib/productLinks';
+import { normalizeImageUrl } from '../../lib/normalizeImageUrl';
 
 const DISPLAY_MS = 3800;
 const FADE_MS = 420;
@@ -57,10 +58,11 @@ export default function ProductShowcase({ products = [] }) {
   }, [current, eligible, secondaryProduct]);
 
   const preload = useCallback((product) => {
-    if (!product?.imageURL || preloadedRef.current.has(product.id)) return;
+    const src = normalizeImageUrl(product?.imageURL);
+    if (!src || preloadedRef.current.has(product.id)) return;
     preloadedRef.current.add(product.id);
     const img = new Image();
-    img.src = product.imageURL;
+    img.src = src;
   }, []);
 
   useEffect(() => {
@@ -126,9 +128,9 @@ export default function ProductShowcase({ products = [] }) {
               transition: { duration: reduced ? 0.001 : 0.28, ease: [0.55, 0.06, 0.68, 0.19] },
             }}
           >
-            {secondaryProduct?.imageURL && (
+            {normalizeImageUrl(secondaryProduct?.imageURL) && (
               <img
-                src={secondaryProduct.imageURL}
+                src={normalizeImageUrl(secondaryProduct.imageURL)}
                 alt={secondaryProduct.name || 'Featured firework'}
                 loading="lazy"
                 className="h-full w-full object-contain p-2"
@@ -200,7 +202,7 @@ export default function ProductShowcase({ products = [] }) {
                 }}
               >
                 <img
-                  src={mainProduct.imageURL}
+                  src={normalizeImageUrl(mainProduct.imageURL)}
                   alt={mainProduct.name || 'Premium firework product'}
                   loading="eager"
                   className="block max-h-[70%] max-w-[80%] object-contain sm:max-h-[72%] sm:max-w-[82%] md:max-h-[74%] md:max-w-[84%] lg:max-h-[76%] lg:max-w-[86%]"

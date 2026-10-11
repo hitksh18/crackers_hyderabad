@@ -12,6 +12,7 @@ import { displayNameForCategory } from '../lib/categoryIcons';
 import EmptyState from '../components/ui/EmptyState';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { inr } from '../lib/currency';
+import { normalizeImageUrl } from '../lib/normalizeImageUrl';
 import { MINIMUM_ORDER_VALUE } from '../lib/orderThresholds';
 import { trackViewCart } from '../lib/ga4';
 import {
@@ -333,9 +334,9 @@ const Cart = () => {
                               className="product-img-panel h-12 w-12 shrink-0 overflow-hidden"
                               style={{ borderRadius: 'var(--r-md)', border: '1px solid var(--hairline)', background: 'var(--surface-sunken)' }}
                             >
-                              {item.imageURL ? (
+                              {normalizeImageUrl(item.imageURL) ? (
                                 <img
-                                  src={item.imageURL}
+                                  src={normalizeImageUrl(item.imageURL)}
                                   alt={item.name}
                                   loading="lazy"
                                   className="h-full w-full object-contain p-1"
@@ -405,9 +406,9 @@ const Cart = () => {
                           className="product-img-panel h-16 w-16 shrink-0 overflow-hidden"
                           style={{ borderRadius: 'var(--r-md)', border: '1px solid var(--hairline)' }}
                         >
-                          {item.imageURL ? (
+                          {normalizeImageUrl(item.imageURL) ? (
                             <img
-                              src={item.imageURL}
+                              src={normalizeImageUrl(item.imageURL)}
                               alt={item.name}
                               loading="lazy"
                               className="h-full w-full object-contain p-1.5"

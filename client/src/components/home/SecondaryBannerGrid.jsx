@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { normalizeImageUrl } from '../../lib/normalizeImageUrl';
 
 const FIELD = 'linear-gradient(158deg, var(--maroon-900) 0%, var(--maroon-800) 45%, #2A1512 75%, #1A1714 100%)';
 
@@ -29,7 +30,8 @@ export default function SecondaryBannerGrid({ banners }) {
       <div className="shell-wide">
         <div className={`grid gap-3 sm:gap-4 ${cols}`}>
           {list.map((b) => {
-            const src = b.imageDesktop || b.image;
+            const src = normalizeImageUrl(b.imageDesktop || b.image);
+            const mobileSrc = normalizeImageUrl(b.imageMobile);
             const frame = (
               <span
                 className="block h-full w-full overflow-hidden"
@@ -38,16 +40,18 @@ export default function SecondaryBannerGrid({ banners }) {
                 {/* <picture> downloads ONE file: mobile below sm, desktop at sm+.
                     The old two-<img> + hidden pattern fetched both. */}
                 <picture>
-                  {b.imageMobile && <source media="(max-width: 639px)" srcSet={b.imageMobile} />}
-                  <img
-                    src={src}
-                    alt={b.alt || ''}
-                    loading="lazy"
-                    decoding="async"
-                    width={640}
-                    height={360}
-                    className={`aspect-video w-full ${fitClass(b)}`}
-                  />
+                  {mobileSrc && <source media="(max-width: 639px)" srcSet={mobileSrc} />}
+                  {src && (
+                    <img
+                      src={src}
+                      alt={b.alt || ''}
+                      loading="lazy"
+                      decoding="async"
+                      width={640}
+                      height={360}
+                      className={`aspect-video w-full ${fitClass(b)}`}
+                    />
+                  )}
                 </picture>
               </span>
             );

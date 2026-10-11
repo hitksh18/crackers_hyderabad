@@ -34,6 +34,7 @@ import { readCategoryShowcaseConfig, applyShowcaseOrder } from '../lib/categoryS
 import { readSiteSettings, firstAnnouncementText, DEFAULT_SEO } from '../lib/siteSettings';
 import { resolveTrustCards } from '../lib/trustIcons';
 import { buildBrandLookup, withResolvedBrands } from '../lib/resolveBrand';
+import { normalizeImageUrl } from '../lib/normalizeImageUrl';
 import Seo, { SITE_URL } from '../components/Seo';
 import toast from '../utils/toast';
 
@@ -456,7 +457,7 @@ const Home = () => {
           <section key={section.id} className="section-pad-sm" style={{ background: 'var(--surface-card)' }}>
             <div className="shell-wide">
               <ScrollReveal distance={20} className="overflow-hidden" style={{ borderRadius: 'var(--r-xl)', boxShadow: 'var(--shadow-lg)' }}>
-                <img src={homepageSettings.bannerImageUrl} alt={homepageSettings.bannerImageAlt || 'Crackers Hyderabad Banner'} loading="lazy" className="max-h-[400px] w-full object-cover sm:max-h-[500px]" />
+                <img src={normalizeImageUrl(homepageSettings.bannerImageUrl)} alt={homepageSettings.bannerImageAlt || 'Crackers Hyderabad Banner'} loading="lazy" className="max-h-[400px] w-full object-cover sm:max-h-[500px]" />
               </ScrollReveal>
             </div>
           </section>
@@ -542,7 +543,7 @@ const Home = () => {
               <section className="section-pad-sm" style={{ background: 'var(--surface-card)' }}>
                 <div className="shell-wide">
                   <ScrollReveal distance={20} className="overflow-hidden" style={{ borderRadius: 'var(--r-xl)', boxShadow: 'var(--shadow-lg)' }}>
-                    <img src={homepageSettings.bannerImageUrl} alt={homepageSettings.bannerImageAlt || 'Crackers Hyderabad Banner'} loading="lazy" className="max-h-[400px] w-full object-cover sm:max-h-[500px]" />
+                    <img src={normalizeImageUrl(homepageSettings.bannerImageUrl)} alt={homepageSettings.bannerImageAlt || 'Crackers Hyderabad Banner'} loading="lazy" className="max-h-[400px] w-full object-cover sm:max-h-[500px]" />
                   </ScrollReveal>
                 </div>
               </section>

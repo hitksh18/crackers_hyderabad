@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, doc, writeBatch } from 'firebase/firestore';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigationType, useSearchParams } from 'react-router-dom';
 import {
   Check, GripVertical, LayoutGrid, List,
   PackageSearch, RotateCcw, SearchX,
@@ -17,6 +17,7 @@ import toast from '../utils/toast';
 import { PRODUCT_CATEGORIES, isProductInCategory, resolveCategory, categoryDisplayName } from '../config/categories';
 import { readCategoryShowcaseConfig, applyShowcaseOrder } from '../lib/categoryShowcase';
 import { buildBrandLookup, withResolvedBrands } from '../lib/resolveBrand';
+import { readCustomerProductsScroll, clearCustomerProductsScroll } from '../lib/productsScroll';
 import { trackSearch } from '../lib/ga4';
 
 /* Categories come from the single source of truth (config/categories.js),
@@ -156,6 +157,7 @@ const Products = () => {
   const [sortBy, setSortBy] = useState('featured');
   const [viewMode, setViewMode] = useState('grid');
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigationType = useNavigationType();
   const { isAdmin } = useAuth();
   const categories = useOrderedCategories();
   const [reorderMode, setReorderMode] = useState(false);
@@ -215,6 +217,42 @@ const Products = () => {
 
   /* One brands lookup per page load — every card below resolves from it. */
   const brandLookup = useMemo(() => buildBrandLookup(brands), [brands]);
+
+  /* Back-from-details scroll restoration: only POP navigations (browser Back
+     or history-back) may restore; PUSH (navbar links, fresh clicks) clears
+     any saved position so intentional visits always start at the top.
+     Restoration waits for the catalogue (loading false) and a settled
+     layout via double rAF — instant, never smooth — then consumes the key.
+     Filters/sort/view are untouched; query-param filters re-apply through
+     the existing searchParams flow on Back. */
+  useEffect(() => {
+    if (loading) return;
+    if (navigationType !== 'POP') {
+      clearCustomerProductsScroll();
+      return;
+    }
+    const saved = readCustomerProductsScroll();
+    if (!saved) return;
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        try {
+          const max = document.documentElement.scrollHeight - window.innerHeight;
+          window.scrollTo(0, Math.max(0, Math.min(saved.scrollY, Math.max(0, max))));
+        } catch {
+          /* Unmounted mid-restore — ignore. */
+        }
+        clearCustomerProductsScroll();
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+    // navigationType is mount-time only; loading gates the restore.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   /* The visible list is derived, not stored: filter (category + search) and
      sort run together on every render, so the cards can never lag behind the

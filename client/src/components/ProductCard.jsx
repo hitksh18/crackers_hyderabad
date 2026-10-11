@@ -18,6 +18,8 @@ import { popoverVariants, tapFeedback } from '../lib/motion';
 import { inr } from '../lib/currency';
 import { productPath } from '../lib/productLinks';
 import { getBrandDisplay } from '../lib/resolveBrand';
+import { saveCustomerProductsScroll } from '../lib/productsScroll';
+import { normalizeImageUrl, logBrokenImageUrl } from '../lib/normalizeImageUrl';
 import toast from '../utils/toast';
 import ImagePlaceholder from './ImagePlaceholder';
 
@@ -88,12 +90,16 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
      so a string brand still shows its name instead of vanishing. */
   const brand = getBrandDisplay(product);
   const brandName = brand?.name || null;
+  /* Production-safe logo URL (localhost-era stored URLs re-base to /uploads). */
+  const brandLogo = brand?.logo ? normalizeImageUrl(brand.logo) : null;
 
   /* Second-image hover swap: ONE displayed image only. Hover shows imageURL2
      in place of imageURL; single-image products never change. */
   const [isHovered, setIsHovered] = useState(false);
-  const hasSecondImage = !!product.imageURL2;
-  const displayedImage = isHovered && hasSecondImage ? product.imageURL2 : product.imageURL;
+  const hasSecondImage = !!normalizeImageUrl(product.imageURL2);
+  const displayedImage = normalizeImageUrl(
+    isHovered && hasSecondImage ? product.imageURL2 : product.imageURL
+  );
 
   const cartAction = (
     <AnimatePresence mode="wait" initial={false}>
@@ -190,6 +196,7 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
           <Link
             to={productPath(product)}
             aria-label={product.name}
+            onClick={saveCustomerProductsScroll}
             className="absolute inset-0 block"
           >
             {displayedImage ? (
@@ -201,7 +208,7 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
                 width={400}
                 height={320}
                 draggable={false}
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                onError={(e) => { logBrokenImageUrl(displayedImage); e.currentTarget.style.display = 'none'; }}
                 className="h-full w-full object-contain p-4 transition-transform duration-500 ease-out-expo group-hover:scale-[1.05]"
                 style={{ aspectRatio: '5 / 4' }}
               />
@@ -263,7 +270,7 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
         {/* Info middle + action right */}
         <div className="flex min-w-0 flex-1 flex-col p-3.5 sm:p-4 md:flex-row md:gap-4">
           <div className="flex min-w-0 flex-1 flex-col">
-            <Link to={productPath(product)} className="mt-0.5 flex items-center">
+            <Link to={productPath(product)} onClick={saveCustomerProductsScroll} className="mt-0.5 flex items-center">
               <h3
                 className="card-title product-name line-clamp-2"
                 style={{ color: 'var(--text-strong)' }}
@@ -359,17 +366,19 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
           compact ? 'aspect-[8/5]' : 'aspect-square'
         }`}
       >
-        <Link
-          to={productPath(product)}
-          aria-label={product.name}
-          className="absolute inset-0 block"
-        >
-          {displayedImage ? (
-            <img
+          <Link
+            to={productPath(product)}
+            aria-label={product.name}
+            onClick={saveCustomerProductsScroll}
+            className="absolute inset-0 block"
+          >
+            {displayedImage ? (
+              <img
               src={displayedImage}
               alt={product.name}
               loading="lazy"
               draggable={false}
+              onError={(e) => { logBrokenImageUrl(displayedImage); e.currentTarget.style.display = 'none'; }}
               className={`h-full w-full object-contain transition-transform duration-500 ease-out-expo group-hover:scale-[1.07] ${
                 compact ? 'p-2.5' : 'p-4 sm:p-5'
               }`}
@@ -435,23 +444,23 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
           <div
             className={`pointer-events-none absolute left-2 z-raised flex items-center rounded-[var(--r-pill)] border shadow-sm ${
               compact
-                ? `bottom-2 gap-1 py-0.5 ${brand.logo ? 'pl-1 pr-2' : 'px-2'}`
-                : `bottom-9 gap-1.5 py-1 ${brand.logo ? 'pl-1.5 pr-2.5' : 'px-2.5'}`
+                ? `bottom-2 gap-1 py-0.5 ${brandLogo ? 'pl-1 pr-2' : 'px-2'}`
+                : `bottom-9 gap-1.5 py-1 ${brandLogo ? 'pl-1.5 pr-2.5' : 'px-2.5'}`
             }`}
             style={{
               background: 'var(--surface-card)',
               borderColor: 'var(--hairline)',
             }}
           >
-            {brand.logo && (
+            {brandLogo && (
               <img
-                src={brand.logo}
+                src={brandLogo}
                 alt={`${brand.name} logo`}
                 loading="lazy"
                 className={`shrink-0 rounded-full bg-white object-contain ${
                   compact ? 'h-4 w-4' : 'h-5 w-5'
                 }`}
-                onError={(e) => { e.currentTarget.parentElement.style.display = 'none'; }}
+                onError={(e) => { logBrokenImageUrl(brandLogo); e.currentTarget.parentElement.style.display = 'none'; }}
               />
             )}
             <span
@@ -472,6 +481,7 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
             enough to sit on a single line. */}
         <Link
           to={productPath(product)}
+          onClick={saveCustomerProductsScroll}
           className={compact ? 'mt-1 flex items-center' : 'mt-1.5 flex min-h-[44px] items-center'}
         >
           <h3
