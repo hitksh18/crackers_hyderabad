@@ -293,6 +293,59 @@ const Home = () => {
     return () => { cancelled = true; };
   }, []);
 
+  /* TEMPORARY DEV-ONLY scroll diagnostics (stripped from production builds):
+     identifies what moves scrollY on "/" across mount, post-paint,
+     catalogue hydration and window load. Remove once the mid-page landing
+     reports stop. */
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const snap = (tag) => {
+      try {
+        const topEl = document.elementFromPoint(window.innerWidth / 2, 100);
+        console.debug('[SCROLL DEBUG]', {
+          tag,
+          pathname: window.location.pathname,
+          hash: window.location.hash,
+          scrollY: window.scrollY,
+          docH: document.documentElement.scrollHeight,
+          winH: window.innerHeight,
+          readyState: document.readyState,
+          topEl: topEl
+            ? topEl.id
+              ? `#${topEl.id}`
+              : String(topEl.className || topEl.tagName).slice(0, 60)
+            : null,
+        });
+      } catch {
+        /* ignore */
+      }
+    };
+    snap('home-mount');
+    const raf = requestAnimationFrame(() => snap('home-post-paint'));
+    const onLoad = () => snap('window-load');
+    window.addEventListener('load', onLoad);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('load', onLoad);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || loading) return;
+    const raf = requestAnimationFrame(() => {
+      try {
+        console.debug('[SCROLL DEBUG]', {
+          tag: 'home-catalogue-ready',
+          scrollY: window.scrollY,
+          docH: document.documentElement.scrollHeight,
+        });
+      } catch {
+        /* ignore */
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [loading]);
+
   const byAdminOrder = (a, b) =>
     (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999) ||
     (b.salesCount || 0) - (a.salesCount || 0) ||
