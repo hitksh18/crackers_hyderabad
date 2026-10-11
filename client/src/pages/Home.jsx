@@ -212,6 +212,31 @@ const Home = () => {
     return () => document.documentElement.classList.remove('route-home');
   }, []);
 
+  /* Initial-position guard: "/" must open on the hero. ScrollToTop already
+     tops at navigation commit, but Home's lazy chunks + async catalogue
+     paint later — if anything (restoration race, layout shift) moved the
+     viewport meanwhile, settle back once, instantly. Mount-only, hash-aware
+     (intentional /#section navigation is never touched), no timers, no
+     content hiding, no-op when already at the top. */
+  useEffect(() => {
+    if (window.location.hash && window.location.hash.length > 1) return;
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        try {
+          if (!window.location.hash && window.scrollY > 0) window.scrollTo(0, 0);
+        } catch {
+          /* ignore */
+        }
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, []);
+
   /* Config hydration — fast single-document reads that drive hero copy,
      builder order, banners and trust cards. The hero itself renders fallback
      content on the very first paint and upgrades in place when this lands;
