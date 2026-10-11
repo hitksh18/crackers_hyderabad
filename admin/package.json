@@ -13,7 +13,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@imgly/background-removal": "^1.7.0",
     "firebase": "^12.5.0",
     "framer-motion": "^12.23.24",
     "jspdf": "^4.2.1",
@@ -23,7 +22,8 @@
     "react-dom": "^19.1.1",
     "react-hot-toast": "^2.6.0",
     "react-icons": "^5.5.0",
-    "react-router-dom": "^7.9.5"
+    "react-router-dom": "^7.9.5",
+    "workspace": "file:.."
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",

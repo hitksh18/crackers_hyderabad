@@ -27,9 +27,17 @@ const ALLOWED_IMAGE_TYPES = {
 };
 
 function getMediaRoot() {
-  if (process.env.MEDIA_ROOT) return process.env.MEDIA_ROOT;
-  if (process.env.UPLOAD_DIR) return process.env.UPLOAD_DIR;
-  if (process.env.KVM_MEDIA_ROOT) return process.env.KVM_MEDIA_ROOT;
+  const configured =
+    process.env.MEDIA_ROOT || process.env.UPLOAD_DIR || process.env.KVM_MEDIA_ROOT;
+  if (configured) {
+    // Resolve relative values against the repo root (two levels above
+    // api/lib), never process.cwd(): `npm --prefix api` launches the API
+    // with cwd=api/, which previously redirected ./api/uploads into
+    // api/api/uploads. Absolute values (e.g. /var/www/... on the KVM)
+    // pass through unchanged.
+    if (path.isAbsolute(configured)) return configured;
+    return path.resolve(__dirname, '..', '..', configured);
+  }
   // On Windows dev, prod path does not exist — use local folder under api/media
   return DEFAULT_MEDIA_ROOT;
 }
@@ -122,16 +130,35 @@ async function storeMedia(buffer, dir, filename, contentType) {
   }
   if (!writable) {
     throw new Error(
-      `Media storage is not writable at ${root}. On the KVM this directory must exist and be writable by the API process; in development set MEDIA_ROOT to a writable local folder.`
+      `[upload] KVM media directory is not writable at ${root}. On the KVM this directory must exist and be writable by the API process; in development set MEDIA_ROOT to a writable local folder.`
     );
   }
   const safePath = uniqueFilePath(dirFull, filename);
+  // Containment: the resolved target must stay inside the media root.
+  // uniqueFilePath() builds from the allow-listed dir + basename, but verify
+  // explicitly so a successful response can never point outside it.
+  const normalizedRoot = path.resolve(root);
+  const normalizedFull = path.resolve(safePath);
+  if (normalizedFull !== normalizedRoot && !normalizedFull.startsWith(normalizedRoot + path.sep)) {
+    throw new Error('[upload] Refusing to write outside the media directory');
+  }
   const finalName = path.basename(safePath);
   await fs.promises.writeFile(safePath, buffer);
   // Ensure readable by Nginx www-data
   try {
     await fs.promises.chmod(safePath, 0o644);
   } catch (_) {}
+  // Verify the file physically exists before reporting success — never return
+  // a public URL for a file that is not on disk.
+  let stat = null;
+  try {
+    stat = await fs.promises.stat(safePath);
+  } catch (_) {
+    stat = null;
+  }
+  if (!stat || !stat.isFile()) {
+    throw new Error(`[upload] File write verification failed at ${normalizedFull}`);
+  }
   const publicBase = getPublicBase();
   const url = `${publicBase}/${normalized}/${encodeURIComponent(finalName)}`;
   return { publicUrl: url, filename: finalName, dir: normalized, absolutePath: safePath };
@@ -194,6 +221,32 @@ function isAllowedPublicUrl(url) {
   return typeof url === 'string' && url.startsWith(base + '/');
 }
 
+// True when a public media URL can only ever load on the uploading machine
+// (local development). Mirrors the frontend isLocalOnlyUrl() guard so the
+// API can label its own responses with `local: true/false`.
+function isLocalPublicUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  if (/^(blob|data):/i.test(trimmed)) return true;
+  let host;
+  try {
+    host = new URL(trimmed).hostname.toLowerCase();
+  } catch {
+    return true;
+  }
+  return (
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '[::1]' ||
+    host.endsWith('.local') ||
+    host.endsWith('.localhost') ||
+    host.startsWith('192.168.') ||
+    host.startsWith('10.') ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  );
+}
+
 // Extract relative dir/filename from public URL, validating allowlist.
 function parsePublicUrl(url) {
   const base = getPublicBase();
@@ -240,6 +293,7 @@ module.exports = {
   watermarkImage,
   upscaleImage,
   isAllowedPublicUrl,
+  isLocalPublicUrl,
   parsePublicUrl,
   deleteMediaByUrl,
   ALLOWED_DIRS,

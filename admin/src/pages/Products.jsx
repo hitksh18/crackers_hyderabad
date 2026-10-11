@@ -14,13 +14,83 @@ import { TableSkeleton } from '../components/ui/Skeleton';
 import { deleteTradePricing, mergeTradePricing } from '../lib/tradePricing';
 import { PRODUCT_CATEGORIES, isProductInCategory } from '../config/categories';
 
+/* Default display order: natural alphabetical by product name, numbers first
+   ("7 CM" < "12 CM" < "100 Shots" < "Aerial"), case-insensitive, with a
+   stable id tie-break so equal names never shuffle between renders.
+   Same convention as the storefront (client/src/pages/Products.jsx byName).
+   Display-only: sortOrder data, drag-reorder persistence and the customer
+   storefront order are untouched. Pure: never mutates its input. */
+const byNaturalName = (a, b) =>
+  String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base', numeric: true })
+  || String(a?.id || '').localeCompare(String(b?.id || ''));
+
+/* Products → Edit → Products state restoration. Temporary navigation state
+   only — sessionStorage, never localStorage. One object holds the four
+   filters plus the scroll position, e.g.
+   { search, category, stock, featured, scrollY, savedAt }.
+   Note the scroller is main.admin-main (the viewport never scrolls; see
+   ScrollToTop), so the position is saved/restored there with a window
+   fallback. Consumed (removed) on restore so normal visits start clean. */
+const PRODUCTS_STATE_KEY = 'productsPageState';
+const PRODUCTS_STATE_TTL_MS = 30 * 60 * 1000;
+
+const STOCK_OPTIONS = ['All', 'In Stock', 'Out of Stock'];
+const FEATURED_OPTIONS = ['All', 'Featured', 'Not Featured'];
+
+const getScroller = () =>
+  (typeof document !== 'undefined' && document.querySelector('main.admin-main')) || null;
+
+const validOption = (value, options, fallback = 'All') =>
+  (typeof value === 'string' && options.includes(value) ? value : fallback);
+
+const readSavedProductsState = () => {
+  try {
+    const raw = sessionStorage.getItem(PRODUCTS_STATE_KEY);
+    if (raw == null) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (
+      typeof parsed.savedAt === 'number' &&
+      Date.now() - parsed.savedAt > PRODUCTS_STATE_TTL_MS
+    ) {
+      sessionStorage.removeItem(PRODUCTS_STATE_KEY);
+      return null;
+    }
+    const categories = ['All', ...PRODUCT_CATEGORIES.map((c) => c.value)];
+    return {
+      search: typeof parsed.search === 'string' ? parsed.search : '',
+      category: validOption(parsed.category, categories),
+      stock: validOption(parsed.stock, STOCK_OPTIONS),
+      featured: validOption(parsed.featured, FEATURED_OPTIONS),
+      scrollY:
+        typeof parsed.scrollY === 'number' && Number.isFinite(parsed.scrollY) && parsed.scrollY > 0
+          ? parsed.scrollY
+          : 0,
+    };
+  } catch {
+    /* Storage unavailable or corrupt — treat as no saved state. */
+    return null;
+  }
+};
+
+const clearSavedProductsState = () => {
+  try {
+    sessionStorage.removeItem(PRODUCTS_STATE_KEY);
+  } catch {
+    /* ignore */
+  }
+};
+
 const AllProducts = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterCategory, setFilterCategory] = useState('All');
-  const [filterStock, setFilterStock] = useState('All');
-  const [filterFeatured, setFilterFeatured] = useState('All');
+  /* Returning from Edit Product restores the exact filter set the user left;
+     a normal visit finds no saved state and starts with the defaults. */
+  const [savedState] = useState(readSavedProductsState);
+  const [searchQuery, setSearchQuery] = useState(savedState?.search ?? '');
+  const [filterCategory, setFilterCategory] = useState(savedState?.category ?? 'All');
+  const [filterStock, setFilterStock] = useState(savedState?.stock ?? 'All');
+  const [filterFeatured, setFilterFeatured] = useState(savedState?.featured ?? 'All');
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const dirtyRef = useRef(false);
@@ -228,11 +298,77 @@ const AllProducts = () => {
     return matchesSearch && matchesCategory && matchesStock && matchesFeatured;
   }), [products, searchQuery, filterCategory, filterStock, filterFeatured]);
 
+  /* Save the full page state (filters + scroll) before leaving for Edit.
+     Passed to each row's Edit link; runs synchronously on click so nothing
+     is lost on unmount. */
+  const handleEditClick = () => {
+    try {
+      const el = getScroller();
+      sessionStorage.setItem(
+        PRODUCTS_STATE_KEY,
+        JSON.stringify({
+          v: 1,
+          savedAt: Date.now(),
+          search: searchQuery,
+          category: filterCategory,
+          stock: filterStock,
+          featured: filterFeatured,
+          scrollY: el ? el.scrollTop : window.scrollY,
+        })
+      );
+    } catch {
+      /* Storage unavailable (private mode) — skip silently. */
+    }
+  };
+
+  /* Restore the saved Edit→return position once products have rendered.
+     Filters were already applied via the lazy initial state above, so the
+     filtered list is what renders; this only positions the scroller. Runs
+     after loading flips false (rows exist) and after the global ScrollToTop
+     reset, on a double rAF so layout is settled — instant jump, never
+     smooth. Clamps to the available height and clears the key so a fresh
+     visit starts at the top. */
+  useEffect(() => {
+    if (loading) return;
+    let raf1 = 0;
+    let raf2 = 0;
+    const saved = savedState?.scrollY || 0;
+    if (!(saved > 0)) {
+      clearSavedProductsState();
+      return;
+    }
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        try {
+          const el = getScroller();
+          const max = el
+            ? el.scrollHeight - el.clientHeight
+            : document.documentElement.scrollHeight - window.innerHeight;
+          const target = Math.max(0, Math.min(saved, Math.max(0, max)));
+          if (el) el.scrollTo(0, target);
+          else window.scrollTo(0, target);
+        } catch {
+          /* Unmounted mid-restore — ignore. */
+        }
+        clearSavedProductsState();
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+    // savedState is mount-time only; loading gates the restore.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
   // Single source of truth — admin/src/config/categories.js (canonical order).
   const categories = PRODUCT_CATEGORIES;
 
   const sortedAll = useMemo(() => sortProductsByOrder(products), [products]);
-  const sortedFiltered = useMemo(() => sortProductsByOrder(filteredProducts), [filteredProducts]);
+  /* Display: every filter (search, category, stock, featured) applies first in
+     filteredProducts above; the natural name sort runs last so every filtered
+     result stays naturally sorted. Copy-then-sort: never mutates state. */
+  const sortedFiltered = useMemo(() => [...filteredProducts].sort(byNaturalName), [filteredProducts]);
   /* Row positions without O(n²) findIndex per card. */
   const positionById = useMemo(() => {
     const map = new Map();
@@ -421,6 +557,7 @@ const AllProducts = () => {
                     onToggleFeatured={toggleFeatured}
                     onToggleStock={toggleOutOfStock}
                     onDelete={handleDeleteProduct}
+                    onEditClick={handleEditClick}
                   />
                 );
               })}

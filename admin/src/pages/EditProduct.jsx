@@ -24,6 +24,10 @@ const EditProduct = () => {
   const [imageURL, setImageURL] = useState('');
   const [useURL, setUseURL] = useState(false);
   const [imageProgress, setImageProgress] = useState(null);
+  const [imageFile2, setImageFile2] = useState(null);
+  const [imagePreview2, setImagePreview2] = useState('');
+  const [imageURL2, setImageURL2] = useState('');
+  const [useURL2, setUseURL2] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [touched, setTouched] = useState({});
   const [brands, setBrands] = useState([]);
@@ -104,6 +108,8 @@ const EditProduct = () => {
         });
         setImagePreview(data.imageURL || '');
         setImageURL(data.imageURL || '');
+        setImagePreview2(data.imageURL2 || '');
+        setImageURL2(data.imageURL2 || '');
 
         if (data.seo) {
           setSeoData({
@@ -163,19 +169,12 @@ const EditProduct = () => {
 
       if (brandLogoFile) {
         try {
-          toast.loading('Removing background from logo...', { id: 'brand-logo-upload' });
+          toast.loading('Uploading logo...', { id: 'brand-logo-upload' });
           logoURL = await uploadImage(brandLogoFile, {
             dir: 'brands',
-            removeBackground: true,
             watermark: false,
-            onProgress: (key, current, total) => {
-              if (total > 0) {
-                const pct = Math.min(100, Math.round((current / total) * 100));
-                toast.loading(`Processing logo... ${pct}%`, { id: 'brand-logo-upload' });
-              }
-            }
           });
-          toast.dismiss('brand-logo-upload');
+          toast.success('Logo uploaded', { id: 'brand-logo-upload' });
         } catch (uploadError) {
           toast.dismiss('brand-logo-upload');
           console.error('Logo upload failed:', uploadError);
@@ -250,6 +249,30 @@ const EditProduct = () => {
     else setUseURL(v => !v);
   };
 
+  const handleImageChange2 = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile2(file);
+      setImagePreview2((prev) => {
+        if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(file);
+      });
+      setImageURL2('');
+      setUseURL2(false);
+    }
+  };
+
+  const handleImageURLChange2 = (e) => {
+    setImageURL2(e.target.value);
+    setImagePreview2(e.target.value);
+    if (e.target.value) setImageFile2(null);
+  };
+
+  const handleToggleUseURL2 = (val) => {
+    if (typeof val === 'boolean') setUseURL2(val);
+    else setUseURL2(v => !v);
+  };
+
   const markTouched = (e) => {
     const key = e.target.name;
     if (!key) return;
@@ -265,19 +288,15 @@ const EditProduct = () => {
       let imageURLFinal = imagePreview;
 
       if (imageFile) {
-        toast.loading('Removing background from image...', { id: 'product-img-upload' });
-        setImageProgress(0);
+        toast.loading('Uploading image...', { id: 'product-img-upload' });
+        setImageProgress(null);
         try {
+          // Direct upload of the original file — no background removal,
+          // no upscale, no watermark, no format conversion.
           imageURLFinal = await uploadImage(imageFile, {
             dir: 'products',
-            removeBackground: true,
-            onProgress: (key, current, total) => {
-              if (total > 0) {
-                const pct = Math.min(100, Math.round((current / total) * 100));
-                setImageProgress(pct);
-                toast.loading(`Processing image... ${pct}%`, { id: 'product-img-upload' });
-              }
-            }
+            upscale: false,
+            watermark: false,
           });
         } catch (uploadError) {
           toast.error(uploadError.message || 'Image upload failed', { id: 'product-img-upload' });
@@ -286,9 +305,31 @@ const EditProduct = () => {
           return;
         }
         toast.success('Image uploaded', { id: 'product-img-upload' });
-        setImageProgress(100);
+        setImageProgress(null);
       } else if (imageURL) {
         imageURLFinal = imageURL;
+      }
+
+      // Optional second image — same existing /api/upload flow as primary.
+      // Untouched when the admin picks nothing new: the stored value stays.
+      let imageURL2Final = imagePreview2;
+
+      if (imageFile2) {
+        toast.loading('Uploading second image...', { id: 'product-img2-upload' });
+        try {
+          imageURL2Final = await uploadImage(imageFile2, {
+            dir: 'products',
+            upscale: false,
+            watermark: false,
+          });
+        } catch (uploadError) {
+          toast.error(uploadError.message || 'Second image upload failed', { id: 'product-img2-upload' });
+          setLoading(false);
+          return;
+        }
+        toast.success('Second image uploaded', { id: 'product-img2-upload' });
+      } else if (imageURL2) {
+        imageURL2Final = imageURL2;
       }
 
       const seoObject = {
@@ -322,6 +363,7 @@ const EditProduct = () => {
         outOfStock: formData.outOfStock,
         description: formData.description,
         imageURL: imageURLFinal,
+        imageURL2: imageURL2Final,
         isFeatured: formData.isFeatured,
         ...(formData.sortOrder !== '' ? { sortOrder: parseInt(formData.sortOrder, 10) } : {}),
         brand: formData.brand || null,
@@ -395,6 +437,9 @@ const EditProduct = () => {
         imageURL={imageURL}
         useURL={useURL}
         imageProgress={imageProgress}
+        imagePreview2={imagePreview2}
+        imageURL2={imageURL2}
+        useURL2={useURL2}
         showAddBrand={showAddBrand}
         onFieldChange={handleChange}
         onSeoChange={handleSeoChange}
@@ -402,6 +447,9 @@ const EditProduct = () => {
         onImageChange={handleImageChange}
         onImageURLChange={handleImageURLChange}
         onToggleUseURL={handleToggleUseURL}
+        onImageChange2={handleImageChange2}
+        onImageURLChange2={handleImageURLChange2}
+        onToggleUseURL2={handleToggleUseURL2}
         onBrandChange={handleChange}
         onShowAddBrand={() => setShowAddBrand(true)}
         onMarkTouched={markTouched}

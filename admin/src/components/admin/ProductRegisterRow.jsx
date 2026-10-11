@@ -41,6 +41,7 @@ const ProductRegisterRow = ({
   onToggleFeatured,
   onToggleStock,
   onDelete,
+  onEditClick,
 }) => {
   const shownCategories = (product.categories || [product.category]).filter(Boolean).slice(0, 2);
   const extraCategories = (product.categories || []).length - 2;
@@ -295,6 +296,7 @@ const ProductRegisterRow = ({
         <div className="ml-auto flex items-center gap-2 xl:ml-0 xl:w-[6rem] xl:shrink-0 xl:justify-end">
           <Link
             to={`/products/edit/${product.id}`}
+            onClick={onEditClick}
             title={`Edit ${product.name}`}
             className="btn-quiet min-h-[44px] px-3 xl:w-11 xl:justify-center xl:px-0"
           >

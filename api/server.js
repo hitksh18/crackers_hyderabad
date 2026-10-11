@@ -26,6 +26,7 @@ const {
   upscaleImage,
   parsePublicUrl,
   deleteMediaByUrl,
+  isLocalPublicUrl,
   ALLOWED_DIRS,
 } = require('./lib/media');
 
@@ -409,12 +410,19 @@ const UPLOAD_ALLOWED_TYPES = {
   'image/gif': '.gif',
 };
 
+const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 6 * 1024 * 1024, files: 1, fields: 10 },
+  limits: { fileSize: UPLOAD_MAX_BYTES, files: 1, fields: 10 },
   fileFilter: (req, file, cb) => {
     if (UPLOAD_ALLOWED_TYPES[file.mimetype]) return cb(null, true);
-    return cb(new Error('Only JPEG, PNG, WebP or GIF images are allowed'));
+    // status 400: a rejected type is a client validation failure, so the
+    // central error handler must return 400 JSON in every environment
+    // (without it, production maps this to a generic 500).
+    const err = new Error('Only JPEG, PNG, WebP or GIF images are allowed');
+    err.status = 400;
+    return cb(err);
   },
 });
 
@@ -473,16 +481,24 @@ app.post(
     }
 
     try {
-      const { publicUrl, absolutePath, filename: storedFilename } = await storeMedia(buffer, dir, finalName);
       const destDir = path.join(getMediaRoot(), dir);
       const safeOriginal = String(req.file.originalname || '').replace(/[\r\n\t]+/g, ' ').slice(0, 120);
+      console.log(`[upload] storing file... dir=${dir} mimetype=${req.file.mimetype} originalName=${safeOriginal} size=${buffer.length}`);
+      console.log(`[upload] storage path: ${path.join(destDir, finalName)}`);
+      const { publicUrl, absolutePath, filename: storedFilename } = await storeMedia(buffer, dir, finalName);
+      console.log('[upload] file stored successfully');
       console.log(`[upload] dir=${dir} mimetype=${req.file.mimetype} originalName=${safeOriginal} size=${buffer.length} upscale=${shouldUpscale} watermark=${shouldWatermark}`);
       console.log(`[upload] generatedFilename=${finalName} storedFilename=${storedFilename} destDir=${destDir} absolutePath=${absolutePath}`);
-      console.log(`[upload] ${dir}/${storedFilename} → ${publicUrl}`);
-      return res.json({ url: publicUrl, publicUrl, dir, filename: storedFilename });
+      console.log(`[upload] public URL: ${publicUrl}`);
+      // `local` tells the frontend whether this URL only loads on this
+      // machine (local development) or is permanent KVM media. Existing
+      // fields are unchanged so current callers keep working.
+      return res.json({ url: publicUrl, publicUrl, dir, filename: storedFilename, local: isLocalPublicUrl(publicUrl) });
     } catch (error) {
+      // Log the detail server-side; the browser gets a safe generic message
+      // (the raw detail can contain internal filesystem paths).
       console.error('[upload] KVM store failed:', error.message);
-      return res.status(500).json({ error: `Image upload failed: ${error.message}` });
+      return res.status(500).json({ error: 'Failed to store image' });
     }
   }
 );
@@ -2818,9 +2834,10 @@ app.post('/api/orders/sms', notifyLimiter, requireFirebase, async (req, res) => 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
-    const message =
-      err.code === 'LIMIT_FILE_SIZE' ? 'Image must be 6MB or smaller' : 'Upload failed';
-    return res.status(400).json({ error: message });
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'Image must be 10MB or smaller' });
+    }
+    return res.status(400).json({ error: 'Upload failed' });
   }
 
   if (err && /CORS not allowed/.test(err.message || '')) {

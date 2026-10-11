@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ShoppingCart,
@@ -17,6 +17,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { popoverVariants, tapFeedback } from '../lib/motion';
 import { inr } from '../lib/currency';
 import { productPath } from '../lib/productLinks';
+import { getBrandDisplay } from '../lib/resolveBrand';
 import toast from '../utils/toast';
 import ImagePlaceholder from './ImagePlaceholder';
 
@@ -83,7 +84,16 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
   const categoryLabel = product.category
     || (Array.isArray(product.categories) ? product.categories[0] : null)
     || null;
-  const brandName = product.brand?.name || null;
+  /* Brand may be an object, a plain string, or missing — resolved defensively
+     so a string brand still shows its name instead of vanishing. */
+  const brand = getBrandDisplay(product);
+  const brandName = brand?.name || null;
+
+  /* Second-image hover swap: ONE displayed image only. Hover shows imageURL2
+     in place of imageURL; single-image products never change. */
+  const [isHovered, setIsHovered] = useState(false);
+  const hasSecondImage = !!product.imageURL2;
+  const displayedImage = isHovered && hasSecondImage ? product.imageURL2 : product.imageURL;
 
   const cartAction = (
     <AnimatePresence mode="wait" initial={false}>
@@ -170,7 +180,11 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
      cart action right. No new data, colors, or actions — only layout. */
   if (viewMode === 'list' && !compact) {
     return (
-      <div className="product-card group relative flex min-w-0 flex-col overflow-hidden card-premium glass-card sm:flex-row">
+      <div
+        className="product-card group relative flex min-w-0 flex-col overflow-hidden card-premium glass-card sm:flex-row"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
         {/* Image — left on sm+, top on mobile */}
         <div className="product-img-panel glass-img relative aspect-[16/10] w-full flex-shrink-0 sm:aspect-auto sm:min-h-[180px] sm:w-44 md:w-52 lg:w-56">
           <Link
@@ -178,9 +192,9 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
             aria-label={product.name}
             className="absolute inset-0 block"
           >
-            {product.imageURL ? (
+            {displayedImage ? (
               <img
-                src={product.imageURL}
+                src={displayedImage}
                 alt={product.name}
                 loading="lazy"
                 decoding="async"
@@ -336,6 +350,8 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
       className={`product-card group relative flex h-full flex-col overflow-hidden card-premium glass-card ${
         compact ? 'card-compact' : ''
       }`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       {/* ---------- Image panel ---------- */}
       <div
@@ -348,9 +364,9 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
           aria-label={product.name}
           className="absolute inset-0 block"
         >
-          {product.imageURL ? (
+          {displayedImage ? (
             <img
-              src={product.imageURL}
+              src={displayedImage}
               alt={product.name}
               loading="lazy"
               draggable={false}
@@ -415,34 +431,36 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
           />
         </button>
 
-        {product.brand?.logo && (
+        {brand?.name && (
           <div
             className={`pointer-events-none absolute left-2 z-raised flex items-center rounded-[var(--r-pill)] border shadow-sm ${
               compact
-                ? 'bottom-2 gap-1 py-0.5 pl-1 pr-2'
-                : 'bottom-9 gap-1.5 py-1 pl-1.5 pr-2.5'
+                ? `bottom-2 gap-1 py-0.5 ${brand.logo ? 'pl-1 pr-2' : 'px-2'}`
+                : `bottom-9 gap-1.5 py-1 ${brand.logo ? 'pl-1.5 pr-2.5' : 'px-2.5'}`
             }`}
             style={{
               background: 'var(--surface-card)',
               borderColor: 'var(--hairline)',
             }}
           >
-            <img
-              src={product.brand.logo}
-              alt={`${product.brand.name || 'Brand'} logo`}
-              loading="lazy"
-              className={`shrink-0 rounded-full bg-white object-contain ${
-                compact ? 'h-4 w-4' : 'h-5 w-5'
-              }`}
-              onError={(e) => { e.currentTarget.parentElement.style.display = 'none'; }}
-            />
+            {brand.logo && (
+              <img
+                src={brand.logo}
+                alt={`${brand.name} logo`}
+                loading="lazy"
+                className={`shrink-0 rounded-full bg-white object-contain ${
+                  compact ? 'h-4 w-4' : 'h-5 w-5'
+                }`}
+                onError={(e) => { e.currentTarget.parentElement.style.display = 'none'; }}
+              />
+            )}
             <span
               className={`truncate font-bold leading-none ${
                 compact ? 'text-[9px]' : 'text-[10px]'
               }`}
               style={{ fontFamily: 'var(--font-body)', color: 'var(--text-body)' }}
             >
-              {product.brand.name || 'Licensed'}
+              {brand.name}
             </span>
           </div>
         )}

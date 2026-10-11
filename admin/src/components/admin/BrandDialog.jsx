@@ -6,7 +6,7 @@ import { modalVariants } from '../../lib/motion';
  * "Add new brand" dialog.
  *
  * Fully controlled: every value and every handler comes from the page, so the
- * Firestore write, the background-removal upload and the reset semantics stay
+ * Firestore write, the logo upload and the reset semantics stay
  * exactly where they were.
  *
  * `onClose` is the dismiss path (backdrop, X) and leaves the draft intact.

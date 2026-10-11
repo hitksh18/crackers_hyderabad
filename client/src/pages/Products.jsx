@@ -16,6 +16,7 @@ import Seo from '../components/Seo';
 import toast from '../utils/toast';
 import { PRODUCT_CATEGORIES, isProductInCategory, resolveCategory, categoryDisplayName } from '../config/categories';
 import { readCategoryShowcaseConfig, applyShowcaseOrder } from '../lib/categoryShowcase';
+import { buildBrandLookup, withResolvedBrands } from '../lib/resolveBrand';
 import { trackSearch } from '../lib/ga4';
 
 /* Categories come from the single source of truth (config/categories.js),
@@ -148,6 +149,7 @@ const gridClasses = {
 
 const Products = () => {
   const [products, setProducts] = useState([]);
+  const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -177,8 +179,13 @@ const Products = () => {
       try {
         // Shared 60s cache with Home + cart revalidation: navigating
         // Home ↔ Products reuses one download, filtering stays local.
-        const productsData = await cachedGetDocs(collection(db, 'products'), 'products');
+        // Brands ride the same cache so every card resolves from one read.
+        const [productsData, brandsData] = await Promise.all([
+          cachedGetDocs(collection(db, 'products'), 'products'),
+          cachedGetDocs(collection(db, 'brands'), 'brands').catch(() => []),
+        ]);
         setProducts(Array.isArray(productsData) ? productsData : []);
+        setBrands(Array.isArray(brandsData) ? brandsData : []);
       } catch (error) {
         console.error('Error fetching products:', error);
       } finally {
@@ -206,9 +213,14 @@ const Products = () => {
     }
   }, [searchParams]);
 
+  /* One brands lookup per page load — every card below resolves from it. */
+  const brandLookup = useMemo(() => buildBrandLookup(brands), [brands]);
+
   /* The visible list is derived, not stored: filter (category + search) and
      sort run together on every render, so the cards can never lag behind the
-     control that was just used. Nothing here mutates `products`. */
+     control that was just used. Brand normalization runs last so ProductCard
+     always receives a consistent { id, name, logo } shape. Nothing here
+     mutates `products`. */
   const filteredProducts = useMemo(() => {
     let list = products;
 
@@ -229,8 +241,8 @@ const Products = () => {
       });
     }
 
-    return sortList(list, sortBy);
-  }, [products, searchTerm, selectedCategory, sortBy]);
+    return withResolvedBrands(sortList(list, sortBy), brandLookup);
+  }, [products, brandLookup, searchTerm, selectedCategory, sortBy]);
 
   const sortByOrder = (list) =>
     [...list].sort((a, b) =>

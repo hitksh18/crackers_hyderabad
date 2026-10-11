@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { cachedGetDocs } from '../lib/firestoreCache';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, Award, BadgeCheck, Check, Heart, Minus, Package, PackageSearch,
+  ArrowLeft, Award, BadgeCheck, Check, ChevronLeft, ChevronRight, Heart, Minus, Package, PackageSearch,
   PackageX, Plus, Share2, ShieldAlert, ShieldCheck, ShoppingCart, Sparkles,
   Tag, X, ZoomIn,
 } from 'lucide-react';
@@ -24,6 +24,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { modalVariants, revealVariants, staggerParent } from '../lib/motion';
 import { inr } from '../lib/currency';
 import { productPath, slugify } from '../lib/productLinks';
+import { buildBrandLookup, resolveBrand, withResolvedBrands } from '../lib/resolveBrand';
 import { trackProductEvent } from '../lib/analytics';
 import { trackViewItem } from '../lib/ga4';
 import Seo, { SITE_URL } from '../components/Seo';
@@ -93,6 +94,10 @@ const ProductDetail = () => {
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
   const [zoomOpen, setZoomOpen] = useState(false);
+  /* Optional second product image (imageURL2): index into the gallery below.
+     Products without imageURL2 always render exactly as before. */
+  const [activeImage, setActiveImage] = useState(0);
+  const touchStartX = useRef(null);
   const { addToCart } = useCart();
   const { isWishlisted, toggleWishlist } = useWishlist();
 
@@ -162,16 +167,12 @@ const ProductDetail = () => {
 
         let related = [];
 
-        const productBrand = typeof productData.brand === 'string' ? productData.brand : (productData.brand?.name || null);
-
-        const brandsMap = {};
-        (Array.isArray(brandsList) ? brandsList : []).forEach((b) => {
-          brandsMap[b.name] = b;
-        });
-
-        const resolvedBrand = typeof productData.brand === 'string'
-          ? { name: productData.brand, logo: brandsMap[productData.brand]?.logo || null }
-          : { name: productData.brand?.name || null, logo: productData.brand?.logo || null };
+        /* Shared brand resolution (brand object → brandId → brand-name
+           match → displayable name). Same lookup also normalizes the
+           related-products rail below. */
+        const brandLookup = buildBrandLookup(brandsList);
+        const resolvedBrand = resolveBrand(productData, brandLookup) || { name: null, logo: null };
+        const productBrand = resolvedBrand.name;
 
         /* "More like this" is category-first: a shopper looking at Sparklers
            wants other Sparklers before other products from the same brand.
@@ -206,7 +207,7 @@ const ProductDetail = () => {
 
         if (cancelled) return;
         setBrandInfo(resolvedBrand);
-        setRelatedProducts(related.slice(0, 8));
+        setRelatedProducts(withResolvedBrands(related.slice(0, 8), brandLookup));
 
         try {
           const raw = localStorage.getItem(RECENT_KEY);
@@ -230,6 +231,7 @@ const ProductDetail = () => {
 
     fetchProduct();
     setQuantity(1);
+    setActiveImage(0);
     return () => { cancelled = true; };
   }, [urlSlug, navigate]);
 
@@ -312,6 +314,27 @@ const ProductDetail = () => {
   const outOfStock = product.outOfStock === true;
   const wished = isWishlisted(product.id);
   const stockLeft = typeof product.stock === 'number' ? product.stock : null;
+
+  /* Image gallery: existing imageURL plus the optional imageURL2.
+     Single-image products get a one-item gallery — no arrows, no swipe. */
+  const gallery = [product.imageURL, product.imageURL2].filter(Boolean);
+  const hasMultipleImages = gallery.length > 1;
+  const showImage = (index) => {
+    if (!hasMultipleImages) return;
+    setActiveImage(((index % gallery.length) + gallery.length) % gallery.length);
+  };
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches && e.touches[0] ? e.touches[0].clientX : null;
+  };
+  const handleTouchEnd = (e) => {
+    if (touchStartX.current == null || !hasMultipleImages) return;
+    const endX = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientX : null;
+    if (endX == null) return;
+    const dx = touchStartX.current - endX;
+    touchStartX.current = null;
+    if (Math.abs(dx) < 40) return;
+    showImage(activeImage + (dx > 0 ? 1 : -1));
+  };
 
   const discountPercent = hasDiscount
     ? Math.round(((originalPrice - product.discountPrice) / originalPrice) * 100)
@@ -466,11 +489,18 @@ const ProductDetail = () => {
         <div className="pd-hero-grid">
           {/* ---- Product image well ---- */}
           <motion.div variants={revealVariants(reduced, 16)} className="pd-media-col">
-            <div className="pd-media">
+            <div
+              className="pd-media"
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+            >
               <div className="pd-media-inner">
-                {product.imageURL ? (
+                {/* ONE main image only — the selected gallery image replaces
+                    the previous one, never overlays it. */}
+                {(gallery[activeImage] || product.imageURL) ? (
                   <img
-                    src={product.imageURL}
+                    key={gallery[activeImage] || product.imageURL}
+                    src={gallery[activeImage] || product.imageURL}
                     alt={product.name}
                     draggable={false}
                     loading="eager"
@@ -484,6 +514,62 @@ const ProductDetail = () => {
                   <ImagePlaceholder />
                 )}
               </div>
+
+              {/* Prev/next arrows — only when multiple images exist. */}
+              {hasMultipleImages && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => showImage(activeImage - 1)}
+                    aria-label="Previous image"
+                    className="absolute left-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border shadow-sm"
+                    style={{ background: 'var(--surface-card)', borderColor: 'var(--hairline)', color: 'var(--text-strong)' }}
+                  >
+                    <ChevronLeft className="h-5 w-5" strokeWidth={2.4} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => showImage(activeImage + 1)}
+                    aria-label="Next image"
+                    className="absolute right-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border shadow-sm"
+                    style={{ background: 'var(--surface-card)', borderColor: 'var(--hairline)', color: 'var(--text-strong)' }}
+                  >
+                    <ChevronRight className="h-5 w-5" strokeWidth={2.4} aria-hidden="true" />
+                  </button>
+                </>
+              )}
+
+              {/* Thumbnails — rendered only when the product has imageURL2;
+                  single-image products are untouched. */}
+              {hasMultipleImages && (
+                <div className="mt-2 flex gap-2" role="group" aria-label="Product images">
+                  {gallery.map((src, i) => (
+                    <button
+                      key={src}
+                      type="button"
+                      onClick={() => showImage(i)}
+                      aria-pressed={activeImage === i}
+                      aria-label={`View image ${i + 1}`}
+                      className="h-14 w-14 shrink-0 overflow-hidden rounded-[var(--r-sm)] border p-1"
+                      style={{
+                        background: 'var(--surface-card)',
+                        borderColor: activeImage === i ? 'var(--ember-600)' : 'var(--hairline)',
+                      }}
+                    >
+                      <img
+                        src={src}
+                        alt=""
+                        aria-hidden="true"
+                        draggable={false}
+                        loading="lazy"
+                        decoding="async"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        className="h-full w-full object-contain"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {outOfStock && (
                 <div className="pd-media-oos">
@@ -844,13 +930,13 @@ const ProductDetail = () => {
               <X className="h-6 w-6" strokeWidth={2.2} aria-hidden="true" />
             </button>
 
-            {product.imageURL ? (
+            {(gallery[activeImage] || product.imageURL) ? (
               <motion.img
                 variants={modalVariants(reduced)}
                 initial="hidden"
                 animate="visible"
                 exit="exit"
-                src={product.imageURL}
+                src={gallery[activeImage] || product.imageURL}
                 alt={product.name}
                 draggable={false}
                 className="max-h-full max-w-full rounded-[var(--r-xl)] object-contain"

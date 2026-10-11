@@ -33,6 +33,7 @@ import { readBuilderConfig } from '../lib/homepageBuilder';
 import { readCategoryShowcaseConfig, applyShowcaseOrder } from '../lib/categoryShowcase';
 import { readSiteSettings, firstAnnouncementText, DEFAULT_SEO } from '../lib/siteSettings';
 import { resolveTrustCards } from '../lib/trustIcons';
+import { buildBrandLookup, withResolvedBrands } from '../lib/resolveBrand';
 import Seo, { SITE_URL } from '../components/Seo';
 import toast from '../utils/toast';
 
@@ -185,6 +186,7 @@ const HomeSeo = ({ siteSettings }) => {
 const Home = () => {
   const navigate = useNavigate();
   const [allProducts, setAllProducts] = useState([]);
+  const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(true);
   const [promotionalBanners, setPromotionalBanners] = useState([]);
   const [trackOrderId, setTrackOrderId] = useState('');
@@ -269,13 +271,15 @@ const Home = () => {
     let cancelled = false;
     const fetchCatalogue = async () => {
       try {
-        const [products, promos, deals] = await Promise.all([
+        const [products, promos, deals, brandsList] = await Promise.all([
           cachedGetDocs(collection(db, 'products'), 'products').catch(() => []),
           cachedGetDocs(collection(db, 'promotionalBanners'), 'promotionalBanners').catch(() => []),
           cachedGetDocs(collection(db, 'festiveDeals'), 'festiveDeals').catch(() => []),
+          cachedGetDocs(collection(db, 'brands'), 'brands').catch(() => []),
         ]);
         if (cancelled) return;
         setAllProducts(Array.isArray(products) ? products : []);
+        setBrands(Array.isArray(brandsList) ? brandsList : []);
         setPromotionalBanners((Array.isArray(promos) ? promos : []).filter(d => d.enabled !== false).sort((a, b) => (b.order || 0) - (a.order || 0)));
         setFestiveDeals((Array.isArray(deals) ? deals : []).filter(d => d.enabled !== false).sort((a, b) => (a.order || 0) - (b.order || 0)));
       } catch (e) {
@@ -321,8 +325,18 @@ const Home = () => {
   const wholesaleCopy = sectionText.wholesale || undefined;
   const resolvedTrust = resolveTrustCards(homepageConfig?.trustCards);
   const trustCards = resolvedTrust ? resolvedTrust.filter(c => c.enabled !== false) : undefined;
-  const featuredShown = maxOrAll(featuredProducts, sectionText.featured?.maxItems ?? 12);
-  const bestShown = maxOrAll(bestSellers, sectionText.bestSellers?.maxItems ?? 10);
+  /* One brands lookup per page load; both rails resolve from it so every
+     card receives a consistent { id, name, logo } brand. Sorting/slicing
+     above are untouched. */
+  const brandLookup = useMemo(() => buildBrandLookup(brands), [brands]);
+  const featuredShown = useMemo(
+    () => withResolvedBrands(maxOrAll(featuredProducts, sectionText.featured?.maxItems ?? 12), brandLookup),
+    [featuredProducts, sectionText.featured?.maxItems, brandLookup]
+  );
+  const bestShown = useMemo(
+    () => withResolvedBrands(maxOrAll(bestSellers, sectionText.bestSellers?.maxItems ?? 10), brandLookup),
+    [bestSellers, sectionText.bestSellers?.maxItems, brandLookup]
+  );
   const dealsShown = maxOrAll(festiveDeals, sectionText.deals?.maxItems);
   // announcement/stable bars below hero removed from public display per spec — keep config/fetch intact
   void firstAnnouncementText; void siteSettings; void strip;

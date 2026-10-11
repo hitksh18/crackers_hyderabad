@@ -1,30 +1,17 @@
 import { authFetch } from './apiClient';
 import { isLocalOnlyUrl } from './storageUrls';
 
-/* The background-removal model (onnxruntime, tens of MB) is imported lazily
-   so merely uploading an image — the common case in Canvas and products —
-   never downloads it. Only an explicit removeBackground:true pays the cost. */
-async function removeImageBackground(file, onProgress) {
-  const { removeImageBackground: run } = await import('./removeBackground');
-  return run(file, onProgress);
-}
-
+/* Uploads the original file directly — no image modification. The user is
+   expected to remove the background manually before selecting a file. */
 export async function uploadImage(file, options = {}) {
   if (!file) {
     throw new Error('No file provided');
   }
 
-  const shouldRemoveBackground = options.removeBackground === true;
   const shouldUpscale = options.upscale !== false;
-  let uploadFile = file;
-
-  if (shouldRemoveBackground) {
-    uploadFile = await removeImageBackground(file, options.onProgress);
-  }
-
   const dir = options.dir || options.folder || 'products';
   const formData = new FormData();
-  formData.append('image', uploadFile);
+  formData.append('image', file);
   formData.append('dir', dir);
   formData.append('upscale', shouldUpscale ? 'true' : 'false');
   formData.append('watermark', options.watermark !== false ? 'true' : 'false');
@@ -62,9 +49,14 @@ export async function uploadImage(file, options = {}) {
   /* Homepage banners, logos and other production content need a permanent
      public URL on the Hostinger KVM server. A blob:, data:, localhost or
      root-relative URL must fail loudly here rather than being persisted and
-     breaking the public site later. Pass { allowLocal: true } only for
-     throwaway/local tooling. */
-  if (options.allowLocal !== true && (data.local === true || isLocalOnlyUrl(url))) {
+     breaking the public site later — except when the admin app itself runs
+     on localhost (local development), where the API's localhost media URL
+     is the correct preview/testing address. Pass { allowLocal: true } only
+     for throwaway/local tooling. */
+  const runningLocally =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  if (options.allowLocal !== true && !runningLocally && (data.local === true || isLocalOnlyUrl(url))) {
     throw new Error(
       data.warning ||
         'Upload failed: the image was not stored to permanent KVM media. Retry — a local-only URL cannot be used here.'

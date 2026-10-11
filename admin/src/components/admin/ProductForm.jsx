@@ -38,12 +38,18 @@ const ProductForm = ({
   imageURL,
   useURL,
   imageProgress,
+  imagePreview2,
+  imageURL2,
+  useURL2,
   onFieldChange,
   onSeoChange,
   onCategoryToggle,
   onImageChange,
   onImageURLChange,
   onToggleUseURL,
+  onImageChange2,
+  onImageURLChange2,
+  onToggleUseURL2,
   onBrandChange,
   onShowAddBrand,
   onMarkTouched,
@@ -127,6 +133,12 @@ const ProductForm = ({
                 onImageChange={onImageChange}
                 onImageURLChange={onImageURLChange}
                 onToggleUseURL={onToggleUseURL}
+                imagePreview2={imagePreview2}
+                imageURL2={imageURL2}
+                useURL2={useURL2}
+                onImageChange2={onImageChange2}
+                onImageURLChange2={onImageURLChange2}
+                onToggleUseURL2={onToggleUseURL2}
               />
             </div>
 
