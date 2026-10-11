@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, doc, writeBatch } from 'firebase/firestore';
-import { useNavigationType, useSearchParams } from 'react-router-dom';
+import { Link, useNavigationType, useSearchParams } from 'react-router-dom';
 import {
   Check, GripVertical, LayoutGrid, List,
   PackageSearch, RotateCcw, SearchX,
@@ -47,6 +47,24 @@ const SORT_OPTIONS = [
   { key: 'price-desc', label: 'Price: High to Low' },
   { key: 'name-asc', label: 'Name: A to Z' },
 ];
+
+/* Per-category SEO descriptors — one factual line each, used for the
+   category meta description and the visible context line. No delivery,
+   discount or availability claims; names come from the canonical config. */
+const CATEGORY_DESCRIPTORS = {
+  'Sparkles': 'hand-held sparklers in multiple sizes for every celebration',
+  'Ground Chakkars': 'spinning ground chakkars in classic and special effects',
+  'Flower Pots': 'colourful flower pots and fountains for family displays',
+  'Bombs': 'traditional sound crackers in a range of sizes',
+  'Garlands': 'garland crackers from single strings to multi-thousand wala series',
+  'Rockets': 'sky rockets with bright bursts and whistling effects',
+  'Sky Shots': 'multi-shot aerial repeaters for bigger displays',
+  'Guns, Rolls & Pop Pop': 'caps, rolls and pop-pop novelties',
+  'Threads and Novelties': 'sparkling pencils and novelty threads',
+  'Fancy Fireworks': 'special-effect fancy fireworks for grand celebrations',
+  'Kids Special': 'a family-focused selection of fireworks',
+  'Gift Boxes': 'curated gift boxes combining favourites for gifting',
+};
 
 /* The price a shopper actually pays, in the same precedence ProductCard uses to
    render it. Reading `price` alone was the sorting bug: this catalogue stores
@@ -384,18 +402,67 @@ const Products = () => {
     }
   };
 
+  /* Category SEO: unique title/description/H1 per real category, generic
+     catalogue signals otherwise. Canonical strategy unchanged
+     (/products?category=<value>). */
+  const activeCategoryEntry = selectedCategory !== 'All' ? resolveCategory(selectedCategory) : null;
+  const activeCategoryName = activeCategoryEntry ? activeCategoryEntry.name : null;
+  const activeCategoryDescriptor = activeCategoryEntry
+    ? (CATEGORY_DESCRIPTORS[activeCategoryEntry.value] || CATEGORY_DESCRIPTORS[activeCategoryEntry.name] || 'fireworks picked for celebrations')
+    : null;
+  const categoryCanonical = activeCategoryEntry
+    ? `/products?category=${encodeURIComponent(activeCategoryEntry.value)}`
+    : '/products';
+  const categoryBreadcrumbLd = activeCategoryEntry
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://crackershyderabad.com/' },
+          { '@type': 'ListItem', position: 2, name: 'Products', item: 'https://crackershyderabad.com/products' },
+          {
+            '@type': 'ListItem',
+            position: 3,
+            name: activeCategoryName,
+            item: `https://crackershyderabad.com${categoryCanonical}`,
+          },
+        ],
+      }
+    : null;
+
   return (
     <div className="min-h-screen">
       <Seo
-        title="Buy Crackers Online in Hyderabad | Wholesale Fireworks – Crackers Hyderabad"
-        description="Shop premium fireworks and wholesale crackers in Hyderabad. Gift boxes, sparkles, rockets, flower pots and festival collections with doorstep delivery."
-        canonical={selectedCategory !== 'All' ? `/products?category=${encodeURIComponent(selectedCategory)}` : '/products'}
+        title={activeCategoryName
+          ? `${activeCategoryName} in Hyderabad | Crackers Hyderabad`
+          : 'Buy Crackers Online in Hyderabad | Wholesale Fireworks – Crackers Hyderabad'}
+        description={activeCategoryName
+          ? `Shop ${activeCategoryName.toLowerCase()} online at Crackers Hyderabad with delivery across Hyderabad. ${activeCategoryDescriptor.charAt(0).toUpperCase() + activeCategoryDescriptor.slice(1)}.`
+          : 'Shop premium fireworks and wholesale crackers in Hyderabad. Gift boxes, sparkles, rockets, flower pots and festival collections with doorstep delivery.'}
+        canonical={categoryCanonical}
+        jsonLd={categoryBreadcrumbLd}
       />
       <div className="shell products-page" style={{ paddingTop: '1.5rem', paddingBottom: '1.5rem' }}>
         {/* ============ COMPACT HEADER ============ */}
         <header className="text-center products-page-header">
           <span className="section-eyebrow justify-center">Catalogue</span>
-          <h1 className="section-title mt-1.5 text-balance">Our Products</h1>
+          <h1 className="section-title mt-1.5 text-balance">
+            {activeCategoryName ? `${activeCategoryName} in Hyderabad` : 'Our Products'}
+          </h1>
+          {activeCategoryEntry && (
+            <nav aria-label="Breadcrumb" className="mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+              <Link to="/">Home</Link>
+              <span aria-hidden="true"> / </span>
+              <Link to="/products">Products</Link>
+              <span aria-hidden="true"> / </span>
+              <span aria-current="page">{activeCategoryName}</span>
+            </nav>
+          )}
+          {activeCategoryDescriptor && (
+            <p className="mx-auto mt-1.5 max-w-xl text-sm" style={{ color: 'var(--text-muted)' }}>
+              Explore {activeCategoryDescriptor} from Crackers Hyderabad.
+            </p>
+          )}
         </header>
 
         {/* ============ CATEGORY FILTER PILLS — spec-compliant scroll container ============ */}

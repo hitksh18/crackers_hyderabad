@@ -466,13 +466,31 @@ const ProductDetail = () => {
   const showAssurance = codAvailable || premiumOn;
 
   const productUrl = `${SITE_URL}${productPath(product)}`;
+  /* Title: brand-led long form while the whole title stays ~60 chars,
+     plain brand suffix for longer names — never truncated, never stuffed. */
+  const productSeoTitle = (() => {
+    const longForm = `${product.name} | Buy in Hyderabad | Crackers Hyderabad`;
+    return longForm.length <= 64 ? longForm : `${product.name} | Crackers Hyderabad`;
+  })();
+  /* Description composed only from real fields (name, brand, category,
+     stored description), capped at 155 chars on a word boundary. */
+  const productSeoDescription = (() => {
+    const brandBit = brandInfo.name ? `${brandInfo.name}. ` : '';
+    const catBit = primaryCategory ? `${primaryCategory}. ` : '';
+    const text = `${product.name || ''}. ${brandBit}${catBit}${product.description || ''}`.replace(/\s+/g, ' ').trim();
+    if (text.length <= 155) return text;
+    const cut = text.slice(0, 155);
+    const lastSpace = cut.lastIndexOf(' ');
+    return (lastSpace > 100 ? cut.slice(0, lastSpace) : cut).trim();
+  })();
   const productJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: product.name,
     image: normalizeImageUrl(product.imageURL) || undefined,
     description: product.description || undefined,
-    brand: { '@type': 'Brand', name: brandInfo.name || 'Crackers Hyderabad' },
+    // Brand only when the product genuinely has one — never a store fallback.
+    ...(brandInfo.name ? { brand: { '@type': 'Brand', name: brandInfo.name } } : {}),
     offers: {
       '@type': 'Offer',
       url: productUrl,
@@ -513,8 +531,8 @@ const ProductDetail = () => {
     <div className="pd-page min-h-screen">
       {product && (
         <Seo
-          title={`${product.name} | Crackers Hyderabad`}
-          description={(product.description || product.name).slice(0, 155)}
+          title={productSeoTitle}
+          description={productSeoDescription}
           canonical={productUrl}
           image={normalizeImageUrl(product.imageURL) || undefined}
           jsonLd={[productJsonLd, breadcrumbJsonLd]}

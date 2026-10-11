@@ -427,6 +427,7 @@ const TrackOrder = () => {
         title="Track Your Fireworks Order | Crackers Hyderabad"
         description="Track your Crackers Hyderabad order by order ID — from packing through dispatch to doorstep delivery."
         canonical="/track-order"
+        noindex
       />
       <div className="shell-narrow section-pad-sm">
         <Link

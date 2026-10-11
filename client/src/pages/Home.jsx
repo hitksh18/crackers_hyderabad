@@ -51,9 +51,16 @@ const DEFAULT_STRIP = {
   banner1Enabled: true,
 };
 
-const HOME_TITLE = 'Firecrackers in Hyderabad | Buy Crackers Online | Crackers Hyderabad';
+const HOME_TITLE = 'Crackers Hyderabad | Firecrackers & Wholesale Fireworks';
 const HOME_DESCRIPTION =
-  'Shop firecrackers and Diwali crackers online in Hyderabad. Explore sparklers, flower pots, rockets, ground chakkars, gift boxes and more at Crackers Hyderabad.';
+  'Crackers Hyderabad – buy firecrackers & wholesale fireworks online in Hyderabad. Sparklers, flower pots, rockets, gift boxes & more.';
+
+/* Public homepage SEO companion ("Firecrackers in Hyderabad").
+   Render-level kill switch: false means the section never mounts publicly —
+   no DOM, no effects, no layout space, no gap. Content, component
+   (client + admin Canvas-preview mirror) and resolution stay intact, so
+   re-enabling is flipping this flag. Meta/JSON-LD/product SEO untouched. */
+const SHOW_HOME_SEO_SECTION = false;
 
 /* Internal links to the real category routes (/products?category=<value>).
    Resolved from the canonical category defs by slug — the same pattern the
@@ -584,7 +591,7 @@ const Home = () => {
       {/* Single page H1 for assistive tech and crawlers. The hero keeps its
           visual display type (now a styled paragraph, not a heading), so the
           premium design is pixel-identical while the document has one H1. */}
-      <h1 className="sr-only">{siteSettings?.seo?.homepageH1 || 'Buy Firecrackers Online in Hyderabad'}</h1>
+      <h1 className="sr-only">{siteSettings?.seo?.homepageH1 || 'Crackers Hyderabad – Premium Firecrackers & Fireworks'}</h1>
 
       {/* First viewport: paints synchronously on first render — never inside
           the Suspense boundary below, so lazy below-fold chunks can never
@@ -642,8 +649,10 @@ const Home = () => {
 
       {/* Homepage SEO companion, Canvas-controlled (seoGuide builder entry).
           OFF renders nothing — no container, no gap. The shared component
-          owns the single visual definition (mirrored for Canvas preview). */}
-      {seoEntry?.enabled !== false && (
+          owns the single visual definition (mirrored for Canvas preview).
+          SHOW_HOME_SEO_SECTION=false keeps it unmounted publicly; flip the
+          flag to restore without touching content. */}
+      {SHOW_HOME_SEO_SECTION && seoEntry?.enabled !== false && (
         <SeoGuideSection
           eyebrow={seoGuide.eyebrow}
           heading={seoGuide.heading}

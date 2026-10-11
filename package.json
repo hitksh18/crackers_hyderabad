@@ -31,7 +31,9 @@
     "migrate:catalog": "node scripts/migrateCatalogToKvm.js --dry-run",
     "migrate:catalog:apply": "node scripts/migrateCatalogToKvm.js --apply",
     "migrate:roles": "node scripts/migrate-roles.js",
-    "migrate:roles:apply": "node scripts/migrate-roles.js --commit"
+    "migrate:roles:apply": "node scripts/migrate-roles.js --commit",
+    "sitemap": "node scripts/generate-sitemap.js",
+    "sitemap:dry-run": "node scripts/generate-sitemap.js --dry-run"
   },
   "keywords": [],
   "author": "",

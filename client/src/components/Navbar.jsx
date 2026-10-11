@@ -233,8 +233,7 @@ const Navbar = () => {
             >
               <img
                 src={logoUrl}
-                alt=""
-                aria-hidden="true"
+                alt="Crackers Hyderabad – Firecrackers in Hyderabad"
                 width={64}
                 height={64}
                 decoding="async"
@@ -468,8 +467,7 @@ const Navbar = () => {
             >
               <img
                 src={logoUrl}
-                alt=""
-                aria-hidden="true"
+                alt="Crackers Hyderabad – Firecrackers in Hyderabad"
                 width={40}
                 height={40}
                 decoding="async"
