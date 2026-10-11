@@ -33,7 +33,7 @@ const LOOPBACK_RE = /^(localhost|127\.0\.0\.1|\[::1\]|.*\.localhost)$/i;
 
 /* Loopback plus LAN/mDNS hosts — never publicly routable upload origins. */
 const LOCAL_NET_RE =
-  /^(localhost|127\.0\.0\.1|\[::1\]|.*\.local|.*\.localhost|192\.168\..*|10\..*|172\.(1[6-9]|2\d|3[01])\..*)$/i;
+  /^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|.*\.local|.*\.localhost|192\.168\..*|10\..*|172\.(1[6-9]|2\d|3[01])\..*)$/i;
 
 /* Unknown context (SSR, tests without window) assumes production — re-base. */
 function appRunsLocally() {
