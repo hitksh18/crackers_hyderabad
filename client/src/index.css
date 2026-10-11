@@ -349,6 +349,23 @@ img {
 }
 
 /* =========================================================================
+   MOBILE CALM (<=767px) — premium means still, not flashy.
+   Scoped strictly to small screens so desktop keeps the full animation
+   language byte-identical. Decorative loops stop; layout, timing of
+   content appearance, and all functionality are untouched.
+   ========================================================================= */
+@media (max-width: 767px) {
+  /* Diya flames hold their final lit frame instead of flickering. */
+  .animate-flicker { animation: none; }
+}
+
+/* Touch devices: product images never get stuck mid-zoom from tap (sticky
+   :hover). Desktop hover zoom is untouched. */
+@media (hover: none) {
+  .product-card a img { transform: none !important; }
+}
+
+/* =========================================================================
    TYPOGRAPHY ROLES
    ========================================================================= */
 

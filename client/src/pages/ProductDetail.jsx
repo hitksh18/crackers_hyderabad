@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { cachedGetDocs } from '../lib/firestoreCache';
@@ -86,6 +86,13 @@ const ProductDetail = () => {
   const { slug: urlSlug } = useParams();
   const navigate = useNavigate();
   const reduced = useReducedMotion();
+  /* Mobile (<768px): hero content appears instantly — no stagger/reveal wait.
+     Desktop and reduced-motion behavior are untouched. */
+  const isMobile = useMemo(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches,
+    []
+  );
+  const calm = reduced || isMobile;
   const [product, setProduct] = useState(null);
   const [relatedProducts, setRelatedProducts] = useState([]);
   // Recently-viewed ids are maintained (and pruned when products are
@@ -98,6 +105,19 @@ const ProductDetail = () => {
   /* Optional second product image (imageURL2): index into the gallery below.
      Products without imageURL2 always render exactly as before. */
   const [activeImage, setActiveImage] = useState(0);
+  /* Per-image load failures (main vs secondary tracked independently): a
+     failed image is dropped from the gallery so the main view falls back
+     to the first valid image instead of sitting blank. Never global. */
+  const [failedImages, setFailedImages] = useState(() => new Set());
+  const markImageFailed = (src) => {
+    if (!src) return;
+    setFailedImages((prev) => {
+      if (prev.has(src)) return prev;
+      const next = new Set(prev);
+      next.add(src);
+      return next;
+    });
+  };
   const touchStartX = useRef(null);
   const { addToCart } = useCart();
   const { isWishlisted, toggleWishlist } = useWishlist();
@@ -233,6 +253,7 @@ const ProductDetail = () => {
     fetchProduct();
     setQuantity(1);
     setActiveImage(0);
+    setFailedImages(new Set());
     return () => { cancelled = true; };
   }, [urlSlug, navigate]);
 
@@ -332,9 +353,17 @@ const ProductDetail = () => {
      Single-image products get a one-item gallery — no arrows, no swipe. */
   /* Production-safe URLs (localhost-era stored URLs re-base to /uploads). */
   const gallery = [product.imageURL, product.imageURL2].map(normalizeImageUrl).filter(Boolean);
-  const hasMultipleImages = gallery.length > 1;
+  /* Valid images only: failed ones are excluded so the main view always
+     selects the first working image and bad thumbs simply disappear. */
+  const validGallery = gallery.filter((src) => !failedImages.has(src));
+  const hasMultipleImages = validGallery.length > 1;
+  /* Main image: the selected entry unless it failed, else the first valid
+     one; undefined when nothing is loadable (placeholder renders). */
+  const mainSrc = validGallery.includes(gallery[activeImage])
+    ? gallery[activeImage]
+    : validGallery[0];
   const showImage = (index) => {
-    if (!hasMultipleImages) return;
+    if (gallery.length < 2) return;
     setActiveImage(((index % gallery.length) + gallery.length) % gallery.length);
   };
   const handleTouchStart = (e) => {
@@ -511,13 +540,13 @@ const ProductDetail = () => {
       <motion.section
         initial="hidden"
         animate="visible"
-        variants={staggerParent(reduced, 0.07)}
+        variants={staggerParent(calm, 0.07)}
         className="pd-shell pd-hero"
         aria-labelledby="product-title"
       >
         <div className="pd-hero-grid">
           {/* ---- Product image well ---- */}
-          <motion.div variants={revealVariants(reduced, 16)} className="pd-media-col">
+          <motion.div variants={revealVariants(calm, 16)} className="pd-media-col">
             <div
               className="pd-media"
               onTouchStart={handleTouchStart}
@@ -525,17 +554,19 @@ const ProductDetail = () => {
             >
               <div className="pd-media-inner">
                 {/* ONE main image only — the selected gallery image replaces
-                    the previous one, never overlays it. */}
-                {gallery[activeImage] ? (
+                    the previous one, never overlays it. A failed selection
+                    falls back to the first valid image; all-failed shows the
+                    existing placeholder (container never collapses). */}
+                {mainSrc ? (
                   <img
-                    key={gallery[activeImage]}
-                    src={gallery[activeImage]}
+                    key={mainSrc}
+                    src={mainSrc}
                     alt={product.name}
                     draggable={false}
                     loading="eager"
                     fetchPriority="high"
                     decoding="async"
-                    onError={(e) => { logBrokenImageUrl(gallery[activeImage]); e.currentTarget.style.display = 'none'; }}
+                    onError={() => { logBrokenImageUrl(mainSrc); markImageFailed(mainSrc); }}
                     className="h-full w-full object-contain transition-transform duration-700 ease-out"
                     style={{ aspectRatio: '1 / 1' }}
                   />
@@ -568,34 +599,37 @@ const ProductDetail = () => {
                 </>
               )}
 
-              {/* Thumbnails — rendered only when the product has imageURL2;
-                  single-image products are untouched. */}
+              {/* Thumbnails — one per gallery image; a failed thumbnail
+                  disappears on its own without affecting the other image.
+                  Single-image products are untouched. */}
               {hasMultipleImages && (
                 <div className="mt-2 flex gap-2" role="group" aria-label="Product images">
                   {gallery.map((src, i) => (
-                    <button
-                      key={src}
-                      type="button"
-                      onClick={() => showImage(i)}
-                      aria-pressed={activeImage === i}
-                      aria-label={`View image ${i + 1}`}
-                      className="h-14 w-14 shrink-0 overflow-hidden rounded-[var(--r-sm)] border p-1"
-                      style={{
-                        background: 'var(--surface-card)',
-                        borderColor: activeImage === i ? 'var(--ember-600)' : 'var(--hairline)',
-                      }}
-                    >
-                      <img
-                        src={src}
-                        alt=""
-                        aria-hidden="true"
-                        draggable={false}
-                        loading="lazy"
-                        decoding="async"
-                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                        className="h-full w-full object-contain"
-                      />
-                    </button>
+                    failedImages.has(src) ? null : (
+                      <button
+                        key={src}
+                        type="button"
+                        onClick={() => showImage(i)}
+                        aria-pressed={mainSrc === src}
+                        aria-label={`View image ${i + 1}`}
+                        className="h-14 w-14 shrink-0 overflow-hidden rounded-[var(--r-sm)] border p-1"
+                        style={{
+                          background: 'var(--surface-card)',
+                          borderColor: mainSrc === src ? 'var(--ember-600)' : 'var(--hairline)',
+                        }}
+                      >
+                        <img
+                          src={src}
+                          alt=""
+                          aria-hidden="true"
+                          draggable={false}
+                          loading="lazy"
+                          decoding="async"
+                          onError={() => { logBrokenImageUrl(src); markImageFailed(src); }}
+                          className="h-full w-full object-contain"
+                        />
+                      </button>
+                    )
                   ))}
                 </div>
               )}
@@ -652,7 +686,7 @@ const ProductDetail = () => {
           </motion.div>
 
           {/* ---- Buying column: title first, then identity, then price ---- */}
-          <motion.div variants={revealVariants(reduced, 16)} className="pd-info">
+          <motion.div variants={revealVariants(calm, 16)} className="pd-info">
             <h1
               id="product-title"
               className={`pd-title product-name${titleTier(product.name)}`}
@@ -959,15 +993,16 @@ const ProductDetail = () => {
               <X className="h-6 w-6" strokeWidth={2.2} aria-hidden="true" />
             </button>
 
-            {(gallery[activeImage]) ? (
+            {mainSrc ? (
               <motion.img
                 variants={modalVariants(reduced)}
                 initial="hidden"
                 animate="visible"
                 exit="exit"
-                src={gallery[activeImage]}
+                src={mainSrc}
                 alt={product.name}
                 draggable={false}
+                onError={() => { logBrokenImageUrl(mainSrc); markImageFailed(mainSrc); }}
                 className="max-h-full max-w-full rounded-[var(--r-xl)] object-contain"
               />
             ) : (

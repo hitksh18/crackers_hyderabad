@@ -442,10 +442,10 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
 
         {brand?.name && (
           <div
-            className={`pointer-events-none absolute left-2 z-raised flex items-center rounded-[var(--r-pill)] border shadow-sm ${
+            className={`pointer-events-none absolute left-2 z-raised flex max-w-[calc(100%-1rem)] items-center rounded-[var(--r-pill)] border shadow-sm ${
               compact
                 ? `bottom-2 gap-1 py-0.5 ${brandLogo ? 'pl-1 pr-2' : 'px-2'}`
-                : `bottom-9 gap-1.5 py-1 ${brandLogo ? 'pl-1.5 pr-2.5' : 'px-2.5'}`
+                : `bottom-2 gap-1.5 py-1 sm:bottom-9 ${brandLogo ? 'pl-1.5 pr-2.5' : 'px-2.5'}`
             }`}
             style={{
               background: 'var(--surface-card)',
@@ -457,10 +457,14 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
                 src={brandLogo}
                 alt={`${brand.name} logo`}
                 loading="lazy"
+                width={20}
+                height={20}
                 className={`shrink-0 rounded-full bg-white object-contain ${
                   compact ? 'h-4 w-4' : 'h-5 w-5'
                 }`}
-                onError={(e) => { logBrokenImageUrl(brandLogo); e.currentTarget.parentElement.style.display = 'none'; }}
+                /* A dead logo URL must never take the brand name down with
+                   it — hide only the broken mark, keep the name pill. */
+                onError={(e) => { logBrokenImageUrl(brandLogo); e.currentTarget.style.display = 'none'; }}
               />
             )}
             <span

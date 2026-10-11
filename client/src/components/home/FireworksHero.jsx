@@ -908,7 +908,10 @@ const FireworksHero = ({ copy } = {}) => {
     <div ref={rootRef} className="fx-hero" role="img" aria-label="Crackers Hyderabad fireworks celebration">
       <div aria-hidden="true" className="fx-bg" />
       <div aria-hidden="true" className="fx-mouselight" />
-      <canvas aria-hidden="true" ref={canvasRef} className="fx-canvas" />
+      {/* Mobile (<768px): no canvas at all — the static CSS night sky stays.
+          The canvas effect early-returns without canvasRef, so no loop,
+          observers, or listeners start. Desktop is untouched. */}
+      {!isMobile && <canvas aria-hidden="true" ref={canvasRef} className="fx-canvas" />}
 
       <div className="fx-content">
         <p className="fx-eyebrow fx-rise" style={{ '--d': '0.15s' }}>

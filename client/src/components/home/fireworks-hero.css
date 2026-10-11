@@ -245,8 +245,14 @@
   .fx-content { transform: none; }
 }
 
-/* ---------------- Small screens: scene stays, intensity drops --------- */
+/* ---------------- Small screens: calm and instant --------------------
+   No canvas (not rendered), no rise stagger, no parallax transforms —
+   content is simply visible. Desktop keeps the full cinematic language. */
 @media (max-width: 767px) {
+  .fx-rise { animation: none; opacity: 1; }
+  .fx-bg,
+  .fx-content { transform: none; }
+
   .fx-hero {
     height: clamp(560px, 92svh, 720px);
     min-height: 520px;
