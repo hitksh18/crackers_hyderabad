@@ -389,7 +389,7 @@ const AllProducts = () => {
     return (
       <div className="admin-page bg-[var(--surface-page)]">
         <AdminHeader title="Products" backFallback="/dashboard" />
-        <div className="mx-auto w-full max-w-[1550px] px-4 py-3 lg:px-8">
+        <div className="mx-auto w-full max-w-[1550px] px-4 py-2 lg:px-8">
           <TableSkeleton rows={8} cols={4} label="Loading products" />
         </div>
       </div>
@@ -414,7 +414,7 @@ const AllProducts = () => {
         backFallback="/dashboard"
         controls={(
           <Link to="/products/add" className="ax-btn-primary">
-            <Plus aria-hidden="true" />
+            <Plus aria-hidden="true" className="h-4 w-4" />
             <span className="hidden sm:inline">Add New Product</span>
             <span className="sm:hidden">Add</span>
           </Link>
@@ -422,16 +422,19 @@ const AllProducts = () => {
       />
 
       <div className="mx-auto w-full max-w-[1550px] px-4 py-3 lg:px-8">
-        {/* Page toolbar: search + filters */}
-        <div className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center">
-          <div className="relative w-full sm:w-[280px] lg:w-[300px] xl:w-[340px]">
+        {/* Page toolbar: one clean card — search (largest) + compact equal-height filters */}
+        <div
+          className="flex flex-col gap-2 rounded-[12px] border p-2 sm:flex-row sm:items-center"
+          style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)' }}
+        >
+          <div className="relative w-full flex-1 sm:min-w-[220px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
             <input
               type="text"
               placeholder="Search products..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-10 w-full rounded-[10px] border bg-[var(--surface-sunken)] pl-10 pr-4 text-sm placeholder:text-[var(--text-subtle)] focus:outline-none transition-colors duration-200"
+              className="h-[42px] w-full rounded-[10px] border bg-[var(--surface-sunken)] pl-10 pr-4 text-sm placeholder:text-[var(--text-subtle)] focus:outline-none transition-colors duration-150"
               style={{ borderColor: 'var(--hairline)', color: 'var(--text-strong)' }}
             />
           </div>
@@ -440,7 +443,7 @@ const AllProducts = () => {
             <select
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
-              className="h-10 appearance-none rounded-[10px] border bg-[var(--surface-sunken)] pl-3 pr-8 text-sm font-semibold focus:outline-none"
+              className="h-[42px] w-full appearance-none rounded-[10px] border bg-[var(--surface-sunken)] pl-3 pr-8 text-[13px] font-semibold focus:outline-none sm:w-auto"
               style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
             >
               <option value="All">Category: All</option>
@@ -455,7 +458,7 @@ const AllProducts = () => {
             <select
               value={filterStock}
               onChange={(e) => setFilterStock(e.target.value)}
-              className="h-10 appearance-none rounded-[10px] border bg-[var(--surface-sunken)] pl-3 pr-8 text-sm font-semibold focus:outline-none"
+              className="h-[42px] w-full appearance-none rounded-[10px] border bg-[var(--surface-sunken)] pl-3 pr-8 text-[13px] font-semibold focus:outline-none sm:w-auto"
               style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
             >
               <option value="All">Stock: All</option>
@@ -469,7 +472,7 @@ const AllProducts = () => {
             <select
               value={filterFeatured}
               onChange={(e) => setFilterFeatured(e.target.value)}
-              className="h-10 appearance-none rounded-[10px] border bg-[var(--surface-sunken)] pl-3 pr-8 text-sm font-semibold focus:outline-none"
+              className="h-[42px] w-full appearance-none rounded-[10px] border bg-[var(--surface-sunken)] pl-3 pr-8 text-[13px] font-semibold focus:outline-none sm:w-auto"
               style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
             >
               <option value="All">Featured: All</option>
@@ -480,20 +483,20 @@ const AllProducts = () => {
           </div>
 
           {hasActiveFilters && (
-            <button type="button" onClick={clearFilters} className="ax-btn">
+            <button type="button" onClick={clearFilters} className="ax-btn h-[42px] shrink-0">
               <RotateCcw aria-hidden="true" /> Clear
             </button>
           )}
         </div>
 
-        {/* Compact toolbar - result count + reorder hint */}
-        <div className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center sm:justify-between">
+        {/* Compact summary row — small secondary count + subtle reorder hint pill */}
+        <div className="flex flex-col gap-1.5 py-1.5 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
             Showing <span className="tabular font-bold" style={{ color: 'var(--ember-600)' }}>{filteredProducts.length}</span> of <span className="tabular font-bold" style={{ color: 'var(--text-strong)' }}>{products.length}</span> products
             {hasActiveFilters && <button type="button" onClick={clearFilters} className="ml-2 text-xs font-semibold underline" style={{ color: 'var(--ember-600)' }}>Clear filters</button>}
           </p>
-          <p className="hidden items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold sm:inline-flex" style={{ background: 'rgba(210,166,79,0.12)', borderColor: 'rgba(210,166,79,0.3)', color: 'var(--gold-600)' }}>
-            <GripVertical className="h-3.5 w-3.5" /> Drag rows to reorder — customers see this order first
+          <p className="hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium sm:inline-flex" style={{ background: 'rgba(210,166,79,0.08)', borderColor: 'rgba(210,166,79,0.22)', color: 'var(--text-muted)' }}>
+            <GripVertical className="h-3 w-3" style={{ color: 'var(--gold-500)' }} /> Drag rows to reorder — customers see this order first
           </p>
         </div>
 
@@ -517,25 +520,25 @@ const AllProducts = () => {
             }
           />
         ) : (
-          <section aria-label="Product register" className="mt-3">
-            {/* Column header - desktop */}
+          <section aria-label="Product register" className="mt-2">
+            {/* Column header - desktop: widths mirror ProductRegisterRow cells */}
             <div
-              className="mb-2 hidden items-center gap-3 rounded-xl border px-4 py-2.5 xl:flex"
+              className="mb-1.5 hidden items-center gap-4 rounded-[10px] border px-4 py-1.5 xl:flex"
               style={{ background: 'var(--surface-sunken)', borderColor: 'var(--hairline)' }}
               aria-hidden="true"
             >
               <div className="flex min-w-0 flex-1 items-center gap-3">
-                <span className="w-9 shrink-0" />
-                <span className="w-14 shrink-0" />
+                <span className="w-8 shrink-0" />
+                <span className="w-11 shrink-0" />
                 <span className="label-caps flex-1">Product</span>
               </div>
-              <span className="label-caps w-[9rem] shrink-0">Pricing</span>
-              <span className="label-caps w-[11rem] shrink-0">Status</span>
-              <span className="label-caps w-[7rem] shrink-0">Order</span>
+              <span className="label-caps w-[8.5rem] shrink-0 text-right">Pricing</span>
+              <span className="label-caps w-[11.5rem] shrink-0">Status</span>
+              <span className="label-caps w-[8.5rem] shrink-0">Order</span>
               <span className="label-caps w-[6rem] shrink-0 text-right">Actions</span>
             </div>
 
-            <ul role="list" className="flex flex-col gap-2">
+            <ul role="list" className="flex flex-col gap-1.5">
               {sortedFiltered.map((product, index) => {
                 const position = positionById.get(product.id) ?? (index + 1);
                 return (

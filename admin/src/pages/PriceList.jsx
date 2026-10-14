@@ -7,6 +7,7 @@ import AdminHeader from '../components/admin/AdminHeader';
 import { CATEGORY_VALUES, isProductInCategory, categoryDisplayName, productCategoryValues } from '../config/categories';
 import { usePriceListData } from '../hooks/usePriceListData';
 import { PRICE_LIST_SECTIONS, formatINR, groupProductsForPrint, availabilityOf, screenGroupOf, printStatusOf } from '../lib/priceListPricing';
+import { buildPriceListRows, loadLogoDataUrl, pdfBrandingFor, printPriceListPDF } from '../utils/priceListPdf';
 
 // Single source of truth — admin/src/config/categories.js (canonical order).
 // State holds canonical stored values; labels render display names.
@@ -70,85 +71,6 @@ const CategoryBadges = ({ product }) => {
   );
 };
 
-/* Print tables: one continuous table per selected store. The offline table
-   is Product/Price; the online table carries the full register columns.
-   Category separator rows (text bands) break groups visually without ever
-   splitting the table — the first group needs none, the masthead serves it. */
-const OfflinePrintTable = ({ groups, section, snoById, pricingLoading }) => (
-  <table className="pl-print-table">
-    <colgroup>
-      <col style={{ width: '8%' }} />
-      <col style={{ width: '72%' }} />
-      <col style={{ width: '20%' }} />
-    </colgroup>
-    <thead>
-      <tr>
-        <th className="pl-print-h-sno">S.No</th>
-        <th className="pl-print-h-name">Product</th>
-        <th className="pl-print-h-money">Price</th>
-      </tr>
-    </thead>
-    <tbody>
-      {groups.map((group) => (
-        <Fragment key={group.key}>
-          {group.items.map((product, itemIndex) => {
-            const { mrp, sale } = section.valueOf(product);
-            const price = sale || mrp;
-            return (
-              <tr key={product.id} className={itemIndex === 0 ? 'pl-group-first' : undefined}>
-                <td className="pl-print-sno">{snoById.get(product.id)}</td>
-                <td className="pl-print-name">{product.name}</td>
-                <td className="pl-print-money">{pricingLoading ? '' : formatINR(price)}</td>
-              </tr>
-            );
-          })}
-        </Fragment>
-      ))}
-    </tbody>
-  </table>
-);
-
-const OnlinePrintTable = ({ groups, section, snoById, pricingLoading }) => (
-  <table className="pl-print-table pl-print-table-wide">
-    <colgroup>
-      <col style={{ width: '7%' }} />
-      <col style={{ width: '37%' }} />
-      <col style={{ width: '16%' }} />
-      <col style={{ width: '12%' }} />
-      <col style={{ width: '13%' }} />
-      <col style={{ width: '15%' }} />
-    </colgroup>
-    <thead>
-      <tr>
-        <th className="pl-print-h-sno">S.No</th>
-        <th className="pl-print-h-name">Product Name</th>
-        <th className="pl-print-h-cat">Category</th>
-        <th className="pl-print-h-money">Offline MRP</th>
-        <th className="pl-print-h-money">Sale Price</th>
-        <th className="pl-print-h-status">Status</th>
-      </tr>
-    </thead>
-    <tbody>
-      {groups.map((group) => (
-        <Fragment key={group.key}>
-          {group.items.map((product, itemIndex) => {
-            const { mrp, sale } = section.valueOf(product);
-            return (
-              <tr key={product.id} className={itemIndex === 0 ? 'pl-group-first' : undefined}>
-                <td className="pl-print-sno">{snoById.get(product.id)}</td>
-                <td className="pl-print-name">{product.name}</td>
-                <td className="pl-print-cat" />
-                <td className="pl-print-money">{pricingLoading ? '' : formatINR(mrp)}</td>
-                <td className="pl-print-money">{pricingLoading ? '' : (sale ? formatINR(sale) : '—')}</td>
-                <td className={`pl-print-status${product.outOfStock ? ' is-oos' : ''}`}>{printStatusOf(product)}</td>
-              </tr>
-            );
-          })}
-        </Fragment>
-      ))}
-    </tbody>
-  </table>
-);
 /* One row shape for the screen table — the caller passes the section's own
    { mrp, sale } pair (see priceListPricing.js), so online and offline values
    can never cross into each other's table. Names wrap, never truncate. */
@@ -228,6 +150,7 @@ const PriceList = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [pdfBusy, setPdfBusy] = useState(false);
   /* Visible store: "online" | "offline". One variable drives both switchers,
      the table values and the printed document — flipping it re-renders only
      this page (no navigation, no reload). */
@@ -283,20 +206,32 @@ const PriceList = () => {
     setStatusFilter('all');
   };
 
-  /* Print with the store's name as the suggested PDF filename: browsers name
-     "Save as PDF" output after document.title, so it is swapped for the
-     print and restored the moment the dialog closes (plus a fallback timer
-     in case the event is missed). Tab title is unaffected afterwards. */
-  const handlePrint = () => {
-    const previousTitle = document.title;
-    document.title = section.fileName;
-    const restore = () => {
-      document.title = previousTitle;
-      window.removeEventListener('afterprint', restore);
-    };
-    window.addEventListener('afterprint', restore);
-    window.print();
-    setTimeout(restore, 1500);
+  /* PDF document: the selected store rendered through the shared jsPDF
+     engine (utils/priceListPdf.js) — one 6-column register
+     (S.No/Product/Category/MRP/Sale/Status), brand header on page 1 only,
+     table head repeated on every page, one compact heading band per
+     category (existing grouping, never invented), content-aware pagination,
+     real stock status. Same structure for both stores; only branding +
+     values differ. */
+  const handlePrint = async () => {
+    if (pdfBusy || filteredProducts.length === 0) return;
+    setPdfBusy(true);
+    try {
+      const rows = buildPriceListRows({
+        groups: printGroups,
+        snoById,
+        valueOf: section.valueOf,
+        formatPrice: formatINR,
+        statusOf: printStatusOf,
+        categoryOf: (product) =>
+          productCategoryValues(product).map(categoryDisplayName).filter(Boolean).join(', ') || '—',
+        labelOf: (group) => group.label,
+      });
+      const logoDataUrl = await loadLogoDataUrl(section.logo);
+      printPriceListPDF(pdfBrandingFor(section, logoDataUrl), rows);
+    } finally {
+      setPdfBusy(false);
+    }
   };
 
   return (
@@ -326,11 +261,12 @@ const PriceList = () => {
             <button
               type="button"
               onClick={handlePrint}
+              disabled={pdfBusy || filteredProducts.length === 0}
               className="ax-btn no-print"
-              title="Print price list (in the print dialog, turn off Headers and footers for a clean PDF)"
+              title="Download the price list PDF for the selected store"
             >
               <Printer aria-hidden="true" />
-              <span className="hidden sm:inline">Print price list</span>
+              <span className="hidden sm:inline">{pdfBusy ? 'Preparing…' : 'Print price list'}</span>
               <span className="sm:hidden">Print</span>
             </button>
           </>
@@ -484,24 +420,6 @@ const PriceList = () => {
             )}
           </section>
 
-          {/* ---- Print document: the selected store only ----------------------
-               A separate print-only document (never an embedded preview): the
-               company masthead once, then one continuous table with category
-               separator rows and a running S.No. The screen sheet above is
-               hidden in print. */}
-          <div className={`pl-print-doc pl-print-${section.key}`}>
-            <div className="pl-print-head">
-              <img src={section.logo} alt="" className="pl-print-logo" />
-              <p className="pl-print-brand">{section.brand}</p>
-              <h2 className="pl-print-title">{section.printTitle}</h2>
-              <div className="pl-print-div" aria-hidden="true" />
-            </div>
-            {section.key === 'online' ? (
-              <OnlinePrintTable groups={printGroups} section={section} snoById={snoById} pricingLoading={pricingLoading} />
-            ) : (
-              <OfflinePrintTable groups={printGroups} section={section} snoById={snoById} pricingLoading={pricingLoading} />
-            )}
-          </div>
         </div>
       </div>
 
@@ -666,47 +584,15 @@ const PriceList = () => {
           color: var(--text-strong);
         }
 
-          /* The print document never shows on screen. */
-          .pl-print-doc { display: none; }
-
-        /* ================= Print: the separate document ================
-           Only .pl-print-doc prints: centred masthead once, then ONE
-           continuous table with full-width category separator rows and a
-           single header that repeats per printed page. Both stores footer
-           their pages; nothing else paginates. */
+        /* ================= Print fallback ============================
+           The document ships as a generated PDF (see handlePrint above), so
+           browser printing is only a fallback: hide the app chrome and the
+           toolbar, keep the working table. */
         @media print {
           @page {
             size: A4 portrait;
-            margin: 40px 45px 40px 45px;
+            margin: 12mm;
           }
-          /* Each store owns a named page carrying its own whisper-quiet
-             footer (brand + page count). */
-          @page pl-online {
-            @bottom-center {
-              content: "CRACKERS HYDERABAD · PRICE LIST · Page " counter(page) " of " counter(pages);
-              font-size: 8px;
-              color: #888888;
-              font-family: Arial, Helvetica, sans-serif;
-            }
-          }
-          @page pl-offline {
-            @bottom-center {
-              content: "AYYAPA FIREWORKS · OFFLINE STORE · Page " counter(page) " of " counter(pages);
-              font-size: 8px;
-              color: #888888;
-              font-family: Arial, Helvetica, sans-serif;
-            }
-          }
-
-          /* Admin chrome leaves normal flow entirely (display, not
-             visibility): the document starts at the top of page 1 with no
-             absolute positioning — absolute containers suppress paged-media
-             features in Chrome. Named one by one (never a blind global
-             button hide): sidebar, mobile drawer + veil + close, mobile nav
-             trigger (the circular hamburger always leaks into print below
-             desktop widths), top bar, page header, and toast popups. These
-             rules live in this page's style block so no other admin screen
-             is affected. */
           .asb-desktop,
           .asb-drawer,
           .asb-drawer-veil,
@@ -714,144 +600,13 @@ const PriceList = () => {
           .asb-fab,
           .admin-topbar,
           .ax-header,
-          .react-hot-toast { display: none !important; }
+          .react-hot-toast,
+          .no-print { display: none !important; }
           .admin-main { overflow: visible !important; padding: 0 !important; }
           .page-enter { min-height: 0 !important; animation: none !important; }
-          .admin-page { padding: 0 !important; margin: 0 !important; background: #FFFFFF !important; }
-          body { margin: 0 !important; }
-
-          .pricelist-print-area {
-            width: 100%;
-            background: #FFFFFF !important;
-          }
-
-          /* Full printable width — release the screen shell constraints. */
-          .pricelist-print-area .shell {
-            width: 100% !important;
-            max-width: none !important;
-            padding: 0 !important;
-          }
-
-          /* Screen sheet off, print document on. No page frame: the table's
-             own outer border is the document's single boundary. */
-          .pl-sheet { display: none !important; }
-          .pl-print-doc { display: block !important; }
-          .pl-print-online { page: pl-online; }
-          .pl-print-offline { page: pl-offline; }
-
-          .pl-print-head { text-align: center; padding: 2mm 0 0 0; }
-          .pl-print-logo {
-            height: 88px;
-            width: auto;
-            max-width: 280px;
-            object-fit: contain;
-            display: block;
-            margin: 0 auto 10px auto;
-          }
-          .pl-print-brand {
-            margin: 0;
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 14px;
-            font-weight: 800;
-            letter-spacing: 0.14em;
-            color: #1A1A1A;
-          }
-          .pl-print-title {
-            margin: 4px 0 0 0;
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 21px;
-            font-weight: 800;
-            letter-spacing: 0.05em;
-            color: #1A1A1A;
-          }
-          .pl-print-online .pl-print-title { color: #B3401F; }
-          /* Offline hierarchy: the gold brand name leads, the dark-blue
-             title follows smaller — both drawn from the Ayyappa logo
-             palette (gold sampled from the mark, deep complementary blue;
-             the mark itself carries no blue). */
-          .pl-print-offline .pl-print-brand { color: #B28E03; font-size: 19px; letter-spacing: 0.06em; }
-          .pl-print-offline .pl-print-title { color: #1E40AF; font-size: 14px; margin-top: 4px; }
-          /* Short centred divider — never a full-width bar, never a box
-             around the header. Shared geometry, per-brand colour. */
-          .pl-print-div {
-            width: 72mm;
-            margin: 5mm auto 0 auto;
-            border-top: 2px solid #111111;
-          }
-          .pl-print-online .pl-print-div { border-top-color: #B3401F; }
-          .pl-print-offline .pl-print-div { border-top-color: #1E40AF; }
-
-          .pl-print-table {
-            width: 100%;
-            table-layout: fixed;
-            border-collapse: collapse;
-            background: #FFFFFF !important;
-            color: #111111 !important;
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 11px;
-            margin-top: 3mm;
-            border: 1px solid #999999;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-          .pl-print-table thead { display: table-header-group; }
-          .pl-print-table thead th {
-            position: static !important;
-            background: #F1EFEA !important;
-            color: #111111 !important;
-            font-weight: 800;
-            font-size: 10px;
-            letter-spacing: 0.07em;
-            text-transform: uppercase;
-            text-align: left;
-            padding: 6px 8px !important;
-            border-bottom: 2px solid #111111 !important;
-          }
-          .pl-print-table thead th + th { text-align: right !important; border-left: 1px solid #D8D4CC !important; }
-          .pl-print-table thead th.pl-print-h-sno { text-align: center !important; }
-          .pl-print-table tbody td {
-            background: #FFFFFF !important;
-            color: #111111 !important;
-            border-bottom: 1px solid #D8D4CC !important;
-            padding: 5px 8px !important;
-            vertical-align: top !important;
-          }
-          .pl-print-table tbody td + td { border-left: 1px solid #E7E4DD !important; }
-          .pl-print-table tr { break-inside: avoid; page-break-inside: avoid; }
-          .pl-print-name {
-            font-weight: 600;
-            line-height: 1.35;
-            overflow-wrap: break-word;
-            word-break: normal;
-          }
-          .pl-print-sno {
-            text-align: center;
-            color: #555555 !important;
-            font-variant-numeric: tabular-nums;
-          }
-          .pl-print-money {
-            text-align: right;
-            white-space: nowrap;
-            font-variant-numeric: tabular-nums;
-            font-weight: 700;
-          }
-          /* Category transitions, text-free: the first row of each group
-             carries a thin accent top border — a single quiet line, same
-             row height as every other row. The very first row needs none of
-             it (the masthead divider already separates it). The row keeps
-             with the one that follows so a lone first row never strands at
-             a page bottom. */
-          .pl-print-table tr.pl-group-first td {
-            border-top: 1px solid #111111 !important;
-          }
-          .pl-print-online tr.pl-group-first td { border-top-color: #B3401F !important; }
-          .pl-print-offline tr.pl-group-first td { border-top-color: #B28E03 !important; }
-          .pl-print-table tbody > tr.pl-group-first:first-child td {
-            border-top-color: #D8D4CC !important;
-          }
-          .pl-print-table tr.pl-group-first { break-after: avoid; page-break-after: avoid; }
-          /* Screen-only actions inside states stay out of the document. */
-          .pricelist-print-area .ax-btn { display: none !important; }
+          .admin-page { padding: 0 !important; margin: 0 !important; }
+          .pl-table thead th { position: static; }
+          .pl-table tr { break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
     </div>

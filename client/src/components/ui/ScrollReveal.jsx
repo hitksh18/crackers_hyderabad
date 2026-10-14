@@ -21,6 +21,20 @@ const ScrollReveal = ({
   const reduced = useReducedMotion();
   const MotionTag = motion[Tag] || motion.div;
 
+  /* Progressive enhancement only: where IntersectionObserver is
+     unavailable the content renders as a plain (visible) element instead
+     of mounting at opacity 0 waiting for an observer tick that never
+     comes. Every modern browser takes the animated path below — visuals
+     are unchanged there. */
+  if (typeof window !== 'undefined' && typeof window.IntersectionObserver === 'undefined') {
+    const PlainTag = Tag;
+    return (
+      <PlainTag className={className} {...rest}>
+        {children}
+      </PlainTag>
+    );
+  }
+
   const variants = stagger
     ? staggerParent(reduced, stagger, delay)
     : {

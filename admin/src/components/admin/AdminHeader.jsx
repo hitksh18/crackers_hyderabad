@@ -10,10 +10,17 @@ import AccountMenu from './AccountMenu';
  * `leftControls` renders extra actions beside Back (e.g. Price List puts
  * Refresh there); pages that omit it render exactly as before.
  */
-export default function AdminHeader({ title, backFallback = '/dashboard', controls = null, leftControls = null, showAvatar = true }) {
+export default function AdminHeader({ title, backFallback = '/dashboard', controls = null, leftControls = null, showAvatar = true, onBack = null }) {
   const navigate = useNavigate();
 
   const goBack = () => {
+    /* Category detail (and any future state-based detail view) passes onBack
+       to return to its own list view. State transitions push no history
+       entry, so the default navigate(-1) would wrongly leave the page. */
+    if (typeof onBack === 'function') {
+      onBack();
+      return;
+    }
     const idx = window.history.state && typeof window.history.state.idx === 'number'
       ? window.history.state.idx
       : 0;

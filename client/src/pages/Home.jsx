@@ -1,4 +1,4 @@
-import { Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import { Component, Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -8,18 +8,23 @@ import ScrollReveal from '../components/ui/ScrollReveal';
 import { Skeleton } from '../components/ui/Skeleton';
 
 import StorefrontHero from '../components/home/StorefrontHero';
-// Everything below the hero is below the fold: each section splits into its
-// own chunk so the first viewport paints without downloading or executing
-// below-fold code. The hero itself stays synchronous above.
-const CategoryShowcase = lazy(() => import('../components/home/CategoryShowcase'));
+/* Critical early homepage sections are synchronous imports — never lazy
+   chunks. CategoryShowcase renders from static defs, FeaturedSection /
+   HomeProductRail are tiny rails, TrustSection is a small static block.
+   If any of these waited on chunk resolution, the footer (its own chunk)
+   could paint first and become reachable right after the trust strip on
+   slow networks. Genuinely heavy lower-page sections stay code-split. */
+import CategoryShowcase from '../components/home/CategoryShowcase';
+import FeaturedSection from '../components/home/FeaturedSection';
+import HomeProductRail from '../components/home/HomeProductRail';
+import TrustSection from '../components/home/TrustSection';
+// Below-the-fold / heavy sections: each splits into its own chunk so the
+// first viewport paints without downloading or executing their code.
 const DealsSection = lazy(() => import('../components/home/DealsSection'));
-const FeaturedSection = lazy(() => import('../components/home/FeaturedSection'));
-const HomeProductRail = lazy(() => import('../components/home/HomeProductRail'));
 const WholesaleSection = lazy(() => import('../components/home/WholesaleSection'));
 const PromoSection = lazy(() => import('../components/home/PromoSection'));
 const SecondaryBannerGrid = lazy(() => import('../components/home/SecondaryBannerGrid'));
 const ProductBannerGrid = lazy(() => import('../components/home/ProductBannerGrid'));
-const TrustSection = lazy(() => import('../components/home/TrustSection'));
 const NewsletterBlock = lazy(() => import('../components/home/NewsletterBlock'));
 const TrackOrderBlock = lazy(() => import('../components/home/TrackOrderBlock'));
 const Footer = lazy(() => import('../components/Footer'));
@@ -193,9 +198,40 @@ const HomeSeo = ({ siteSettings }) => {
   );
 };
 
+/* Guards optional lazy below-fold sections: a failed/slow chunk unmounts
+   to nothing instead of unmounting the whole homepage. Eager critical
+   sections never need it — they are part of the main bundle. */
+class SectionErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false };
+  }
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch() {
+    /* optional chunk failed — homepage stays up without that section */
+  }
+  render() {
+    if (this.state.failed) return null;
+    return this.props.children;
+  }
+}
+
+/* Builder section types that render synchronously (main bundle). Every
+   other type is a lazy chunk and owns an isolated Suspense boundary. */
+const EAGER_SECTION_TYPES = new Set([
+  'hero',
+  'promoCards',
+  'announcement',
+  'categories',
+  'featured',
+  'bestSellers',
+  'trust',
+]);
+
 const Home = () => {
-  const navigate = useNavigate();
-  const [allProducts, setAllProducts] = useState([]);
+  const navigate = useNavigate();  const [allProducts, setAllProducts] = useState([]);
   const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(true);
   const [promotionalBanners, setPromotionalBanners] = useState([]);
@@ -595,82 +631,96 @@ const Home = () => {
           premium design is pixel-identical while the document has one H1. */}
       <h1 className="sr-only">{siteSettings?.seo?.homepageH1 || 'Crackers Hyderabad – Premium Firecrackers & Fireworks'}</h1>
 
-      {/* First viewport: paints synchronously on first render — never inside
-          the Suspense boundary below, so lazy below-fold chunks can never
-          delay or replace it. */}
+      {/* First viewport: paints synchronously on first render — hero plus
+          the critical early sections below never sit inside a Suspense
+          boundary, so lazy below-fold chunks can never delay them or let
+          the footer jump up before them. */}
       {hero}
 
-      {/* Below the fold: code-split chunks + progressively hydrated Firestore
-          data stream in after the hero. Each section owns its Suspense
-          boundary so chunks resolve independently in document order — one
-          slow chunk (or the separately-boundaried footer) can never hold
-          Categories or any other section back. fallback={null} keeps each
-          section out of the way only until its own chunk arrives. */}
+      {/* Below the fold: synchronously-bundled critical sections render
+          immediately in document order; heavy optional chunks resolve in
+          isolated boundaries (one slow chunk can never hold the rest back,
+          and a failed chunk unmounts to nothing via the error boundary).
+          fallback={null} keeps each lazy section out of the way only until
+          its own chunk arrives — layout above it is already reserved by
+          the eager content. */}
       {hasBuilder ? (
         sections.map((s) => (
-          <Suspense key={s.id || s.type} fallback={null}>{renderSection(s)}</Suspense>
+          EAGER_SECTION_TYPES.has(s.type) ? (
+            <Fragment key={s.id || s.type}>{renderSection(s)}</Fragment>
+          ) : (
+            <SectionErrorBoundary key={s.id || s.type}>
+              <Suspense fallback={null}>{renderSection(s)}</Suspense>
+            </SectionErrorBoundary>
+          )
         ))
       ) : (
         <>
-          <Suspense fallback={null}>
-            <CategoryShowcase sectionRef={categoriesRef} countInCategory={countInCategory} categories={visibleCategories} heading={homepageContent.categories} />
-          </Suspense>
-          <Suspense fallback={null}>
-            <FeaturedSection products={featuredShown} heading={homepageContent.featured} loading={loading} />
-          </Suspense>
-          <Suspense fallback={null}>
-            <section className="section-pad" style={{ background: 'var(--surface-page)' }}>
-              <div className="shell-wide">
-                <HomeProductRail eyebrow={homepageContent.bestSellers.eyebrow} title={homepageContent.bestSellers.title} subtitle={homepageContent.bestSellers.subtitle} products={bestShown} loading={loading} railLabel="best sellers" />
-              </div>
-            </section>
-          </Suspense>
-          <Suspense fallback={null}>
-            <PromoSection promotionalBanners={promotionalBanners} />
-          </Suspense>
-          <Suspense fallback={null}>
-            <SecondaryBannerGrid banners={homepageConfig?.secondaryBanners || []} />
-          </Suspense>
-          <Suspense fallback={null}>
-            <ProductBannerGrid banners={homepageConfig?.productBanners || []} />
-          </Suspense>
-          <Suspense fallback={null}>
-            {dealsShown.length > 0 && <DealsSection deals={dealsShown} heading={homepageContent.deals} />}
-          </Suspense>
-          <Suspense fallback={null}>
-            {settingsLoading ? (
-              <section className="section-pad-sm" style={{ background: 'var(--surface-card)' }}>
-                <div className="shell-wide" role="status" aria-live="polite" aria-busy="true">
-                  <span className="sr-only">Loading homepage banner</span>
-                  <Skeleton className="h-56 w-full sm:h-72" rounded="var(--r-xl)" />
-                </div>
-              </section>
-            ) : homepageSettings.bannerImageUrl ? (
-              <section className="section-pad-sm" style={{ background: 'var(--surface-card)' }}>
+          <CategoryShowcase sectionRef={categoriesRef} countInCategory={countInCategory} categories={visibleCategories} heading={homepageContent.categories} />
+          <FeaturedSection products={featuredShown} heading={homepageContent.featured} loading={loading} />
+          <section className="section-pad" style={{ background: 'var(--surface-page)' }}>
+            <div className="shell-wide">
+              <HomeProductRail eyebrow={homepageContent.bestSellers.eyebrow} title={homepageContent.bestSellers.title} subtitle={homepageContent.bestSellers.subtitle} products={bestShown} loading={loading} railLabel="best sellers" />
+            </div>
+          </section>
+          <SectionErrorBoundary>
+            <Suspense fallback={null}>
+              <PromoSection promotionalBanners={promotionalBanners} />
+            </Suspense>
+          </SectionErrorBoundary>
+          <SectionErrorBoundary>
+            <Suspense fallback={null}>
+              <SecondaryBannerGrid banners={homepageConfig?.secondaryBanners || []} />
+            </Suspense>
+          </SectionErrorBoundary>
+          <SectionErrorBoundary>
+            <Suspense fallback={null}>
+              <ProductBannerGrid banners={homepageConfig?.productBanners || []} />
+            </Suspense>
+          </SectionErrorBoundary>
+          <SectionErrorBoundary>
+            <Suspense fallback={null}>
+              {dealsShown.length > 0 && <DealsSection deals={dealsShown} heading={homepageContent.deals} />}
+            </Suspense>
+          </SectionErrorBoundary>
+          <SectionErrorBoundary>
+            <Suspense fallback={null}>
+              {settingsLoading ? (
+                <section className="section-pad-sm" style={{ background: 'var(--surface-card)' }}>
+                  <div className="shell-wide" role="status" aria-live="polite" aria-busy="true">
+                    <span className="sr-only">Loading homepage banner</span>
+                    <Skeleton className="h-56 w-full sm:h-72" rounded="var(--r-xl)" />
+                  </div>
+                </section>
+              ) : homepageSettings.bannerImageUrl ? (
+                <section className="section-pad-sm" style={{ background: 'var(--surface-card)' }}>
+                  <div className="shell-wide">
+                    <ScrollReveal distance={20} className="overflow-hidden" style={{ borderRadius: 'var(--r-xl)', boxShadow: 'var(--shadow-lg)' }}>
+                      <img src={normalizeImageUrl(homepageSettings.bannerImageUrl)} alt={homepageSettings.bannerImageAlt || 'Crackers Hyderabad Banner'} loading="lazy" className="max-h-[400px] w-full object-cover sm:max-h-[500px]" />
+                    </ScrollReveal>
+                  </div>
+                </section>
+              ) : null}
+            </Suspense>
+          </SectionErrorBoundary>
+          <TrustSection heading={homepageContent.trust} cards={trustCards} />
+          <SectionErrorBoundary>
+            <Suspense fallback={null}>
+              <section className="section-pad" style={{ background: 'var(--surface-sunken)' }}>
                 <div className="shell-wide">
-                  <ScrollReveal distance={20} className="overflow-hidden" style={{ borderRadius: 'var(--r-xl)', boxShadow: 'var(--shadow-lg)' }}>
-                    <img src={normalizeImageUrl(homepageSettings.bannerImageUrl)} alt={homepageSettings.bannerImageAlt || 'Crackers Hyderabad Banner'} loading="lazy" className="max-h-[400px] w-full object-cover sm:max-h-[500px]" />
-                  </ScrollReveal>
+                  <div className="grid gap-6 lg:grid-cols-[48fr_52fr] lg:gap-6">
+                    <NewsletterBlock email={newsletterEmail} onEmailChange={(e) => setNewsletterEmail(e.target.value)} onSubmit={handleSubscribe} copy={newsletterCopy} />
+                    <TrackOrderBlock orderId={trackOrderId} onOrderIdChange={(e) => setTrackOrderId(e.target.value)} onSubmit={handleTrackOrder} />
+                  </div>
                 </div>
               </section>
-            ) : null}
-          </Suspense>
-          <Suspense fallback={null}>
-            <TrustSection heading={homepageContent.trust} cards={trustCards} />
-          </Suspense>
-          <Suspense fallback={null}>
-            <section className="section-pad" style={{ background: 'var(--surface-sunken)' }}>
-              <div className="shell-wide">
-                <div className="grid gap-6 lg:grid-cols-[48fr_52fr] lg:gap-6">
-                  <NewsletterBlock email={newsletterEmail} onEmailChange={(e) => setNewsletterEmail(e.target.value)} onSubmit={handleSubscribe} copy={newsletterCopy} />
-                  <TrackOrderBlock orderId={trackOrderId} onOrderIdChange={(e) => setTrackOrderId(e.target.value)} onSubmit={handleTrackOrder} />
-                </div>
-              </div>
-            </section>
-          </Suspense>
-          <Suspense fallback={null}>
-            <WholesaleSection copy={wholesaleCopy} />
-          </Suspense>
+            </Suspense>
+          </SectionErrorBoundary>
+          <SectionErrorBoundary>
+            <Suspense fallback={null}>
+              <WholesaleSection copy={wholesaleCopy} />
+            </Suspense>
+          </SectionErrorBoundary>
         </>
       )}
 
@@ -691,9 +741,11 @@ const Home = () => {
         />
       )}
 
-      <Suspense fallback={null}>
-        <Footer />
-      </Suspense>
+      <SectionErrorBoundary>
+        <Suspense fallback={null}>
+          <Footer />
+        </Suspense>
+      </SectionErrorBoundary>
     </div>
   );
 };

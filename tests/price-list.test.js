@@ -238,7 +238,7 @@ test('the page shows one store at a time with no generated metadata', () => {
   assert.ok(!/Generated:/.test(source), 'no "Generated: <date>" line in the document');
   assert.ok(!/new Date\(\)\.toLocaleDateString/.test(source), 'no browser-generated date in the document');
   assert.ok(!/IP address|printersIp|userIp/i.test(source), 'no IP metadata in the document');
-  assert.match(source, /title="Print price list \(in the print dialog, turn off Headers and footers/, 'the print button tells staff how to drop browser chrome');
+  assert.match(source, /title="Download the price list PDF for the selected store"/, 'the print button generates the PDF document');
 });
 
 test('no horizontal category-pill strip remains', () => {
@@ -275,42 +275,95 @@ test('no description sentence survives below the navbar', () => {
   assert.ok(!/Showing \{filteredProducts\.length\}/.test(source), 'no product-count sentence in the content');
 });
 
-test('the offline print accent follows the logo palette, never green', () => {
-  const source = read('admin', 'src', 'pages', 'PriceList.jsx');
-  // Gold brand (sampled from the mark), deep-blue title/divider/separators.
-  assert.match(source, /\.pl-print-offline \.pl-print-brand \{ color: #B28E03; font-size: 19px/, 'gold brand leads at 19px');
-  assert.match(source, /\.pl-print-offline \.pl-print-title \{ color: #1E40AF; font-size: 14px/, 'blue title follows at 14px');
-  assert.match(source, /\.pl-print-div \{\s*width: 72mm/, 'a short centred divider replaces the full-width bar');
-  assert.match(source, /\.pl-print-offline \.pl-print-div \{ border-top-color: #1E40AF/, 'offline divider is deep blue');
-  assert.ok(!/\.pl-print-head \{ border-bottom/.test(source), 'no border wrapped directly around the header');
-  assert.match(source, /\.pl-print-offline tr\.pl-group-first td \{ border-top-color: #B28E03/, 'offline group boundaries are gold');
-  assert.ok(!/#1F6B3A/.test(source), 'no green accent remains on the page');
-  assert.ok(!/#1D4ED8/.test(source), 'no bright-blue accent remains on the page');
+test('both brand palettes live in the shared PDF engine, never green', () => {
+  const engine = read('admin', 'src', 'utils', 'priceListPdf.js');
+  // Ayyapa: gold brand sampled from the mark, deep complementary blue title.
+  assert.match(engine, /brandColor: \[178, 142, 3\]/, 'ayyapa gold brand colour');
+  assert.match(engine, /titleColor: \[30, 64, 175\]/, 'ayyapa deep-blue document title');
+  // Crackers Hyderabad: maroon identity, burnt-red accent.
+  assert.match(engine, /brandColor: \[118, 23, 19\]/, 'crackers maroon brand colour');
+  assert.match(engine, /titleColor: \[179, 64, 31\]/, 'crackers burnt-red document title');
+  // Short centred divider — never a full-width bar, never a header box.
+  assert.match(engine, /const divW = 56;/, 'a short centred divider replaces the full-width bar');
+  assert.ok(!/#1F6B3A/.test(engine), 'no green accent remains in the document');
+  assert.ok(!/#1D4ED8/.test(engine), 'no bright-blue accent remains in the document');
+  // One branding helper serves both sections: same geometry, own identity.
+  assert.match(engine, /export const pdfBrandingFor/, 'a single branding helper owns both identities');
 });
 
-test('only offline pages carry a whisper-quiet footer', () => {
-  const source = read('admin', 'src', 'pages', 'PriceList.jsx');
-  assert.match(source, /@page pl-offline \{/, 'offline owns a named page');
-  assert.match(source, /AYYAPA FIREWORKS · OFFLINE STORE · Page /, 'footer names brand, document and page');
-  assert.match(source, /font-size: 8px/, 'footer text is readable, not microscopic');
-  assert.match(source, /\.pl-print-offline \{ page: pl-offline; \}/, 'the offline document takes its named page');
-  assert.ok(!/@page pl-online/.test(source), 'online keeps the plain page (no footer)');
+test('footers carry only the brand name on every page', () => {
+  const engine = read('admin', 'src', 'utils', 'priceListPdf.js');
+  // Footer stamped after layout on every page: brand name only.
+  assert.match(engine, /drawText\(doc, branding\.brand, PDF_PAGE\.w \/ 2, footerY/, 'footer draws the brand name alone');
+  // No page numbers, store tags or metadata anywhere in the document.
+  assert.ok(!/['`]Page /.test(engine.replace(/\/\/.*$/gm, '')), 'no page numbers in the document');
+  assert.ok(!/footerTag/.test(engine), 'no footer tag field remains');
+  assert.ok(!/OFFLINE STORE/.test(engine), 'no OFFLINE STORE text in the document');
+  assert.ok(!/ONLINE STORE/.test(engine), 'no ONLINE STORE text in the document');
+  // Subtitles are exactly PRICE LIST for both stores.
+  assert.deepEqual(
+    [...engine.matchAll(/docTitle: '([^']+)'/g)].map((m) => m[1]),
+    ['PRICE LIST', 'PRICE LIST'],
+    'both subtitles read exactly PRICE LIST',
+  );
+  // No CSS paged-media counters: footers are stamped after layout.
+  // (Chrome never supported counter(pages).)
+  const page = read('admin', 'src', 'pages', 'PriceList.jsx');
+  assert.ok(!/@bottom-center/.test(page), 'no CSS running footers remain');
+  assert.ok(!/counter\(pages\)/.test(page), 'no CSS page counters remain');
 });
 
-test('category transitions are single quiet lines', () => {
-  const source = read('admin', 'src', 'pages', 'PriceList.jsx');
-  const printCss = source.slice(source.indexOf('@media print'));
-  assert.match(printCss, /tr\.pl-group-first td \{\s*border-top: 1px solid #111111/, 'group boundary is a thin rule');
-  assert.ok(!/F5F4F0/.test(printCss), 'no background tint on group rows');
-  assert.ok(!/padding-top: 8px/.test(printCss), 'no inflated row heights');
+test('category changes open exactly one compact heading band', () => {
+  const engine = read('admin', 'src', 'utils', 'priceListPdf.js');
+  // One routine draws the band: accent rule above, tinted wash, bold
+  // uppercase centred name, single hairline below — no box of its own.
+  assert.match(engine, /const drawCategoryHead = \(doc, label, widths, left, top, branding\) =>/, 'one heading routine exists');
+  assert.match(engine, /String\(label \|\| ''\)\.toUpperCase\(\)/, 'heading names render bold uppercase');
+  assert.match(engine, /headingBg/, 'heading carries a subtle brand-tinted wash');
+  assert.match(engine, /headingColor/, 'heading text follows the brand accent');
+  // Exactly one heading per category: drawn only at group starts, which come
+  // from the existing grouping — never one per product, never invented.
+  assert.match(engine, /const isGroupStart = i === 0 \|\| rows\[i - 1\]\.groupKey !== row\.groupKey/, 'headings open groups only');
+  assert.match(engine, /groupLabel: labelOf\(group\)/, 'each row carries its group display label');
+  // Heading + first row are atomic: measured together, paged together, never
+  // orphaned alone at a page bottom.
+  assert.match(engine, /const need = m\.h \+ \(isGroupStart \? CAT_GAP \+ CAT_HEAD_H : 0\)/, 'heading and first row page as one unit');
 });
 
-test('the table is a bordered grid inside generous margins', () => {
-  const source = read('admin', 'src', 'pages', 'PriceList.jsx');
-  assert.match(source, /margin: 15mm;/, 'equal page margins on all sides');
-  assert.match(source, /\.pl-print-table \{[^}]*border: 1px solid #999999;/, 'the table edge is thin, matching the frame language');
-  const printCss = source.slice(source.indexOf('@media print'));
-  assert.ok(!/nth-child\(even\)/.test(printCss), 'no zebra striping in the print document');
+test('one frame owns the geometry; the table lives inside it', () => {
+  const engine = read('admin', 'src', 'utils', 'priceListPdf.js');
+  assert.match(engine, /export const PDF_FRAME = \{ x: 12, y: 10, w: 186, h: 277 \}/, 'a single authoritative content rectangle');
+  assert.match(engine, /tableW = widths\.reduce/, 'table width derives from the content width');
+  // Columns share the full content width exactly: name owns the largest area.
+  assert.match(engine, /\{ key: 'name', share: 0\.41 \}/, 'product name keeps the largest share');
+  const fullBlock = engine.match(/export const PDF_COLUMNS = \[([\s\S]*?)\];/)[1];
+  const shares = [...fullBlock.matchAll(/share: (0\.\d+)/g)].map((m) => Number(m[1]));
+  assert.deepEqual(shares, [0.07, 0.41, 0.2, 0.1, 0.1, 0.12], 'six columns share the content width');
+  assert.ok(Math.abs(shares.reduce((a, b) => a + b, 0) - 1) < 1e-9, 'columns sum to exactly the table width — no overflow');
+  assert.ok(!/position: fixed/.test(engine), 'no CSS fixed-position frame hack');
+});
+
+test('Ayyapa compacts to S.NO | PRODUCT NAME | PRICE; Crackers keeps six', () => {
+  const engine = read('admin', 'src', 'utils', 'priceListPdf.js');
+  // Compact register exists once, shares exact, PRICE draws the sale value.
+  const compactBlock = engine.match(/export const PDF_COLUMNS_COMPACT = \[([\s\S]*?)\];/)[1];
+  assert.deepEqual(
+    [...compactBlock.matchAll(/key: '(\w+)'/g)].map((m) => m[1]),
+    ['sno', 'name', 'price'],
+    'compact set is exactly S.NO, PRODUCT NAME, PRICE',
+  );
+  const compactShares = [...compactBlock.matchAll(/share: (0\.\d+)/g)].map((m) => Number(m[1]));
+  assert.ok(Math.abs(compactShares.reduce((a, b) => a + b, 0) - 1) < 1e-9, 'compact shares sum to exactly the table width');
+  assert.match(engine, /export const PDF_HEADER_TITLES_COMPACT = \['S\.No', 'Product Name', 'Price'\]/, 'price column labeled exactly PRICE');
+  // Wiring: offline takes the compact set, online keeps the full register.
+  assert.match(engine, /columns: PDF_COLUMNS_COMPACT,/, 'Ayyapa renders the compact register');
+  assert.match(engine, /headerTitles: PDF_HEADER_TITLES_COMPACT,/, 'Ayyapa titles carry no SALE PRICE');
+  assert.match(engine, /columns: PDF_COLUMNS,/, 'Crackers keeps the full register');
+  assert.match(engine, /headerTitles: PDF_HEADER_TITLES,/, 'Crackers keeps all six titles');
+  // One renderer serves both: measurement, head and rows all read the
+  // branding's column set — never a second table implementation.
+  assert.match(engine, /const columns = branding\.columns \|\| PDF_COLUMNS;/, 'single renderer reads per-brand columns');
+  assert.ok(!/OfflinePrintTable/.test(engine), 'no legacy offline table remains');
 });
 
 test('fixed and floating UI never reaches the printed page', () => {
@@ -324,20 +377,30 @@ test('fixed and floating UI never reaches the printed page', () => {
   }
 });
 
-test('a thin frame borders every printed page', () => {
-  const source = read('admin', 'src', 'pages', 'PriceList.jsx');
-  assert.match(source, /pl-page-frame/, 'frame element exists in the print document');
-  assert.match(source, /position: fixed/, 'the frame repeats on every printed page');
-  assert.match(source, /border: 1px solid #999999/, 'the frame is a thin neutral rule');
+test('brand header on page 1 only; frame + table head on every page', () => {
+  const engine = read('admin', 'src', 'utils', 'priceListPdf.js');
+  assert.match(engine, /const drawFrame = \(doc\) =>/, 'one frame drawing routine exists');
+  assert.match(engine, /const drawPageHeader = \(doc, branding, logoDims\) =>/, 'one header routine exists');
+  // Page 1 reserves the brand header; continuations start the table at the
+  // top of the content area — logo/brand/title must never repeat.
+  assert.match(engine, /const startPage = \(isFirst\) => \{/, 'the page template knows first from continuation');
+  assert.match(engine, /isFirst \? drawPageHeader\(doc, branding, logoDims\) : PDF_FRAME\.y \+ PDF_PAD/, 'brand header is drawn on page 1 only');
+  assert.match(engine, /let \{ y \} = startPage\(true\)/, 'the document opens with the brand header');
+  assert.match(engine, /doc\.addPage\(\);[\s\S]*?const st = startPage\(false\)/, 'continuation pages skip the brand header');
+  assert.ok(!/table-header-group/.test(engine), 'no CSS thead-repeat hack');
 });
 
-test('the downloaded filename follows the selected store', () => {
+test('the engine filename follows the selected store', () => {
+  const engine = read('admin', 'src', 'utils', 'priceListPdf.js');
+  assert.match(engine, /export const priceListPdfFileName/, 'a single filename helper exists');
+  assert.match(engine, /`\$\{branding\.fileName\}\.pdf`/, 'filenames end in .pdf under the store name');
   const lib = read('admin', 'src', 'lib', 'priceListPricing.js');
   assert.match(lib, /fileName: 'Crackers Hyderabad PriceList'/, 'online filename configured');
   assert.match(lib, /fileName: 'Ayyappa Fireworks PriceList'/, 'offline filename configured');
   const source = read('admin', 'src', 'pages', 'PriceList.jsx');
-  assert.match(source, /document\.title = section\.fileName/, 'print swaps in the store filename');
-  assert.match(source, /window\.addEventListener\('afterprint', restore\)/, 'the tab title is restored afterwards');
+  assert.match(source, /printPriceListPDF\(pdfBrandingFor\(section, logoDataUrl\), rows\)/, 'the button renders the selected store through the shared engine');
+  assert.ok(!/document\.title = section\.fileName/.test(source), 'no browser-title filename swap remains');
+  assert.ok(!/window\.print\(\)/.test(source), 'no window.print() remains on this page');
 });
 test('filter dropdowns render readable text', () => {
   const source = read('admin', 'src', 'pages', 'PriceList.jsx');
@@ -356,45 +419,48 @@ test('navbar layout: Refresh left, single switch plus Print right', () => {
   const rightBlock = source.slice(controlsAt);
   assert.ok(/title="Refresh product and pricing data"/.test(leftBlock), 'Refresh sits beside Back on the left');
   assert.ok(/StoreSwitch value=\{priceListMode\} onChange=\{setPriceListMode\} compact/.test(rightBlock), 'the switcher sits on the right');
-  assert.ok(/title="Print price list/.test(rightBlock), 'Print sits on the right after the switcher');
+  assert.ok(/title="Download the price list PDF for the selected store"/.test(rightBlock), 'Print sits on the right after the switcher');
   assert.ok(!/title="Switch store price list"/.test(source), 'no single text-flipping toggle button remains');
 });
 
-test('pagination rules hold for a long catalogue', () => {
-  const source = read('admin', 'src', 'pages', 'PriceList.jsx');
-  // Rows never split; the single column header repeats per printed page
-  // (never per category). The company masthead is flow content, so it
-  // prints once — never per page.
-  assert.match(source, /pl-print-table tr \{\s*break-inside:\s*avoid/, 'rows never split across pages');
-  assert.match(source, /pl-print-table thead \{\s*display:\s*table-header-group/, 'the column header repeats on continuation pages');
-  assert.match(source, /tr\.pl-group-first \{\s*break-after:\s*avoid/, 'a group opening keeps with its rows');
-  // No forced breaks anywhere: one continuous table, no blank pages.
-  assert.ok(!/break-before:\s*page/.test(source), 'no forced page breaks in the print document');
-  // Page counters exist in exactly one place: the offline named-page
-  // footer. Nothing else may number pages.
-  const bottoms = source.match(/@bottom-center/g) || [];
-  assert.equal(bottoms.length, 1, 'exactly one running footer block (offline only)');
+test('pagination is content-aware: measure, flow, repeat the head', () => {
+  const engine = read('admin', 'src', 'utils', 'priceListPdf.js');
+  // Every row is measured (names wrap) before anything is drawn.
+  assert.match(engine, /const measured = \(rows \|\| \[\]\)\.map\(\(row\) => measureRow\(doc, row, widths, columns\)\)/, 'all rows are measured up front');
+  // Rows flow while they fit; otherwise a new templated page starts.
+  assert.match(engine, /if \(y \+ need > contentBottom\) newPage\(\);/, 'a row that does not fit opens a new page');
+  // The table head is part of the page template, so it repeats everywhere.
+  assert.match(engine, /const bodyTop = drawTableHead\(doc, widths, left, tableTop, headerTitles, columns\)/, 'every page opens with the table head');
+  // No fixed products-per-page anywhere.
+  assert.ok(!/per.?page.{0,20}\d{2}/i.test(engine), 'no fixed row count per page');
   // Long names wrap instead of truncating.
-  assert.match(source, /overflow-wrap:\s*break-word/, 'long product names wrap');
+  assert.match(engine, /splitTextToSize/, 'long product names wrap inside their cell');
+  assert.ok(!/\.\.\./.test(engine.replace(/\.\.\.[A-Za-z_]+/g, '')), 'no ellipsis truncation in the document');
 });
 
-test('the print document is separate from the screen table', () => {
+test('rows flatten the existing groups with continuous S.No', () => {
+  const engine = read('admin', 'src', 'utils', 'priceListPdf.js');
+  assert.match(engine, /export const buildPriceListRows/, 'one row builder flattens the print groups');
+  assert.match(engine, /groupKey: group\.key/, 'each row remembers its group for headings');
+  assert.match(engine, /sno: snoById\.get\(product\.id\)/, 'S.No follows display order across groups');
+  // Heading text comes from the existing group display labels — the engine
+  // never invents category names.
+  assert.match(engine, /labelOf = \(group\) => group\?\.label/, 'heading labels default to the existing group labels');
+});
+
+test('the page renders one PDF through the engine, not DOM tables', () => {
   const source = read('admin', 'src', 'pages', 'PriceList.jsx');
-  // Exactly one print table for the selected store: centred masthead once,
-  // then product rows with text-free category separation and a running S.No.
-  // No per-category tables, no embedded viewers.
-  assert.match(source, /pl-print-doc pl-print-\$\{section\.key\}/, 'one print document per selected store');
-  assert.match(source, /pl-print-table/, 'the print document owns its table');
+  assert.match(source, /buildPriceListRows\(\{/, 'the button flattens the filtered groups into rows');
+  assert.match(source, /groupProductsForPrint\(filteredProducts\)/, 'rows come from the filtered list');
+  assert.match(source, /categoryOf: \(product\) =>/, 'categories ride in the CATEGORY column');
+  assert.match(source, /labelOf: \(group\) => group\.label/, 'headings use the existing group display labels');
+  assert.match(source, /statusOf: printStatusOf/, 'status reads the real stock flag');
+  assert.match(source, /valueOf: section\.valueOf/, 'prices read the selected store');
+  assert.ok(!/pl-print-doc/.test(source), 'no print-only DOM document remains');
+  assert.ok(!/pl-print-table/.test(source), 'no print-only DOM tables remain');
   assert.ok(!/<iframe/.test(source), 'no embedded iframe preview');
   assert.ok(!/<embed/.test(source), 'no embedded object preview');
   assert.ok(!/<canvas/.test(source), 'no canvas PDF renderer');
-  // Category boundaries come from the shared helper; the document shows no
-  // category text at all. S.No runs continuously.
-  assert.match(source, /groupProductsForPrint\(filteredProducts\)/, 'print groups come from the filtered list');
-  assert.match(source, /className=\{itemIndex === 0 \? 'pl-group-first' : undefined\}/, 'first row of each group is marked');
-  assert.ok(!/pl-cat-sep/.test(source), 'no text separator rows in the print document');
-  assert.match(source, /snoById\.get\(product\.id\)/, 'printed S.No follows display order across groups');
-  assert.match(source, /break-after:\s*avoid/, 'a heading never strands alone at a page bottom');
   // The screen table shows Product, Category, MRP, price and Availability —
   // filters use the same data the columns display.
   const head = source.match(/const PriceTableHead[\s\S]*?\n\);/);
@@ -402,4 +468,49 @@ test('the print document is separate from the screen table', () => {
   assert.ok(/>Category</.test(head[0]), 'Category column present on screen');
   assert.ok(/>Availability</.test(head[0]), 'Availability column present on screen');
   assert.ok(!/>Status</.test(head[0]), 'no generic Status column on screen');
+});
+
+let priceListPdf;
+test.before(async () => {
+  priceListPdf = await import('../admin/src/utils/priceListPdf.js');
+});
+
+test('a 123-product catalogue paginates without losing rows', () => {
+  const cats = priceCategories.CATEGORY_VALUES;
+  const groups = cats.map((key, gi) => ({
+    key,
+    items: Array.from({ length: gi === 0 ? 15 : 9 }, (_, i) => ({
+      id: `${key}-${i}`,
+      name: i % 4 === 0
+        ? '7 Shots Multi Colour Fancy Aerial Repeating Shell Box Extra Long Product Name For Wrapping'
+        : `Product ${i + 1} of ${key}`,
+      outOfStock: (gi + i) % 9 === 0,
+    })),
+  }));
+  const flat = groups.flatMap((g) => g.items);
+  const snoById = new Map(flat.map((p, i) => [p.id, i + 1]));
+  const rows = priceListPdf.buildPriceListRows({
+    groups,
+    snoById,
+    valueOf: () => ({ mrp: 1493, sale: 800 }),
+    formatPrice: pricing.formatINR,
+    statusOf: pricing.printStatusOf,
+    categoryOf: (p) => priceCategories.categoryDisplayName(p.id.split('-')[0]) || p.id,
+    labelOf: (group) => priceCategories.categoryDisplayName(group.key),
+  });
+  assert.equal(rows.length, flat.length, 'every product reaches the document exactly once');
+  assert.deepEqual(rows.map((r) => r.sno), flat.map((_, i) => i + 1), 'S.No runs continuously');
+  assert.equal(new Set(rows.map((r) => r.sno)).size, rows.length, 'no duplicate numbers');
+  // One heading label per category, carried by its first row.
+  const headLabels = rows.filter((r, i) => i === 0 || rows[i - 1].groupKey !== r.groupKey).map((r) => r.groupLabel);
+  assert.equal(headLabels.length, cats.length, 'exactly one heading per category');
+  assert.deepEqual(headLabels, cats.map((k) => priceCategories.categoryDisplayName(k)), 'headings use the existing display names');
+
+  const doc = priceListPdf.generatePriceListPDF(
+    priceListPdf.pdfBrandingFor(pricing.PRICE_LIST_SECTIONS[1], null),
+    rows,
+  );
+  assert.ok(doc.getNumberOfPages() >= 2, 'a long catalogue spans pages');
+  const bytes = doc.output('arraybuffer');
+  assert.ok(bytes.byteLength > 10000, 'the document carries real content');
 });

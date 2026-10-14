@@ -32,7 +32,7 @@ const AdminCategories = () => {
   const [selectedCategory, setSelectedCategory] = useState(null);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterMode, setFilterMode] = useState('all');
+  const [filterMode, setFilterMode] = useState('assigned');
   const [selectedProductIds, setSelectedProductIds] = useState(new Set());
   const [saving, setSaving] = useState(false);
   const [initialAssignedIds, setInitialAssignedIds] = useState(new Set());
@@ -75,7 +75,7 @@ const AdminCategories = () => {
     setSelectedProductIds(new Set(assigned));
     setInitialAssignedIds(new Set(assigned));
     setSearchQuery('');
-    setFilterMode('all');
+    setFilterMode('assigned');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -219,6 +219,7 @@ const AdminCategories = () => {
       <AdminHeader
         title={selectedCategory.name}
         backFallback="/categories"
+        onBack={() => setSelectedCategory(null)}
         controls={(
           <>
             <span className="hidden text-xs sm:inline" style={{ color: hasChanges ? 'var(--ember-600)' : 'var(--text-muted)' }}>{hasChanges ? `${pendingAddCount + pendingRemoveCount} pending` : 'All saved'}</span>
@@ -229,8 +230,8 @@ const AdminCategories = () => {
       />
 
         <motion.div variants={pageVariants} initial="initial" animate="animate" className="mx-auto w-full max-w-[1600px] px-4 py-3 lg:px-8">
-          {/* Compact subheader: mirrors Ana intro / Orders subline */}
-          <div className="flex flex-wrap items-center justify-between gap-2 py-2">
+          {/* Compact subheader */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 pt-0.5">
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
               Assigned <span className="tabular font-bold" style={{ color: 'var(--text-strong)' }}>{assignedCount}</span> / {products.length} · <span className="hidden sm:inline">Click checkbox to assign products</span><span className="sm:hidden">Tap to assign</span>
             </p>
@@ -240,34 +241,36 @@ const AdminCategories = () => {
             </div>
           </div>
 
-          {/* Filter pills — exact User Management treatment */}
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { key: 'all', label: 'All Products', count: products.length },
-              { key: 'assigned', label: 'Assigned', count: assignedCount },
-              { key: 'unassigned', label: 'Not Assigned', count: products.length - assignedCount },
-            ].map((tab) => {
-              const active = filterMode === tab.key;
-              return (
-                <button key={tab.key} type="button" aria-pressed={active} onClick={() => setFilterMode(tab.key)} className="inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors duration-200" style={active ? { background: 'var(--text-strong)', color: 'var(--surface-card)', borderColor: 'var(--text-strong)' } : { background: 'var(--surface-card)', color: 'var(--text-muted)', borderColor: 'var(--hairline)' }}>
-                  {tab.label} <span className="tabular text-[11px] opacity-70">{tab.count}</span>
-                </button>
-              );
-            })}
-          </div>
+          {/* Single compact toolbar: filters left, search middle, count + actions right */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 rounded-2xl border px-2.5 py-2" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)' }}>
+            {/* LEFT: filters in required order */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {[
+                { key: 'assigned', label: 'Assigned', count: assignedCount },
+                { key: 'unassigned', label: 'Not Assigned', count: products.length - assignedCount },
+                { key: 'all', label: 'All Products', count: products.length },
+              ].map((tab) => {
+                const active = filterMode === tab.key;
+                return (
+                  <button key={tab.key} type="button" aria-pressed={active} onClick={() => setFilterMode(tab.key)} className="inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors duration-200" style={active ? { background: 'var(--text-strong)', color: 'var(--surface-card)', borderColor: 'var(--text-strong)' } : { background: 'var(--surface-card)', color: 'var(--text-muted)', borderColor: 'var(--hairline)' }}>
+                    {tab.label} <span className="tabular text-[11px] opacity-70">{tab.count}</span>
+                  </button>
+                );
+              })}
+            </div>
 
-          {/* Search + controls — matches User Management search row */}
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative w-full sm:max-w-[380px]">
+            {/* MIDDLE: search */}
+            <div className="relative order-3 w-full min-w-0 sm:order-2 sm:w-auto sm:min-w-[200px] sm:max-w-[340px] sm:flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
               <input type="text" placeholder="Search products..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-9 w-full rounded-full border bg-[var(--surface-card)] pl-10 pr-9 text-sm placeholder:text-[var(--text-subtle)] focus:outline-none" style={{ borderColor: 'var(--hairline)', color: 'var(--text-strong)' }} />
               {searchQuery ? (
                 <button type="button" onClick={() => setSearchQuery('')} className="absolute right-1 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full" style={{ background: 'var(--surface-sunken)', border: '1px solid var(--hairline)' }}><X className="h-3.5 w-3.5" style={{ color: 'var(--text-muted)' }} /></button>
               ) : null}
             </div>
-            <div className="flex items-center gap-2">
-              <span className="tabular text-xs" style={{ color: 'var(--text-muted)' }}>{filteredProducts.length} products</span>
-              <div className="ml-1 flex items-center gap-1.5">
+            {/* RIGHT: count + actions */}
+            <div className="order-2 ml-auto flex shrink-0 items-center gap-2 sm:order-3">
+              <span className="tabular whitespace-nowrap text-xs" style={{ color: 'var(--text-subtle)' }}>{filteredProducts.length} products</span>
+              <div className="flex items-center gap-1.5">
                 <button type="button" onClick={handleSelectAllVisible} className="inline-flex h-8 items-center rounded-full border px-3 text-xs font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', color: 'var(--text-body)' }}>Select All</button>
                 <button type="button" onClick={handleClearAllVisible} className="inline-flex h-8 items-center rounded-full border px-3 text-xs font-semibold" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', color: 'var(--text-body)' }}>Clear All</button>
               </div>
@@ -275,9 +278,9 @@ const AdminCategories = () => {
           </div>
 
           {/* Product list — admin data table, not SaaS cards */}
-          <div className="mt-3 overflow-hidden rounded-2xl border" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)' }}>
+          <div className="mt-2 overflow-hidden rounded-2xl border" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)' }}>
             {/* Desktop column header */}
-            <div className="hidden items-center gap-3 px-3 py-2.5 lg:grid" style={{ gridTemplateColumns: 'auto 48px 1fr 110px 140px 96px', background: 'var(--surface-sunken)', borderBottom: '1px solid var(--hairline)' }}>
+            <div className="hidden items-center gap-3 px-3 py-2 lg:grid" style={{ gridTemplateColumns: 'auto 48px 1fr 110px 140px 96px', background: 'var(--surface-sunken)', borderBottom: '1px solid var(--hairline)' }}>
               <div className="w-5" />
               <div className="text-[11px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Image</div>
               <div className="text-[11px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Product</div>
@@ -302,7 +305,7 @@ const AdminCategories = () => {
                   const image = p.imageURL || p.imageUrl || p.image || '';
                   const catText = Array.isArray(p.categories) && p.categories.length > 1 ? `${p.categories[0]} +${p.categories.length - 1}` : (Array.isArray(p.categories) ? p.categories[0] : p.category) || '—';
                   return (
-                    <label key={p.id} className="grid cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-[var(--surface-sunken)]/50 lg:grid-cols-[auto_48px_1fr_110px_140px_96px] lg:gap-3" style={{ minHeight: '64px' }}>
+                    <label key={p.id} className="grid cursor-pointer items-center gap-3 px-3 py-2 transition-colors hover:bg-[var(--surface-sunken)]/50 lg:grid-cols-[auto_48px_1fr_110px_140px_96px] lg:gap-3" style={{ minHeight: '56px' }}>
                       <input type="checkbox" checked={checked} onChange={() => toggleProduct(p.id)} className="sr-only" />
                       <span aria-hidden="true" className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] border" style={{ background: checked ? 'var(--ember-600)' : 'transparent', borderColor: checked ? 'var(--ember-600)' : 'var(--hairline-strong)' }}>
                         {checked && <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />}

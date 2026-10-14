@@ -19,6 +19,10 @@ const SectionHeading = ({
 }) => {
   const reduced = useReducedMotion();
   const centred = align === 'center';
+  /* Same progressive-enhancement guard as ScrollReveal: without
+     IntersectionObserver the heading renders visible, never stuck at
+     opacity 0 waiting for an observer tick. */
+  const ioMissing = typeof window !== 'undefined' && typeof window.IntersectionObserver === 'undefined';
 
   return (
     <div
@@ -34,8 +38,8 @@ const SectionHeading = ({
         )}
 
         <motion.div
-          initial="hidden"
-          whileInView="visible"
+          initial={ioMissing ? false : 'hidden'}
+          whileInView={ioMissing ? undefined : 'visible'}
           viewport={inViewOnce}
           variants={revealVariants(reduced, 18)}
         >
