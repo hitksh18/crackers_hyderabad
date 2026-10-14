@@ -3,11 +3,14 @@ import { ArrowLeft } from 'lucide-react';
 import AccountMenu from './AccountMenu';
 
 /**
- * Shared Admin header: Back (browser history) | centered title | controls.
+ * Shared Admin header: Back (+ optional left controls) | centered title |
+ * controls.
  * Sticky 68px bar that never scrolls; pages render their content below it.
  * `controls` receives page-specific actions (e.g. date range + refresh).
+ * `leftControls` renders extra actions beside Back (e.g. Price List puts
+ * Refresh there); pages that omit it render exactly as before.
  */
-export default function AdminHeader({ title, backFallback = '/dashboard', controls = null, showAvatar = true }) {
+export default function AdminHeader({ title, backFallback = '/dashboard', controls = null, leftControls = null, showAvatar = true }) {
   const navigate = useNavigate();
 
   const goBack = () => {
@@ -26,6 +29,7 @@ export default function AdminHeader({ title, backFallback = '/dashboard', contro
             <ArrowLeft aria-hidden="true" />
             <span>Back</span>
           </button>
+          {leftControls}
         </div>
         <h1 className="ax-header-title">{title}</h1>
         <div className="ax-header-right">

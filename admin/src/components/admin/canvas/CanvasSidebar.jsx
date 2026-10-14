@@ -1,5 +1,4 @@
 import {
-  FileText,
   Flag,
   Grip,
   Image as ImageIcon,
@@ -39,7 +38,6 @@ const SIDEBAR_GROUPS = [
       { id: 'trust', label: 'Trust', icon: ShieldCheck },
       { id: 'newsletter', label: 'Newsletter', icon: Mail },
       { id: 'wholesale', label: 'Wholesale', icon: Store },
-      { id: 'seoGuide', label: 'Firecrackers in Hyderabad', icon: FileText },
       { id: 'footer', label: 'Footer', icon: PanelBottom },
     ],
   },

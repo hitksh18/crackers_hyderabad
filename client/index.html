@@ -15,6 +15,12 @@
     <meta name="theme-color" content="#14100E" />
     <meta name="color-scheme" content="dark" />
     <meta name="robots" content="index, follow" />
+    <!-- Static canonical for the homepage shell. The client SEO manager
+         upserts the per-route canonical after hydration (homepage value comes
+         from settings/siteSettings.seo); this tag guarantees crawlers that
+         never execute JavaScript still see a canonical, and it matches the
+         configured default. -->
+    <link rel="canonical" href="https://crackershyderabad.com/" />
 
     <!-- Critical first-paint shell: paints before React, Firebase, fonts or
          product data arrive, and reserves the hero height so the first

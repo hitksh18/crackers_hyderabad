@@ -8,7 +8,6 @@ import PromoSection from '../../home/PromoSection';
 import SecondaryBannerGrid from '../../home/SecondaryBannerGrid';
 import ProductBannerGrid from '../../home/ProductBannerGrid';
 import TrustSection from '../../home/TrustSection';
-import SeoGuideSection from '../../home/SeoGuideSection';
 import NewsletterBlock from '../../home/NewsletterBlock';
 import TrackOrderBlock from '../../home/TrackOrderBlock';
 import WholesaleSection from '../../home/WholesaleSection';
@@ -48,7 +47,6 @@ const TAB_FOR_TYPE = {
   trust: 'trust',
   newsletter: 'newsletter',
   wholesale: 'wholesale',
-  seoGuide: 'seoGuide',
 };
 
 const maxOrAll = (arr, n) => (n && n > 0 ? arr.slice(0, n) : arr);
@@ -138,7 +136,6 @@ export default function HomepagePreview({
   countInCategory,
   enabledDeals = [],
   trustPreview = null,
-  seoPreview = null,
   bannerSettings = null,
   fallbackBanners = [],
   fallbackCards = [],
@@ -302,22 +299,6 @@ export default function HomepagePreview({
           section.label || 'Wholesale',
           <WholesaleSection copy={texts.wholesale} />,
         );
-      case 'seoGuide': {
-        if (!seoPreview) return null;
-        return shell(
-          'seoGuide',
-          section.label || 'Firecrackers in Hyderabad',
-          <SeoGuideSection
-            eyebrow={seoPreview.eyebrow}
-            heading={seoPreview.heading}
-            paras={seoPreview.paras}
-            categoryHeading={seoPreview.categoryHeading}
-            categories={seoPreview.categories}
-            faqHeading={seoPreview.faqHeading}
-            faqs={seoPreview.faqs}
-          />,
-        );
-      }
       case 'banner': {
         const cfg = section.config || {};
         const banners = (cfg.banners || []).filter((b) => b.enabled !== false);

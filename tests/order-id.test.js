@@ -18,15 +18,21 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const orderId = require('../api/lib/orderId');
+const emailTemplates = require('../api/lib/emailTemplates');
 
 /* The admin app is ESM and browser-targeted; pull its renderers in with a
    dynamic import so the two can be compared directly. */
 let clientPreview;
 let adminPreview;
+let adminOrderIdLib;
 
 test.before(async () => {
   clientPreview = await import('../client/src/lib/orderId.js');
   adminPreview = await import('../admin/src/lib/orderIdFormat.js');
+});
+
+test.before(async () => {
+  adminOrderIdLib = await import('../admin/src/lib/orderId.js');
 });
 
 const NOW = new Date('2026-10-08T09:15:00Z'); // 14:45 IST, same calendar day
@@ -1022,4 +1028,213 @@ test('the default-format id carries no date and still requires the phone digits'
   const id = orderId.renderOrderId(orderId.defaultConfig(), { sequence: 1, now: NOW });
   assert.equal(id, 'CHYD26-0001');
   assert.equal(orderId.carriesOwnEntropy(id), false, 'and it must still require the phone digits');
+});
+
+/* -------------------------------------------------------------------------
+   9. One customer-facing Order ID (shortCode, strict)
+   ------------------------------------------------------------------------- */
+
+/**
+ * The regression scenario: one online order, two ids in the system.
+ * `id` is the Firestore document id (internal only); `shortCode` is the
+ * customer-facing Order ID the server minted. Every customer-visible surface
+ * must show the second and never the first.
+ */
+const CANONICAL_ORDER = { id: '3UooOYxuwbiA13UJS5Gi', shortCode: 'CHYD26-3001' };
+const CANONICAL_ID = 'CHYD26-3001';
+const INTERNAL_ID = '3UooOYxuwbiA13UJS5Gi';
+
+/** Capture console.error output while running fn (the helper logs a diagnostic). */
+function captureConsoleError(fn) {
+  const original = console.error;
+  const messages = [];
+  console.error = (...args) => { messages.push(args.join(' ')); };
+  try {
+    return { result: fn(), messages };
+  } finally {
+    console.error = original;
+  }
+}
+
+test('every display helper returns the canonical shortCode for the documented order', () => {
+  assert.equal(clientPreview.getDisplayOrderId(CANONICAL_ORDER), CANONICAL_ID);
+  assert.equal(adminOrderIdLib.getDisplayOrderId(CANONICAL_ORDER), CANONICAL_ID);
+  assert.equal(orderId.getDisplayOrderId(CANONICAL_ORDER), CANONICAL_ID);
+});
+
+test('the helper normalises but never invents an id', () => {
+  for (const helper of [clientPreview.getDisplayOrderId, adminOrderIdLib.getDisplayOrderId, orderId.getDisplayOrderId]) {
+    // Stray whitespace and casing are tidied to the canonical form.
+    assert.equal(helper({ id: 'doc1', shortCode: '  chyd26-3001  ' }), CANONICAL_ID);
+    // The old invoice payload shape injected the document id as `orderId`.
+    // The generator must stay immune: shortCode still wins.
+    assert.equal(
+      helper({ orderId: INTERNAL_ID, id: INTERNAL_ID, shortCode: CANONICAL_ID }),
+      CANONICAL_ID,
+      'an injected orderId must not override shortCode'
+    );
+  }
+});
+
+test('a missing shortCode fails safe and never leaks the document id', () => {
+  const cases = [
+    ['no shortCode field', { id: INTERNAL_ID }],
+    ['blank shortCode', { id: INTERNAL_ID, shortCode: '   ' }],
+    ['no document either', {}],
+    ['null order', null],
+    ['undefined order', undefined],
+  ];
+  for (const [name, order] of cases) {
+    for (const [lib, helper] of [
+      ['client', clientPreview.getDisplayOrderId],
+      ['admin', adminOrderIdLib.getDisplayOrderId],
+      ['api', orderId.getDisplayOrderId],
+    ]) {
+      const { result, messages } = captureConsoleError(() => helper(order));
+      assert.equal(result, '', `${lib}: ${name} must yield an empty display id`);
+      assert.ok(!String(result).includes(INTERNAL_ID), `${lib}: ${name} must not leak the document id`);
+      assert.equal(messages.length, 1, `${lib}: ${name} must log exactly one diagnostic`);
+      assert.match(messages[0], /missing shortCode/, `${lib}: ${name} diagnostic must name the problem`);
+    }
+  }
+  // The diagnostic names the document so the record can be found and migrated.
+  const { messages } = captureConsoleError(() => orderId.getDisplayOrderId({ id: INTERNAL_ID }));
+  assert.ok(messages[0].includes(INTERNAL_ID), 'the diagnostic must identify the document');
+});
+
+test('offline records keep their configured casing', () => {
+  // The POS module owns the offline format (own counter, own config); the
+  // display layer must show it exactly as minted — including casing.
+  const offline = {
+    id: 'posDocId9',
+    source: 'pos',
+    channel: 'offline',
+    orderType: 'offline',
+    orderId: 'Ayyapa26-0007',
+    shortCode: 'Ayyapa26-0007',
+  };
+  assert.equal(clientPreview.getDisplayOrderId(offline), 'Ayyapa26-0007');
+  assert.equal(adminOrderIdLib.getDisplayOrderId(offline), 'Ayyapa26-0007');
+  assert.equal(orderId.getDisplayOrderId(offline), 'Ayyapa26-0007');
+});
+
+test('invoice header, filename, email, SMS and WhatsApp agree on the one id', () => {
+  const code = orderId.getDisplayOrderId(CANONICAL_ORDER);
+  assert.equal(code, CANONICAL_ID);
+
+  // Invoice header / continued header / footer / metadata title.
+  assert.equal(`#${code || 'N/A'}`, '#CHYD26-3001');
+  // Downloaded PDF filename.
+  assert.equal(`Invoice_${code || 'ORDER'}.pdf`, 'Invoice_CHYD26-3001.pdf');
+
+  // Hook email subject + body (the exact compositions the senders use).
+  assert.equal(
+    emailTemplates.emailSubject(code, 'Confirmed'),
+    'Your Crackers Hyderabad Order #CHYD26-3001 is confirmed'
+  );
+  const body = emailTemplates.orderConfirmationText({
+    orderCode: code,
+    status: 'Confirmed',
+    quantity: 2,
+    total: 1000,
+    trackUrl: 'https://crackershyderabad.com/track/CHYD26-3001',
+    invoiceUrl: 'https://crackershyderabad.com/track-order?id=CHYD26-3001',
+    customerName: 'Test Customer',
+    note: '',
+    items: [],
+    subtotal: 1000,
+    discount: 0,
+    couponCode: null,
+  });
+  assert.ok(body.includes('Order ID: #CHYD26-3001'), 'the email body must quote the canonical id');
+  assert.ok(!body.includes(INTERNAL_ID), 'the email body must not contain the document id');
+
+  // Staff manual-resend subject composition.
+  assert.equal(
+    `Order Confirmed - #${code} | Crackers Hyderabad`,
+    'Order Confirmed - #CHYD26-3001 | Crackers Hyderabad'
+  );
+  // Customer SMS composition.
+  assert.ok(`your order #${code} has been placed`.includes('#CHYD26-3001'));
+  // WhatsApp status message composition.
+  assert.ok(`Order ID: #${code}`.includes('#CHYD26-3001'));
+});
+
+test('no surface derives a display id from the document id', () => {
+  const read = (...parts) => require('node:fs').readFileSync(require('node:path').join(__dirname, '..', ...parts), 'utf8');
+  const pages = [
+    ['client', 'src', 'pages', 'MyOrders.jsx'],
+    ['client', 'src', 'pages', 'TrackOrder.jsx'],
+    ['client', 'src', 'pages', 'OrderSuccess.jsx'],
+    ['client', 'src', 'utils', 'pdfGenerator.js'],
+    ['admin', 'src', 'pages', 'Orders.jsx'],
+    ['admin', 'src', 'pages', 'OrderDetail.jsx'],
+    ['admin', 'src', 'pages', 'Dashboard.jsx'],
+    ['admin', 'src', 'utils', 'pdfGenerator.js'],
+  ];
+  for (const parts of pages) {
+    let source = read(...parts);
+    assert.ok(!/order\.id\.slice\(/.test(source), `${parts.join('/')} must not slice the document id`);
+    assert.ok(!/\.slice\(-[68]\)/.test(source), `${parts.join('/')} must not slice an id to 6/8 chars`);
+    /* The document id IS the correct key inside API request bodies
+       (POST /api/orders/status looks the order up by it) — those two lines
+       are allowlisted. Everywhere else, injecting it as `orderId` poisons
+       the invoice payload, so it must be gone. */
+    source = source.replace(/body: JSON\.stringify\(\{ orderId: (order|editingOrder)\.id[^}]*\}\),?/g, '');
+    assert.ok(!/orderId:\s*order\.id/.test(source), `${parts.join('/')} must not inject the document id as orderId`);
+  }
+  for (const parts of [
+    ['client', 'src', 'utils', 'pdfGenerator.js'],
+    ['admin', 'src', 'utils', 'pdfGenerator.js'],
+  ]) {
+    const source = read(...parts);
+    assert.match(source, /getDisplayOrderId\(order\)/, `${parts.join('/')} must read the canonical helper`);
+    assert.ok(!/orderIdOf\(order\)/.test(source), `${parts.join('/')} must not use the lenient helper`);
+  }
+});
+
+test('the server mail and SMS paths read the strict helper', () => {
+  const read = (...parts) => require('node:fs').readFileSync(require('node:path').join(__dirname, '..', ...parts), 'utf8');
+  const server = read('api', 'server.js');
+  assert.match(server, /displayOrderCode\(order\) \|\| 'N\/A'/, 'the email builders must read the strict helper');
+  assert.match(server, /const displayOrderId = displayOrderCode\(order\)/, 'the resend subject must read the strict helper');
+  assert.match(server, /displayOrderCode\(order\)/, 'the SMS must read the strict helper');
+  assert.ok(!/order\.shortCode \|\| order\.id/.test(server), 'no mail/SMS path may fall back to the document id');
+  assert.ok(!/order\.shortCode \|\| order\.orderId/.test(server), 'no mail/SMS path may fall back to orderId');
+
+  const email = read('api', 'lib', 'email.js');
+  assert.match(email, /getDisplayOrderId\(order\)/, 'the confirmation and status hooks must read the strict helper');
+  assert.match(email, /missing-short-code/, 'a missing shortCode must fail safe with a reportable error');
+
+  const automation = read('api', 'lib', 'emailAutomation.js');
+  assert.match(automation, /getDisplayOrderId\(order\)/, 'the details-updated mail must read the strict helper');
+});
+
+test('the tracking API always returns shortCode', () => {
+  const orders = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '..', 'api', 'lib', 'orders.js'),
+    'utf8'
+  );
+  // The tracking view allowlist — the invoice generator depends on this field.
+  assert.match(orders, /shortCode: order\.shortCode \|\| null/, 'trackingView must carry shortCode');
+  assert.match(orders, /orderCode: order\.shortCode \|\| null/, 'the public track response must carry shortCode');
+});
+
+test('online and offline numbering stay on independent paths', () => {
+  const orders = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '..', 'api', 'lib', 'orders.js'),
+    'utf8'
+  );
+  // Online checkout commits through the online sequencer with the online config…
+  assert.match(orders, /commitSequencedOrder\(db, \{[\s\S]*?orderIdConfig,/, 'online checkout must use the online sequencer');
+  // …while the POS path commits through its own sequencer with the offline config.
+  assert.match(orders, /commitOfflineSequencedOrder\(db, \{/, 'POS must use the offline sequencer');
+  assert.match(orders, /offlineConfig/, 'POS must read the offline format config');
+  // The two counters are different documents.
+  assert.match(orders, /ORDER_COUNTER_DOC = 'orders'/, 'the online counter document is unchanged');
+  const offline = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '..', 'api', 'lib', 'offlineOrderId.js'),
+    'utf8'
+  );
+  assert.match(offline, /COUNTER_DOC_ID = 'offlineOrders'/, 'the offline counter document is unchanged and independent');
 });

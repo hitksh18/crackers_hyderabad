@@ -18,6 +18,9 @@
  */
 
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+/* The single customer-facing Order ID reader (shortCode, strict — never the
+   document id). */
+const { getDisplayOrderId } = require('./orderId');
 const {
   readEmailConfig,
   createSmtpTransporter,
@@ -652,7 +655,13 @@ async function sendDetailsUpdatedEmail(db, orderId) {
       return { ok: false, skipped: 'already-sent' };
     }
 
-    const code = String(order.shortCode || '').toUpperCase();
+    /* No shortCode, no customer mail — fail safe and report the record
+       instead of mailing without an Order ID. */
+    const code = getDisplayOrderId(order);
+    if (!code) {
+      console.error(`[email] details-updated email skipped for order ${orderRef.id}: missing shortCode`);
+      return { ok: false, error: 'missing-short-code' };
+    }
     const emailConfig = require('./email').readEmailConfig();
     const trackUrl = `${emailConfig.trackBaseUrl}/track/${encodeURIComponent(code)}`;
     const invoiceUrl = `${emailConfig.trackBaseUrl}/track-order?id=${encodeURIComponent(code)}`;

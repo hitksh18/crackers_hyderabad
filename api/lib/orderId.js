@@ -437,6 +437,42 @@ function isSafeOrderId(value) {
   return text.length >= MIN_ORDER_ID_LENGTH && text.length <= MAX_ORDER_ID_LENGTH && SAFE_ORDER_ID.test(text);
 }
 
+/**
+ * The ONE customer-facing online Order ID: `order.shortCode`, normalised.
+ *
+ * Every customer-visible server surface — confirmation email subject/body,
+ * manual resend, SMS — reads through here, so the mailed/texted id is always
+ * the exact id the invoice and the storefront show. Internal uses (Firestore
+ * reads/writes, `loadOrderRef`, tracking lookups, delivery logs) keep using
+ * the document id directly.
+ *
+ * Deliberately strict: it NEVER falls back to `order.orderId`, `order.id`,
+ * or a slice of either. The Firestore document id is internal-only and must
+ * never become the visible order number. When `shortCode` is missing (a
+ * legacy record that predates it), this returns '' and logs a diagnostic
+ * naming the document, so callers fail safe — skip the send or render 'N/A'
+ * — instead of silently leaking the internal id to the customer.
+ *
+ * Mirrored in client/src/lib/orderId.js and admin/src/lib/orderId.js — keep
+ * the three in sync.
+ */
+function getDisplayOrderId(order) {
+  const code = order && order.shortCode;
+  if (typeof code !== 'string' || !code.trim()) {
+    console.error(
+      `[order-id] missing shortCode — refusing to expose the internal document id. doc=${(order && (order.id || order.orderId)) || 'unknown'}`
+    );
+    return '';
+  }
+  /* Counter/offline sales keep their configured casing (`Ayyapa26-0007`): the
+     offline format is owned by the POS module and must be shown exactly as
+     minted. Online ids are minted upper-case, and upper-casing here keeps a
+     legacy or hand-edited value canonical (`CHYD26-3001`) everywhere it is
+     shown, mailed or texted. */
+  const isCounterSale = order.source === 'pos' || order.channel === 'offline' || order.orderType === 'offline';
+  return isCounterSale ? code.trim() : code.trim().toUpperCase();
+}
+
 module.exports = {
   CONFIG_COLLECTION,
   CONFIG_DOC_ID,
@@ -472,4 +508,5 @@ module.exports = {
   writeOrderIdConfig,
   isSafeOrderId,
   carriesOwnEntropy,
+  getDisplayOrderId,
 };

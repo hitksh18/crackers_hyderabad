@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 import { Search, Package, Printer, RefreshCw } from 'lucide-react';
 import EmptyState from '../components/ui/EmptyState';
 import { displayNameForCategory } from '../lib/categoryIcons';
@@ -6,6 +6,7 @@ import { Skeleton, TableSkeleton } from '../components/ui/Skeleton';
 import AdminHeader from '../components/admin/AdminHeader';
 import { CATEGORY_VALUES, isProductInCategory, categoryDisplayName, productCategoryValues } from '../config/categories';
 import { usePriceListData } from '../hooks/usePriceListData';
+import { PRICE_LIST_SECTIONS, formatINR, groupProductsForPrint, availabilityOf, screenGroupOf, printStatusOf } from '../lib/priceListPricing';
 
 // Single source of truth — admin/src/config/categories.js (canonical order).
 // State holds canonical stored values; labels render display names.
@@ -29,27 +30,21 @@ const rankOf = (product, rankByValue) => {
   return best;
 };
 
-const PANEL = {
-  background: 'var(--surface-card)',
-  border: '1px solid var(--hairline)',
-  borderRadius: 'var(--r-lg)',
-  boxShadow: 'var(--shadow-sm)',
-  overflow: 'hidden',
-};
-
 const PriceSkeleton = () => (
-  <span className="inline-block h-4 w-14 rounded" style={{ background: 'var(--surface-raised)' }} aria-hidden="true" />
+  <span className="pl-skel inline-block h-4 w-14 rounded" aria-hidden="true" />
 );
 
-const StockCell = ({ outOfStock }) => (
-  <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold">
+/* Compact availability readout driven by the catalogue's own stock flag —
+   the same field the status filter reads. Small dot + words, no big badge. */
+const AvailabilityCell = ({ outOfStock }) => (
+  <span className="pl-stock inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold">
     <span
       aria-hidden="true"
       className="pl-dot h-1.5 w-1.5 shrink-0 rounded-full"
-      style={{ background: outOfStock ? 'var(--delta-down, #f2716b)' : 'var(--delta-up, #4fb483)' }}
+      style={{ background: outOfStock ? '#C0453E' : '#2E8B57' }}
     />
-    <span className={outOfStock ? 'pl-oos' : 'pl-avail'} style={{ color: outOfStock ? 'var(--delta-down, #f2716b)' : 'var(--delta-up, #4fb483)' }}>
-      {outOfStock ? 'Out of Stock' : 'Available'}
+    <span className={outOfStock ? 'pl-oos' : 'pl-avail'}>
+      {availabilityOf({ outOfStock })}
     </span>
   </span>
 );
@@ -57,84 +52,168 @@ const StockCell = ({ outOfStock }) => (
 const CategoryBadges = ({ product }) => {
   const values = productCategoryValues(product);
   if (values.length === 0) {
-    return <span style={{ color: 'var(--text-subtle)' }}>—</span>;
+    return <span className="pl-dash">—</span>;
   }
   const shown = values.slice(0, 2);
   const extra = values.length - shown.length;
   return (
-    <span className="flex flex-wrap gap-1">
+    <span className="pl-cats">
       {shown.map((value) => (
-        <span key={value} className="badge badge-neutral">
+        <span key={value} className="pl-cat">
           {displayNameForCategory(value)}
         </span>
       ))}
       {extra > 0 && (
-        <span className="badge badge-neutral tabular">+{extra}</span>
+        <span className="pl-cat tabular">+{extra}</span>
       )}
     </span>
   );
 };
 
-/* Indian currency display only — values are untouched. Integers render
-   without decimals (₹1,493); genuine paise keep up to 2 trimmed decimals. */
-const formatINR = (value) => {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return '—';
-  return `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-};
-
-const PriceRow = ({ product, showCategories, pricingLoading }) => (
-  <tr
-    className="pl-row border-t transition-colors hover:bg-primary-50 dark:hover:bg-primary-900/15"
-    style={{ borderColor: 'var(--hairline)' }}
-  >
-    {/* Full product name — wraps to 2–3 lines, never truncated. */}
-    <td
-      className="pl-name px-4 py-2.5 align-top text-[13px] font-semibold"
-      style={{ color: 'var(--text-strong)', lineHeight: 1.4 }}
-      title={product.name}
-    >
-      {product.name}
-    </td>
-
-    {showCategories && (
-      <td className="pl-cat px-4 py-2.5 align-top">
-        <CategoryBadges product={product} />
-      </td>
-    )}
-
-    <td className="price tabular whitespace-nowrap px-4 py-2.5 text-right align-top text-[13px]" style={{ color: 'var(--text-body)' }}>
-      {pricingLoading ? <PriceSkeleton /> : formatINR(product.offlineMRP || product.price || 0)}
-    </td>
-
-    <td className="price tabular whitespace-nowrap px-4 py-2.5 text-right align-top text-[13px]">
-      {pricingLoading ? (
-        <PriceSkeleton />
-      ) : product.offlineDiscountPrice ? (
-        <span className="font-bold" style={{ color: 'var(--leaf-600)' }}>
-          {formatINR(product.offlineDiscountPrice)}
-        </span>
-      ) : (
-        <span style={{ color: 'var(--text-subtle)' }}>—</span>
-      )}
-    </td>
-
-    <td className="pl-status whitespace-nowrap px-4 py-2.5 text-right align-top">
-      <StockCell outOfStock={product.outOfStock} />
-    </td>
-  </tr>
+/* Print tables: one continuous table per selected store. The offline table
+   is Product/Price; the online table carries the full register columns.
+   Category separator rows (text bands) break groups visually without ever
+   splitting the table — the first group needs none, the masthead serves it. */
+const OfflinePrintTable = ({ groups, section, snoById, pricingLoading }) => (
+  <table className="pl-print-table">
+    <colgroup>
+      <col style={{ width: '8%' }} />
+      <col style={{ width: '72%' }} />
+      <col style={{ width: '20%' }} />
+    </colgroup>
+    <thead>
+      <tr>
+        <th className="pl-print-h-sno">S.No</th>
+        <th className="pl-print-h-name">Product</th>
+        <th className="pl-print-h-money">Price</th>
+      </tr>
+    </thead>
+    <tbody>
+      {groups.map((group) => (
+        <Fragment key={group.key}>
+          {group.items.map((product, itemIndex) => {
+            const { mrp, sale } = section.valueOf(product);
+            const price = sale || mrp;
+            return (
+              <tr key={product.id} className={itemIndex === 0 ? 'pl-group-first' : undefined}>
+                <td className="pl-print-sno">{snoById.get(product.id)}</td>
+                <td className="pl-print-name">{product.name}</td>
+                <td className="pl-print-money">{pricingLoading ? '' : formatINR(price)}</td>
+              </tr>
+            );
+          })}
+        </Fragment>
+      ))}
+    </tbody>
+  </table>
 );
 
-const PriceTableHead = ({ showCategories }) => (
+const OnlinePrintTable = ({ groups, section, snoById, pricingLoading }) => (
+  <table className="pl-print-table pl-print-table-wide">
+    <colgroup>
+      <col style={{ width: '7%' }} />
+      <col style={{ width: '37%' }} />
+      <col style={{ width: '16%' }} />
+      <col style={{ width: '12%' }} />
+      <col style={{ width: '13%' }} />
+      <col style={{ width: '15%' }} />
+    </colgroup>
+    <thead>
+      <tr>
+        <th className="pl-print-h-sno">S.No</th>
+        <th className="pl-print-h-name">Product Name</th>
+        <th className="pl-print-h-cat">Category</th>
+        <th className="pl-print-h-money">Offline MRP</th>
+        <th className="pl-print-h-money">Sale Price</th>
+        <th className="pl-print-h-status">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {groups.map((group) => (
+        <Fragment key={group.key}>
+          {group.items.map((product, itemIndex) => {
+            const { mrp, sale } = section.valueOf(product);
+            return (
+              <tr key={product.id} className={itemIndex === 0 ? 'pl-group-first' : undefined}>
+                <td className="pl-print-sno">{snoById.get(product.id)}</td>
+                <td className="pl-print-name">{product.name}</td>
+                <td className="pl-print-cat" />
+                <td className="pl-print-money">{pricingLoading ? '' : formatINR(mrp)}</td>
+                <td className="pl-print-money">{pricingLoading ? '' : (sale ? formatINR(sale) : '—')}</td>
+                <td className={`pl-print-status${product.outOfStock ? ' is-oos' : ''}`}>{printStatusOf(product)}</td>
+              </tr>
+            );
+          })}
+        </Fragment>
+      ))}
+    </tbody>
+  </table>
+);
+/* One row shape for the screen table — the caller passes the section's own
+   { mrp, sale } pair (see priceListPricing.js), so online and offline values
+   can never cross into each other's table. Names wrap, never truncate. */
+const PriceRow = ({ product, sno, pricingLoading, mrp, sale }) => {
+  const price = sale || mrp;
+  return (
+    <tr className="pl-row">
+      <td className="pl-sno">
+        {sno}
+      </td>
+      <td className="pl-name" title={product.name}>
+        {product.name}
+      </td>
+      <td className="pl-cat">
+        <CategoryBadges product={product} />
+      </td>
+      <td className="pl-money">
+        {pricingLoading ? <PriceSkeleton /> : formatINR(mrp)}
+      </td>
+      <td className="pl-money pl-sale">
+        {pricingLoading ? <PriceSkeleton /> : <span className="pl-sale-value">{formatINR(price)}</span>}
+      </td>
+      <td className="pl-status">
+        <AvailabilityCell outOfStock={product.outOfStock} />
+      </td>
+    </tr>
+  );
+};
+
+const PriceTableHead = ({ mrpLabel, priceLabel }) => (
   <thead>
-    <tr style={{ background: 'var(--surface-sunken)' }}>
-      <th className="label-caps px-4 py-2.5 text-left">Product Name</th>
-      {showCategories && <th className="label-caps px-4 py-2.5 text-left">Category</th>}
-      <th className="label-caps whitespace-nowrap px-4 py-2.5 text-right">Offline MRP</th>
-      <th className="label-caps whitespace-nowrap px-4 py-2.5 text-right">Sale Price</th>
-      <th className="label-caps whitespace-nowrap px-4 py-2.5 text-right">Status</th>
+    <tr>
+      <th className="pl-h-sno">S.No</th>
+      <th className="pl-h-name">Product</th>
+      <th className="pl-h-cat">Category</th>
+      <th className="pl-h-money">{mrpLabel}</th>
+      <th className="pl-h-money">{priceLabel}</th>
+      <th className="pl-h-status">Availability</th>
     </tr>
   </thead>
+);
+
+/* Two-option store switcher. The same control renders in the navbar (compact)
+   and in the content area — both flip the one shared state, so the table,
+   the print document and both switchers always agree. */
+const StoreSwitch = ({ value, onChange, compact = false }) => (
+  <div role="group" aria-label="Price list store" className={`pl-switch${compact ? ' pl-switch-compact' : ''}`}>
+    {[
+      { key: 'online', label: 'ONLINE STORE' },
+      { key: 'offline', label: 'OFFLINE STORE' },
+    ].map((option) => {
+      const active = value === option.key;
+      return (
+        <button
+          key={option.key}
+          type="button"
+          aria-pressed={active}
+          onClick={() => onChange(option.key)}
+          className={`pl-switch-btn${active ? ' is-active' : ''}`}
+        >
+          {option.label}
+        </button>
+      );
+    })}
+  </div>
 );
 
 const PriceList = () => {
@@ -149,25 +228,17 @@ const PriceList = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [statusFilter, setStatusFilter] = useState('all');
+  /* Visible store: "online" | "offline". One variable drives both switchers,
+     the table values and the printed document — flipping it re-renders only
+     this page (no navigation, no reload). */
+  const [priceListMode, setPriceListMode] = useState('online');
+
+  const section = PRICE_LIST_SECTIONS.find((s) => s.key === priceListMode) || PRICE_LIST_SECTIONS[0];
 
   const rankByValue = useMemo(
     () => new Map(CATEGORY_VALUES.map((value, i) => [value, i])),
     []
   );
-
-  /* One pass: per-category counts for the filter strip. */
-  const categoryCounts = useMemo(() => {
-    const counts = new Map(categories.map((cat) => [cat, 0]));
-    for (const product of products) {
-      counts.set('All', (counts.get('All') || 0) + 1);
-      for (const cat of CATEGORY_VALUES) {
-        if (isProductInCategory(product, cat)) {
-          counts.set(cat, (counts.get(cat) || 0) + 1);
-        }
-      }
-    }
-    return counts;
-  }, [products]);
 
   const query = searchQuery.trim().toLowerCase();
 
@@ -179,16 +250,32 @@ const PriceList = () => {
       if (query && !(product.name || '').toLowerCase().includes(query)) return false;
       return true;
     });
-    /* Stable catalogue order: canonical category group, then name. */
+    /* Stable catalogue order: canonical category group, then name. The screen
+       S.No and the printed S.No both follow this order. */
     return [...list].sort(
       (a, b) => rankOf(a, rankByValue) - rankOf(b, rankByValue)
         || String(a.name || '').localeCompare(String(b.name || ''))
     );
   }, [products, selectedCategory, statusFilter, query, rankByValue]);
 
-  const showCategories = selectedCategory === 'All';
   const isFiltered = Boolean(query) || selectedCategory !== 'All' || statusFilter !== 'all';
   const busy = productsLoading || pricingLoading;
+
+  /* Print catalogue: the filtered list grouped by existing category
+     (canonical order, uncategorised last). Same products, same order as the
+     screen table — only regrouped for the document. */
+  const printGroups = useMemo(() => groupProductsForPrint(filteredProducts), [filteredProducts]);
+
+  /* Screen separator bands use the exact same grouping rule, resolved per
+     displayed row — the band above a row always names its group. */
+  const screenGroups = useMemo(() => filteredProducts.map(screenGroupOf), [filteredProducts]);
+
+  /* Continuous S.No across category groups: a product keeps the number of
+     its position in the filtered list, whatever group prints it. */
+  const snoById = useMemo(
+    () => new Map(filteredProducts.map((product, index) => [product.id, index + 1])),
+    [filteredProducts]
+  );
 
   const clearFilters = () => {
     setSearchQuery('');
@@ -196,33 +283,51 @@ const PriceList = () => {
     setStatusFilter('all');
   };
 
-  const filterSummary = [
-    query ? `"${searchQuery.trim()}"` : null,
-    selectedCategory !== 'All' ? categoryDisplayName(selectedCategory) : null,
-    statusFilter === 'available' ? 'Available' : statusFilter === 'out' ? 'Out of Stock' : null,
-  ].filter(Boolean).join(' · ');
+  /* Print with the store's name as the suggested PDF filename: browsers name
+     "Save as PDF" output after document.title, so it is swapped for the
+     print and restored the moment the dialog closes (plus a fallback timer
+     in case the event is missed). Tab title is unaffected afterwards. */
+  const handlePrint = () => {
+    const previousTitle = document.title;
+    document.title = section.fileName;
+    const restore = () => {
+      document.title = previousTitle;
+      window.removeEventListener('afterprint', restore);
+    };
+    window.addEventListener('afterprint', restore);
+    window.print();
+    setTimeout(restore, 1500);
+  };
 
   return (
     <div className="admin-page" style={{ background: 'var(--surface-page)' }}>
       <AdminHeader
         title="Price List"
         backFallback="/dashboard"
-        controls={(
-          <>
+        leftControls={(
+          <span className="no-print" style={{ display: 'inline-flex', marginLeft: 8 }}>
             <button
               type="button"
               onClick={refresh}
               disabled={busy}
-              className="ax-btn no-print"
+              className="ax-btn"
               title="Refresh product and pricing data"
             >
               <RefreshCw aria-hidden="true" className={busy ? 'animate-spin' : undefined} />
               <span className="hidden sm:inline">Refresh</span>
             </button>
+          </span>
+        )}
+        controls={(
+          <>
+            <span className="no-print">
+              <StoreSwitch value={priceListMode} onChange={setPriceListMode} compact />
+            </span>
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={handlePrint}
               className="ax-btn no-print"
+              title="Print price list (in the print dialog, turn off Headers and footers for a clean PDF)"
             >
               <Printer aria-hidden="true" />
               <span className="hidden sm:inline">Print price list</span>
@@ -233,26 +338,6 @@ const PriceList = () => {
       />
       <div className="pricelist-print-area">
         <div className="shell py-6 md:py-8">
-          {/* Print-only masthead (page 1). Screen users already have the page header.
-              Continuation pages are identified by the repeated table header
-              plus the "Crackers Hyderabad · Price List · Page X of Y" footer
-              on every page. */}
-          <div className="pl-print-head">
-            <p className="pl-print-brand">CRACKERS HYDERABAD</p>
-            <p className="pl-print-title">PRICE LIST</p>
-            <p className="pl-print-meta">
-              Generated: {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · {filteredProducts.length} Products
-              {filterSummary ? ` · ${filterSummary}` : ''}
-            </p>
-          </div>
-
-          <p className="tabular no-print mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
-            Wholesale pricing and catalogue overview
-            {!productsLoading && (
-              <> · Showing {filteredProducts.length} of {products.length} products</>
-            )}
-          </p>
-
           {/* ---- Toolbar (screen only) -------------------------------------- */}
           <div className="no-print mt-4 rounded-[var(--r-lg)] border p-3" style={{ background: 'var(--surface-card)', borderColor: 'var(--hairline)' }}>
             {productsLoading ? (
@@ -286,7 +371,7 @@ const PriceList = () => {
                   id="pricelist-category"
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="input-premium h-10 text-sm sm:w-44"
+                  className="input-premium pl-select h-10 text-sm sm:w-44"
                 >
                   {categories.map((cat) => (
                     <option key={cat} value={cat}>
@@ -299,47 +384,12 @@ const PriceList = () => {
                   id="pricelist-status"
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="input-premium h-10 text-sm sm:w-36"
+                  className="input-premium pl-select h-10 text-sm sm:w-36"
                 >
                   <option value="all">All statuses</option>
                   <option value="available">Available</option>
                   <option value="out">Out of Stock</option>
                 </select>
-              </div>
-            )}
-          </div>
-
-          {/* ---- Category strip (screen only) -------------------------------- */}
-          <div className="no-print mt-3" role="group" aria-label="Filter by category">
-            {productsLoading ? (
-              <div className="flex gap-2 overflow-hidden" aria-hidden="true">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <Skeleton key={i} className="h-9 w-28 shrink-0" rounded="var(--r-pill)" />
-                ))}
-              </div>
-            ) : (
-              <div className="scroll-x-pills -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-                {categories.map((cat) => {
-                  const active = selectedCategory === cat;
-                  return (
-                    <button
-                      key={cat}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-[var(--r-pill)] border px-3 py-1.5 text-[13px] font-semibold transition-colors ${
-                        active
-                          ? 'border-primary-600 bg-primary-600 text-white'
-                          : 'border-[color:var(--hairline-strong)] bg-[color:var(--surface-card)] text-[color:var(--text-body)] hover:border-primary-400'
-                      }`}
-                    >
-                      {cat === 'All' ? 'All' : categoryDisplayName(cat)}
-                      <span className={`tabular text-xs font-bold ${active ? 'opacity-80' : 'opacity-70'}`}>
-                        {categoryCounts.get(cat) || 0}
-                      </span>
-                    </button>
-                  );
-                })}
               </div>
             )}
           </div>
@@ -358,125 +408,319 @@ const PriceList = () => {
             </div>
           )}
 
-          {/* ---- Table -------------------------------------------------------- */}
-          <div className="mt-3" style={PANEL}>
+          {/* ---- Screen table: the selected store only ------------------------ */}
+          <section className="pl-sheet mt-4">
             {productsLoading ? (
-              <div className="p-4">
-                <TableSkeleton rows={10} cols={showCategories ? 5 : 4} label="Loading price list" />
+              <div className="pl-body-pad">
+                <TableSkeleton rows={10} cols={6} label={`Loading ${section.title}`} />
               </div>
             ) : productsError ? (
-              <EmptyState
-                icon={Package}
-                title="Unable to load price list"
-                description="The product catalogue could not be loaded."
-                tone="alert"
-                className="m-4"
-                action={(
-                  <button type="button" onClick={refresh} className="ax-btn">
-                    <RefreshCw aria-hidden="true" /> Retry
-                  </button>
-                )}
-              />
-            ) : filteredProducts.length === 0 ? (
-              <EmptyState
-                icon={Package}
-                title="No products found"
-                description={isFiltered ? 'Nothing matches the current search and filters.' : 'The catalogue is empty.'}
-                className="m-4"
-                action={isFiltered ? (
-                  <button type="button" onClick={clearFilters} className="ax-btn">
-                    Clear filters
-                  </button>
-                ) : null}
-              />
-            ) : (
-              <div className="pl-scroll">
-                {/* Fixed layout + colgroup: the name column owns ~half the
-                    width on screen and in print; prices/status stay compact
-                    and right aligned. When a category is selected the category
-                    column is hidden and its share goes to the name column. */}
-                <table className="pl-table w-full border-collapse">
-                  {showCategories ? (
-                    <colgroup>
-                      <col style={{ width: '46%' }} />
-                      <col style={{ width: '22%' }} />
-                      <col style={{ width: '11%' }} />
-                      <col style={{ width: '11%' }} />
-                      <col style={{ width: '10%' }} />
-                    </colgroup>
-                  ) : (
-                    <colgroup>
-                      <col style={{ width: '58%' }} />
-                      <col style={{ width: '14%' }} />
-                      <col style={{ width: '14%' }} />
-                      <col style={{ width: '14%' }} />
-                    </colgroup>
+              <div className="pl-body-pad">
+                <EmptyState
+                  icon={Package}
+                  title="Unable to load price list"
+                  description="The product catalogue could not be loaded."
+                  tone="alert"
+                  action={(
+                    <button type="button" onClick={refresh} className="ax-btn no-print">
+                      <RefreshCw aria-hidden="true" /> Retry
+                    </button>
                   )}
-                  <PriceTableHead showCategories={showCategories} />
+                />
+              </div>
+            ) : filteredProducts.length === 0 ? (
+              <div className="pl-body-pad">
+                <EmptyState
+                  icon={Package}
+                  title="No products found"
+                  description={isFiltered ? 'Nothing matches the current search and filters.' : 'The catalogue is empty.'}
+                  action={isFiltered ? (
+                    <button type="button" onClick={clearFilters} className="ax-btn no-print">
+                      Clear filters
+                    </button>
+                  ) : null}
+                />
+              </div>
+            ) : (
+              <div className="pl-table-wrap">
+                {/* Fixed layout: name owns the width it needs, S.No stays
+                    narrow and centred, prices right aligned. Category always
+                    shows — filtering never hides columns. */}
+                <table className="pl-table">
+                  <colgroup>
+                    <col style={{ width: '6%' }} />
+                    <col style={{ width: '36%' }} />
+                    <col style={{ width: '18%' }} />
+                    <col style={{ width: '13%' }} />
+                    <col style={{ width: '14%' }} />
+                    <col style={{ width: '13%' }} />
+                  </colgroup>
+                  <PriceTableHead mrpLabel={section.mrpLabel} priceLabel={section.priceLabel} />
                   <tbody>
-                    {filteredProducts.map((product) => (
-                      <PriceRow
-                        key={product.id}
-                        product={product}
-                        showCategories={showCategories}
-                        pricingLoading={pricingLoading}
-                      />
-                    ))}
+                    {filteredProducts.map((product, index) => {
+                      const { mrp, sale } = section.valueOf(product);
+                      const group = screenGroups[index] || screenGroupOf(product);
+                      const showSeparator = index === 0 || (screenGroups[index - 1] || {}).key !== group.key;
+                      return (
+                        <Fragment key={product.id}>
+                          {showSeparator && (
+                            <tr className="pl-sep">
+                              <td colSpan={6}>{group.label}</td>
+                            </tr>
+                          )}
+                          <PriceRow
+                            product={product}
+                            sno={index + 1}
+                            pricingLoading={pricingLoading}
+                            mrp={mrp}
+                            sale={sale}
+                          />
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
+            )}
+          </section>
+
+          {/* ---- Print document: the selected store only ----------------------
+               A separate print-only document (never an embedded preview): the
+               company masthead once, then one continuous table with category
+               separator rows and a running S.No. The screen sheet above is
+               hidden in print. */}
+          <div className={`pl-print-doc pl-print-${section.key}`}>
+            <div className="pl-print-head">
+              <img src={section.logo} alt="" className="pl-print-logo" />
+              <p className="pl-print-brand">{section.brand}</p>
+              <h2 className="pl-print-title">{section.printTitle}</h2>
+              <div className="pl-print-div" aria-hidden="true" />
+            </div>
+            {section.key === 'online' ? (
+              <OnlinePrintTable groups={printGroups} section={section} snoById={snoById} pricingLoading={pricingLoading} />
+            ) : (
+              <OfflinePrintTable groups={printGroups} section={section} snoById={snoById} pricingLoading={pricingLoading} />
             )}
           </div>
         </div>
       </div>
 
       <style>{`
-        .pl-print-head { display: none; }
         .scroll-x-pills { scrollbar-width: thin; }
 
-        /* ---- Screen table: fixed layout, wrapping names, sticky head ---- */
-        .pl-table { table-layout: fixed; }
+        /* ================= Screen: store switch ========================
+           Restrained two-option segmented control, in the navbar (compact)
+           and above the table. The active store reads instantly; nothing
+           glows, floats or animates. */
+        .pl-switch {
+          display: inline-flex;
+          gap: 2px;
+          padding: 3px;
+          border: 1px solid var(--hairline-strong);
+          border-radius: 999px;
+          background: var(--surface-card);
+        }
+        .pl-switch-btn {
+          border: 0;
+          border-radius: 999px;
+          background: transparent;
+          padding: 8px 26px;
+          font-family: Arial, Helvetica, sans-serif;
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          color: var(--text-muted);
+          cursor: pointer;
+          white-space: nowrap;
+          transition: background-color 120ms ease-out, color 120ms ease-out;
+        }
+        .pl-switch-btn:hover { color: var(--text-strong); }
+        .pl-switch-btn.is-active { background: #FFFFFF; color: #1A1A1A; }
+        .pl-switch-btn:focus-visible { outline: 2px solid var(--gold-500); outline-offset: 2px; }
+        /* Compact navbar variant: same control, tighter to fit beside the
+           action buttons without crowding the bar. */
+        .pl-switch-compact { padding: 2px; }
+        .pl-switch-compact .pl-switch-btn { padding: 6px 14px; font-size: 11px; }
+
+        /* Readable dropdowns: dark website-themed control with light text,
+           visible border and states — never faint-on-light. */
+        select.pl-select.input-premium {
+          background-color: var(--surface-card);
+          color: var(--text-body);
+          border: 1px solid var(--hairline-strong);
+        }
+        select.pl-select.input-premium:hover { border-color: var(--gold-500); }
+        select.pl-select.input-premium:focus {
+          outline: 2px solid var(--gold-500);
+          outline-offset: 1px;
+          border-color: var(--gold-500);
+        }
+        select.pl-select.input-premium option {
+          background-color: #1E1815;
+          color: #D6CEC3;
+        }
+
+        /* ================= Screen: dark admin table ====================
+           The working table lives on the dark admin theme: dark card,
+           clearly visible row + column borders, sticky head, subtle hover.
+           Print styling is separate below and never leaks in. */
+        .pl-sheet {
+          background: var(--surface-card);
+          color: var(--text-body);
+          border: 1px solid var(--hairline-strong);
+          border-radius: 10px;
+          overflow: hidden;
+        }
+        .pl-body-pad { padding: 16px; }
+        .pl-table-wrap { overflow: visible; }
+        @media (max-width: 767px) {
+          .pl-table-wrap { overflow-x: auto; }
+          .pl-table-wrap .pl-table { min-width: 44rem; }
+        }
+
+        /* Screen table: dark rows, sticky head, subtle hover. */
+        .pl-table {
+          width: 100%;
+          table-layout: fixed;
+          border-collapse: collapse;
+          background: transparent;
+          color: var(--text-body);
+          font-family: Arial, Helvetica, sans-serif;
+          font-size: 12.5px;
+        }
         .pl-table thead th {
           position: sticky;
           top: 0;
           z-index: 1;
-          background: var(--surface-sunken);
+          background: var(--surface-card);
+          color: var(--text-strong);
+          font-weight: 800;
+          font-size: 10.5px;
+          letter-spacing: 0.07em;
+          text-transform: uppercase;
+          text-align: left;
+          padding: 8px 10px;
+          border-bottom: 2px solid var(--hairline-strong);
+        }
+        .pl-table thead th + th { border-left: 1px solid var(--hairline); }
+        .pl-h-sno { text-align: center; }
+        .pl-h-money, .pl-h-status { text-align: right; white-space: nowrap; }
+        .pl-table tbody td {
+          padding: 7px 10px;
+          vertical-align: top;
+          border-bottom: 1px solid var(--hairline);
+          background: transparent;
+          color: var(--text-body);
+        }
+        .pl-table tbody td + td { border-left: 1px solid var(--hairline); }
+        .pl-table tbody tr:nth-child(even) td { background: rgba(237, 231, 223, 0.025); }
+        .pl-table tbody tr:hover td { background: rgba(237, 231, 223, 0.06); }
+        .pl-sno {
+          text-align: center;
+          color: var(--text-muted);
+          font-variant-numeric: tabular-nums;
         }
         .pl-name {
+          font-weight: 600;
+          line-height: 1.4;
           overflow-wrap: break-word;
           word-break: normal;
-          hyphens: none;
+          color: var(--text-strong);
         }
-        /* Desktop: no horizontal scroll — the table fits the content width. */
-        .pl-scroll { overflow: visible; }
-        /* Small screens: allow the table to scroll horizontally instead of
-           crushing the columns. Desktop is unaffected. */
-        @media (max-width: 767px) {
-          .pl-scroll { overflow-x: auto; }
-          .pl-scroll .pl-table { min-width: 40rem; }
+        .pl-cat { color: var(--text-muted); font-size: 11.5px; overflow-wrap: break-word; }
+        .pl-cats { display: flex; flex-wrap: wrap; gap: 4px; }
+        .pl-cats .pl-cat {
+          display: inline-block;
+          border: 1px solid var(--hairline-strong);
+          background: rgba(237, 231, 223, 0.05);
+          border-radius: 20px;
+          padding: 1px 8px;
+          font-size: 10.5px;
+          color: var(--text-body);
+          white-space: nowrap;
+        }
+        .pl-money {
+          text-align: right;
+          white-space: nowrap;
+          font-variant-numeric: tabular-nums;
+          color: var(--text-body);
+        }
+        .pl-sale-value { font-weight: 800; color: var(--text-strong); }
+        .pl-status { text-align: right; }
+        .pl-avail { color: #4FB483; font-weight: 700; }
+        .pl-oos { color: #F2716B; font-weight: 700; }
+        .pl-dash { color: var(--text-muted); }
+        .pl-skel { background: var(--surface-raised); }
+        /* Category separator band: full-width, compact, clearly distinct
+           from product rows without boxing anything. Screen only — the
+           print document has its own separator rows. */
+        .pl-table tbody tr.pl-sep td {
+          background: rgba(237, 231, 223, 0.06);
+          border-top: 1px solid var(--hairline-strong);
+          border-bottom: 1px solid var(--hairline-strong);
+          padding: 7px 10px 6px 10px;
+          font-size: 10.5px;
+          font-weight: 800;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: var(--text-strong);
         }
 
+          /* The print document never shows on screen. */
+          .pl-print-doc { display: none; }
+
+        /* ================= Print: the separate document ================
+           Only .pl-print-doc prints: centred masthead once, then ONE
+           continuous table with full-width category separator rows and a
+           single header that repeats per printed page. Both stores footer
+           their pages; nothing else paginates. */
         @media print {
           @page {
-            size: A4 landscape;
-            margin: 10mm 9mm 13mm 9mm;
+            size: A4 portrait;
+            margin: 40px 45px 40px 45px;
+          }
+          /* Each store owns a named page carrying its own whisper-quiet
+             footer (brand + page count). */
+          @page pl-online {
             @bottom-center {
-              content: "Crackers Hyderabad · Price List · Page " counter(page) " of " counter(pages);
+              content: "CRACKERS HYDERABAD · PRICE LIST · Page " counter(page) " of " counter(pages);
               font-size: 8px;
-              color: #777777;
+              color: #888888;
+              font-family: Arial, Helvetica, sans-serif;
+            }
+          }
+          @page pl-offline {
+            @bottom-center {
+              content: "AYYAPA FIREWORKS · OFFLINE STORE · Page " counter(page) " of " counter(pages);
+              font-size: 8px;
+              color: #888888;
               font-family: Arial, Helvetica, sans-serif;
             }
           }
 
-          body * { visibility: hidden !important; }
-
-          .pricelist-print-area,
-          .pricelist-print-area * { visibility: visible !important; }
+          /* Admin chrome leaves normal flow entirely (display, not
+             visibility): the document starts at the top of page 1 with no
+             absolute positioning — absolute containers suppress paged-media
+             features in Chrome. Named one by one (never a blind global
+             button hide): sidebar, mobile drawer + veil + close, mobile nav
+             trigger (the circular hamburger always leaks into print below
+             desktop widths), top bar, page header, and toast popups. These
+             rules live in this page's style block so no other admin screen
+             is affected. */
+          .asb-desktop,
+          .asb-drawer,
+          .asb-drawer-veil,
+          .asb-drawer-close,
+          .asb-fab,
+          .admin-topbar,
+          .ax-header,
+          .react-hot-toast { display: none !important; }
+          .admin-main { overflow: visible !important; padding: 0 !important; }
+          .page-enter { min-height: 0 !important; animation: none !important; }
+          .admin-page { padding: 0 !important; margin: 0 !important; background: #FFFFFF !important; }
+          body { margin: 0 !important; }
 
           .pricelist-print-area {
-            position: absolute;
-            left: 0;
-            top: 0;
             width: 100%;
             background: #FFFFFF !important;
           }
@@ -487,119 +731,127 @@ const PriceList = () => {
             max-width: none !important;
             padding: 0 !important;
           }
-          .pricelist-print-area .pl-scroll { overflow: visible !important; }
 
-          /* Compact page-1 masthead with a thin brand accent line. */
-          .pl-print-head {
+          /* Screen sheet off, print document on. No page frame: the table's
+             own outer border is the document's single boundary. */
+          .pl-sheet { display: none !important; }
+          .pl-print-doc { display: block !important; }
+          .pl-print-online { page: pl-online; }
+          .pl-print-offline { page: pl-offline; }
+
+          .pl-print-head { text-align: center; padding: 2mm 0 0 0; }
+          .pl-print-logo {
+            height: 88px;
+            width: auto;
+            max-width: 280px;
+            object-fit: contain;
             display: block;
-            margin-bottom: 5px;
-            padding-bottom: 4px;
-            border-bottom: 2px solid #B3401F;
+            margin: 0 auto 10px auto;
           }
-
           .pl-print-brand {
-            font-size: 15px;
-            font-weight: 800;
-            letter-spacing: 0.08em;
             margin: 0;
-            color: #111111 !important;
             font-family: Arial, Helvetica, sans-serif;
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: 0.14em;
+            color: #1A1A1A;
           }
-
           .pl-print-title {
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.22em;
-            margin: 1px 0 0 0;
-            color: #B3401F !important;
+            margin: 4px 0 0 0;
             font-family: Arial, Helvetica, sans-serif;
+            font-size: 21px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            color: #1A1A1A;
           }
-
-          .pl-print-meta {
-            font-size: 9px;
-            margin: 1px 0 0 0;
-            color: #555555 !important;
-            font-family: Arial, Helvetica, sans-serif;
+          .pl-print-online .pl-print-title { color: #B3401F; }
+          /* Offline hierarchy: the gold brand name leads, the dark-blue
+             title follows smaller — both drawn from the Ayyappa logo
+             palette (gold sampled from the mark, deep complementary blue;
+             the mark itself carries no blue). */
+          .pl-print-offline .pl-print-brand { color: #B28E03; font-size: 19px; letter-spacing: 0.06em; }
+          .pl-print-offline .pl-print-title { color: #1E40AF; font-size: 14px; margin-top: 4px; }
+          /* Short centred divider — never a full-width bar, never a box
+             around the header. Shared geometry, per-brand colour. */
+          .pl-print-div {
+            width: 72mm;
+            margin: 5mm auto 0 auto;
+            border-top: 2px solid #111111;
           }
+          .pl-print-online .pl-print-div { border-top-color: #B3401F; }
+          .pl-print-offline .pl-print-div { border-top-color: #1E40AF; }
 
-          /* Compact professional table: dark text, subtle borders, zebra. */
-          .pl-table {
-            width: 100% !important;
-            min-width: 0 !important;
-            table-layout: fixed !important;
-            font-size: 10px;
-            font-family: Arial, Helvetica, sans-serif;
+          .pl-print-table {
+            width: 100%;
+            table-layout: fixed;
             border-collapse: collapse;
             background: #FFFFFF !important;
+            color: #111111 !important;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 11px;
+            margin-top: 3mm;
+            border: 1px solid #999999;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
-          .pl-table thead { display: table-header-group; }
-          .pl-table thead th {
+          .pl-print-table thead { display: table-header-group; }
+          .pl-print-table thead th {
             position: static !important;
-            background: #E4E4E4 !important;
+            background: #F1EFEA !important;
             color: #111111 !important;
             font-weight: 800;
-            font-size: 9px;
-            letter-spacing: 0.06em;
+            font-size: 10px;
+            letter-spacing: 0.07em;
             text-transform: uppercase;
-            border-top: 1px solid #888888 !important;
-            border-bottom: 2px solid #555555 !important;
-            border-left: 1px solid #BBBBBB !important;
-            border-right: 1px solid #BBBBBB !important;
-            padding: 4px 6px !important;
+            text-align: left;
+            padding: 6px 8px !important;
+            border-bottom: 2px solid #111111 !important;
           }
-          .pl-table thead th:nth-child(3),
-          .pl-table thead th:nth-child(4) { text-align: right !important; }
-          .pl-table tbody td {
+          .pl-print-table thead th + th { text-align: right !important; border-left: 1px solid #D8D4CC !important; }
+          .pl-print-table thead th.pl-print-h-sno { text-align: center !important; }
+          .pl-print-table tbody td {
             background: #FFFFFF !important;
             color: #111111 !important;
-            border: 1px solid #CCCCCC !important;
-            box-shadow: none !important;
-            padding: 3px 6px !important;
+            border-bottom: 1px solid #D8D4CC !important;
+            padding: 5px 8px !important;
             vertical-align: top !important;
           }
-          /* Alternating rows for scanability (needs the exact-adjust above). */
-          .pl-table tbody tr:nth-child(even) td { background: #F5F5F5 !important; }
-          .pl-table tr { break-inside: avoid; page-break-inside: avoid; }
-          .pl-table tr:hover td { background: #FFFFFF !important; }
-          .pl-table tbody tr:nth-child(even):hover td { background: #F5F5F5 !important; }
-
-          /* Complete names in print — never ellipsis, wrap to more lines. */
-          .pl-table .pl-name,
-          .pl-table td.truncate {
-            white-space: normal !important;
-            overflow: visible !important;
-            text-overflow: clip !important;
-            overflow-wrap: break-word !important;
-            word-break: normal !important;
-            font-size: 11px !important;
-            font-weight: 600 !important;
-            line-height: 1.35 !important;
-            color: #111111 !important;
+          .pl-print-table tbody td + td { border-left: 1px solid #E7E4DD !important; }
+          .pl-print-table tr { break-inside: avoid; page-break-inside: avoid; }
+          .pl-print-name {
+            font-weight: 600;
+            line-height: 1.35;
+            overflow-wrap: break-word;
+            word-break: normal;
           }
-          /* Category wraps too; badges flatten to plain text. */
-          .pl-table .pl-cat {
-            overflow-wrap: break-word !important;
-            color: #333333 !important;
+          .pl-print-sno {
+            text-align: center;
+            color: #555555 !important;
+            font-variant-numeric: tabular-nums;
           }
-          /* MRP secondary, sale price emphasized — both tabular. */
-          .pl-table .price { color: #444444 !important; font-weight: 400 !important; }
-          .pl-table .price .font-bold { color: #111111 !important; font-weight: 800 !important; }
-          .pl-table .badge {
-            border: 0 !important;
-            background: transparent !important;
-            padding: 0 !important;
-            box-shadow: none !important;
-            color: #333333 !important;
-            font-weight: 400 !important;
+          .pl-print-money {
+            text-align: right;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+            font-weight: 700;
           }
-          /* Status centered with a clear text indicator. */
-          .pl-table thead th:last-child { text-align: center !important; }
-          .pl-table .pl-status { text-align: center !important; }
-          .pl-table .pl-avail { color: #1A7A3C !important; font-weight: 700 !important; }
-          .pl-table .pl-oos { color: #B02020 !important; font-weight: 700 !important; }
-          .pl-table .pl-dot { display: none !important; }
+          /* Category transitions, text-free: the first row of each group
+             carries a thin accent top border — a single quiet line, same
+             row height as every other row. The very first row needs none of
+             it (the masthead divider already separates it). The row keeps
+             with the one that follows so a lone first row never strands at
+             a page bottom. */
+          .pl-print-table tr.pl-group-first td {
+            border-top: 1px solid #111111 !important;
+          }
+          .pl-print-online tr.pl-group-first td { border-top-color: #B3401F !important; }
+          .pl-print-offline tr.pl-group-first td { border-top-color: #B28E03 !important; }
+          .pl-print-table tbody > tr.pl-group-first:first-child td {
+            border-top-color: #D8D4CC !important;
+          }
+          .pl-print-table tr.pl-group-first { break-after: avoid; page-break-after: avoid; }
+          /* Screen-only actions inside states stay out of the document. */
+          .pricelist-print-area .ax-btn { display: none !important; }
         }
       `}</style>
     </div>

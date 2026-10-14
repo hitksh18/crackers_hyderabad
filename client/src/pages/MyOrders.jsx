@@ -26,7 +26,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { revealVariants, staggerParent } from '../lib/motion';
 import { Skeleton } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
-import { orderIdOf } from '../lib/orderId';
+import { getDisplayOrderId } from '../lib/orderId';
 
 const OrderCardSkeleton = () => (
   <div className="panel-editorial glass-card p-5 sm:p-7" aria-hidden="true">
@@ -121,8 +121,13 @@ const MyOrders = () => {
     setDownloadingInvoice(order.id);
 
     try {
+      /* Pass the order through untouched: the invoice generator reads the
+         canonical id (`shortCode`) itself. Injecting the document id as `orderId` here
+         used to overwrite it with the internal Firestore document id, so the
+         downloaded invoice printed the document id instead of CHYD26-3001.
+         `order.id` stays in the payload for the generator's internal needs
+         (keys/dedup) but is never displayed. */
       const orderWithId = {
-        orderId: order.id,
         ...order,
         items: order.items
       };
@@ -132,7 +137,7 @@ const MyOrders = () => {
       const url = URL.createObjectURL(pdfBlob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `Invoice_${orderIdOf(order) || 'ORDER'}.pdf`;
+      link.download = `Invoice_${getDisplayOrderId(order) || 'ORDER'}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -311,7 +316,10 @@ const MyOrders = () => {
             {orders.map((order) => {
               const StatusIcon = getStatusIcon(order.status);
               const isExpanded = expandedOrder === order.id;
-              const orderCode = orderIdOf(order);
+              /* The single customer-facing id: shortCode (CHYD26-3001). Never
+                 the Firestore document id — `order.id` below is internal only
+                 (React keys, panel ids, API calls). */
+              const orderCode = getDisplayOrderId(order) || 'N/A';
               const panelId = `order-panel-${order.id}`;
 
               return (

@@ -19,8 +19,7 @@ import { uploadImage } from '../utils/uploadImage';
 import { isLocalOnlyUrl } from '../utils/storageUrls';
 import { readHomepageConfig, saveHomepageConfig, defaultSecondaryBanner, defaultProductBanner, DEFAULT_HERO_BANNERS, DEFAULT_PROMO_CARDS } from '../lib/homepage';
 import { readBuilderConfig, saveSections, moveSection, duplicateSection, BANNER_SECTION_TEMPLATE } from '../lib/homepageBuilder';
-import { resolveSeoGuide, DEFAULT_SEO_GUIDE_SECTION } from '../lib/seoGuide';
-import { PRODUCT_CATEGORIES } from '../config/categories';
+
 import { readSiteSettings, saveSiteSettings, announcementTexts } from '../lib/siteSettings';
 import { resolveTrustCards, defaultTrustCards } from '../lib/trustIcons';
 import { categoryDefs } from '../components/home/homeData';
@@ -32,7 +31,7 @@ import {
   Toggle,
   RowMenu,
 } from '../components/admin/homepage/CanvasChrome';
-import { BannerModal, DealModal, TrustModal, FaqModal } from '../components/admin/homepage/CanvasModals';
+import { BannerModal, DealModal, TrustModal } from '../components/admin/homepage/CanvasModals';
 import { useCanvasHistory } from '../components/admin/canvas/CanvasHistory';
 import CanvasToolbar from '../components/admin/canvas/CanvasToolbar';
 import CanvasSidebar from '../components/admin/canvas/CanvasSidebar';
@@ -53,7 +52,6 @@ const CANVAS_SECTIONS = [
   { id: 'trust', label: 'Trust' },
   { id: 'newsletter', label: 'Newsletter' },
   { id: 'wholesale', label: 'Wholesale' },
-  { id: 'seoGuide', label: 'SEO Content' },
   { id: 'footer', label: 'Footer' },
 ];
 
@@ -116,7 +114,6 @@ export default function HomepageBuilder() {
   const [bannerModal, setBannerModal] = useState(null);
   const [dealModal, setDealModal] = useState(null);
   const [trustModal, setTrustModal] = useState(null);
-  const [faqModal, setFaqModal] = useState(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const [faviconUploading, setFaviconUploading] = useState(false);
   /* Legacy settings/homepage document (bannerImageUrl). The public homepage
@@ -502,27 +499,6 @@ export default function HomepageBuilder() {
   }, [draft]);
   const visibleCats = orderedCats.filter((c) => !(draft?.showcase?.hidden || []).includes(c.slug));
 
-  /* ---- Homepage SEO guide ("Firecrackers in Hyderabad") ----
-     Content lives on the seoGuide builder entry's `config` (persisted by the
-     existing saveSections write — no new endpoint, no new document). Names,
-     slugs and routes always resolve from the canonical catalogue; Canvas
-     only stores visibility/order overrides plus copy. */
-  const seoCfg = useMemo(() => {
-    const entry = orderedSections.find((s) => s.type === 'seoGuide');
-    return (entry && entry.config && typeof entry.config === 'object') ? entry.config : {};
-  }, [orderedSections]);
-  const seoCats = useMemo(() => {
-    const rank = new Map(((seoCfg.orderSlugs) || []).map((slug, i) => [String(slug), i]));
-    const hidden = new Set(((seoCfg.hiddenSlugs) || []).map((s) => String(s)));
-    return [...PRODUCT_CATEGORIES]
-      .map((c) => ({ ...c, hidden: hidden.has(c.slug) }))
-      .sort((a, b) => (rank.get(a.slug) ?? 999) - (rank.get(b.slug) ?? 999));
-  }, [seoCfg]);
-  const seoResolved = useMemo(
-    () => resolveSeoGuide({ sectionConfig: seoCfg, siteSeo: draft?.site?.seo }),
-    [draft, seoCfg]
-  );
-
   const enabledDeals = useMemo(
     () => [...(draft?.deals || [])].filter((d) => d.enabled !== false)
       .sort((a, b) => (b.order || 0) - (a.order || 0)),
@@ -562,22 +538,6 @@ export default function HomepageBuilder() {
   const moveBuilderSection = (id, dir) => setDraft((d) => ({
     ...d, builder: { ...d.builder, sections: moveSection(d.builder.sections, id, dir) },
   }));
-
-  /* Targeted merge into the seoGuide entry's config — every other section
-     and every other document is untouched by these edits. */
-  const patchSeoConfig = (patch) => setDraft((d) => {
-    const sections = d.builder?.sections || [];
-    if (!sections.some((s) => s.type === 'seoGuide')) {
-      return { ...d, builder: { ...d.builder, sections: [...sections, { ...DEFAULT_SEO_GUIDE_SECTION, config: { ...patch } }] } };
-    }
-    return {
-      ...d,
-      builder: {
-        ...d.builder,
-        sections: sections.map((s) => (s.type === 'seoGuide' ? { ...s, config: { ...(s.config || {}), ...patch } } : s)),
-      },
-    };
-  });
 
   /* ================= section workspaces ================= */
 
@@ -1119,99 +1079,6 @@ export default function HomepageBuilder() {
       </>
     ),
 
-    seoGuide: (
-      <>
-        <WorkspaceHead title="Firecrackers in Hyderabad" desc="Homepage SEO guide above the footer. Copy, categories and FAQ." enabled={sectionEnabled('seoGuide')} />
-        <Field>
-          <Toggle checked={sectionEnabled('seoGuide')} onChange={(v) => setBuilderEnabled('seoGuide', v)} label="Enabled" />
-        </Field>
-        <div className="cv-row2">
-          <Field label="Eyebrow">
-            <input className="cv-input" value={seoCfg.eyebrow ?? seoResolved.eyebrow} onChange={(e) => patchSeoConfig({ eyebrow: e.target.value })} placeholder="HYDERABAD • PREMIUM FIREWORKS" />
-          </Field>
-          <Field label="Heading">
-            <input className="cv-input" value={seoCfg.heading ?? seoResolved.heading} onChange={(e) => patchSeoConfig({ heading: e.target.value })} placeholder="Firecrackers in Hyderabad" />
-          </Field>
-        </div>
-        <Field label="Paragraphs" hint="Blank line separates paragraphs. Clearing all restores the defaults.">
-          <textarea
-            className="cv-textarea" rows={5}
-            value={(seoCfg.paragraphs ?? seoResolved.paras).join('\n\n')}
-            onChange={(e) => patchSeoConfig({ paragraphs: e.target.value.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean) })}
-          />
-        </Field>
-        <Field label="Category heading">
-          <input className="cv-input" value={seoCfg.categoryHeading ?? seoResolved.categoryHeading} onChange={(e) => patchSeoConfig({ categoryHeading: e.target.value })} placeholder="Explore Categories" />
-        </Field>
-        <p className="cv-label">Categories · {seoCats.filter((c) => !c.hidden).length} / {seoCats.length} shown</p>
-        <div className="cv-rows">
-          {seoCats.map((cat, i) => (
-            <div
-              key={cat.slug}
-              className={`cv-row${cat.hidden ? ' is-disabled' : ''}${dropTarget === `seocat:${i}` ? ' is-over' : ''}`}
-              {...dnd('seocat', i, (from, to) => {
-                const list = [...seoCats];
-                const [item] = list.splice(from, 1);
-                list.splice(to, 0, item);
-                patchSeoConfig({ orderSlugs: list.map((c) => c.slug) });
-              })}
-            >
-              <span className="cv-drag"><GripVertical aria-hidden="true" /></span>
-              <div className="cv-row-main">
-                <p className="cv-row-title">{cat.name}</p>
-                <p className="cv-row-sub">{cat.hidden ? 'Hidden' : `${countInCategory(cat.aliases)} items`}</p>
-              </div>
-              <div className="cv-row-actions">
-                <span className="cv-switch" title={cat.hidden ? 'Show category' : 'Hide category'}>
-                  <input
-                    type="checkbox" checked={!cat.hidden} aria-label={`Show ${cat.name}`}
-                    onChange={(e) => {
-                      const hidden = new Set((seoCfg.hiddenSlugs || []).map(String));
-                      if (e.target.checked) hidden.delete(cat.slug);
-                      else hidden.add(cat.slug);
-                      patchSeoConfig({ hiddenSlugs: [...hidden] });
-                    }}
-                  />
-                  <i aria-hidden="true" />
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-        <p className="cv-note" style={{ marginTop: 8 }}>Names stay linked to the catalogue — hiding here only hides the card in this section.</p>
-        <Field label="FAQ heading" hint="Frequently Asked Questions">
-          <input className="cv-input" value={seoCfg.faqHeading ?? seoResolved.faqHeading} onChange={(e) => patchSeoConfig({ faqHeading: e.target.value })} placeholder="Frequently Asked Questions" />
-        </Field>
-        <p className="cv-label">FAQ entries · {seoResolved.faqs.length}</p>
-        <div className="cv-rows">
-          {seoResolved.faqs.map((f, i) => (
-            <div key={`${f.q}-${i}`} className="cv-row">
-              <div className="cv-row-main">
-                <p className="cv-row-title">{f.q}</p>
-                <p className="cv-row-sub">{String(f.a).slice(0, 90)}{String(f.a).length > 90 ? '…' : ''}</p>
-              </div>
-              <div className="cv-row-actions">
-                <button type="button" className="cv-icon-btn" aria-label="Edit FAQ entry" onClick={() => setFaqModal({ index: i })}>
-                  <Pencil className="h-4 w-4" aria-hidden="true" />
-                </button>
-                <button
-                  type="button" className="cv-icon-btn" aria-label="Delete FAQ entry"
-                  onClick={() => patchSeoConfig({ faqs: seoResolved.faqs.filter((_, j) => j !== i) })}
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <button type="button" className="cv-add-btn" onClick={() => setFaqModal({})}>
-            <Plus className="h-4 w-4" aria-hidden="true" /> Add FAQ Entry
-          </button>
-        </div>
-      </>
-    ),
-
     footer: (
       <>
         <WorkspaceHead title="Footer" desc="Contact column, brand logo and social links." />        <Field label="Phone">
@@ -1294,7 +1161,6 @@ export default function HomepageBuilder() {
     trust: ['trust'],
     newsletter: ['newsletter'],
     wholesale: ['wholesale'],
-    seoGuide: ['seoGuide'],
     footer: ['footer'],
   };
 
@@ -1312,7 +1178,6 @@ export default function HomepageBuilder() {
     trust: sectionEnabled('trust'),
     newsletter: sectionEnabled('newsletter'),
     wholesale: sectionEnabled('wholesale'),
-    seoGuide: sectionEnabled('seoGuide'),
     footer: undefined,
   };
 
@@ -1411,7 +1276,6 @@ export default function HomepageBuilder() {
                 countInCategory={countInCategory}
                 enabledDeals={enabledDeals}
                 trustPreview={trustPreview}
-                seoPreview={seoResolved}
                 bannerSettings={bannerDoc}
                 fallbackBanners={DEFAULT_HERO_BANNERS}
                 fallbackCards={DEFAULT_PROMO_CARDS}
@@ -1501,22 +1365,6 @@ export default function HomepageBuilder() {
         />
       )}
 
-      {faqModal && (
-        <FaqModal
-          title={faqModal.index == null ? 'Add FAQ Entry' : 'Edit FAQ Entry'}
-          initial={faqModal.index == null ? null : seoResolved.faqs[faqModal.index]}
-          onClose={() => setFaqModal(null)}
-          onSave={(saved) => {
-            const { index } = faqModal;
-            const current = [...seoResolved.faqs];
-            if (index == null) current.push(saved);
-            else current[index] = saved;
-            patchSeoConfig({ faqs: current });
-            setFaqModal(null);
-            toast.success('FAQ updated in preview — save to publish');
-          }}
-        />
-      )}
     </div>
   );
 

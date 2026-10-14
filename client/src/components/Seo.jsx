@@ -19,9 +19,14 @@ const Seo = ({
   canonical,
   image = SITE_IMAGE,
   /* Optional social overrides (homepage SEO settings). When omitted, the
-     page title/description/image double as the share metadata, as before. */
+     page title/description/image double as the share metadata, as before.
+     twitterTitle/twitterDescription are the dedicated X fields from
+     settings/siteSettings.seo — without them the admin's X values would save
+     yet never render anywhere. */
   ogTitle,
   ogDescription,
+  twitterTitle,
+  twitterDescription,
   twitterImage,
   noindex = false,
   jsonLd = null,
@@ -46,22 +51,24 @@ const Seo = ({
     const twImage = twRaw.startsWith('http') ? twRaw : `${SITE_URL}${twRaw}`;
     const shareTitle = ogTitle || title || document.title;
     const shareDescription = ogDescription || description;
+    const twTitle = twitterTitle || shareTitle;
+    const twDescription = twitterDescription || shareDescription;
     upsert('meta[property="og:title"]', 'meta', { property: 'og:title', content: shareTitle });
     if (shareDescription) {
       upsert('meta[property="og:description"]', 'meta', { property: 'og:description', content: shareDescription });
     }
     upsert('meta[property="og:url"]', 'meta', { property: 'og:url', content: url });
     upsert('meta[property="og:image"]', 'meta', { property: 'og:image', content: ogImage });
-    upsert('meta[name="twitter:title"]', 'meta', { name: 'twitter:title', content: shareTitle });
-    if (shareDescription) {
-      upsert('meta[name="twitter:description"]', 'meta', { name: 'twitter:description', content: shareDescription });
+    upsert('meta[name="twitter:title"]', 'meta', { name: 'twitter:title', content: twTitle });
+    if (twDescription) {
+      upsert('meta[name="twitter:description"]', 'meta', { name: 'twitter:description', content: twDescription });
     }
     upsert('meta[name="twitter:image"]', 'meta', { name: 'twitter:image', content: twImage });
     upsert('meta[name="robots"]', 'meta', {
       name: 'robots',
       content: noindex ? 'noindex, nofollow' : 'index, follow',
     });
-  }, [canonical, description, image, noindex, ogDescription, ogTitle, pathname, title, twitterImage]);
+  }, [canonical, description, image, noindex, ogDescription, ogTitle, pathname, title, twitterDescription, twitterImage, twitterTitle]);
 
   return jsonLd ? (
     Array.isArray(jsonLd) ? (

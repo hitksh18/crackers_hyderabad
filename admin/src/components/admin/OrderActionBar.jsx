@@ -1,4 +1,5 @@
-import { Download, Loader2, MessageCircle, Pencil, Printer, Trash2 } from 'lucide-react';
+import { Download, Loader2, Pencil, Printer, Trash2 } from 'lucide-react';
+import { FaWhatsapp } from 'react-icons/fa';
 
 /**
  * Row actions for the orders register.
@@ -63,6 +64,7 @@ const OrderActionBar = ({
   canEdit = false,
   canDelete = false,
   isBusy = false,
+  isWhatsAppBusy = false,
   labelled = false,
   onDownloadInvoice,
   onPrintInvoice,
@@ -92,11 +94,13 @@ const OrderActionBar = ({
     />
     {showWhatsApp && (
       <ActionButton
-        icon={MessageCircle}
+        icon={isWhatsAppBusy ? Loader2 : FaWhatsapp}
+        spinning={isWhatsAppBusy}
         text="WhatsApp"
-        label={`Message the customer on WhatsApp about order ${orderCode}`}
+        label={isWhatsAppBusy ? `Sending WhatsApp message for order ${orderCode}` : 'Send WhatsApp'}
         tone="leaf"
         onClick={onWhatsApp}
+        disabled={isWhatsAppBusy}
         labelled={labelled}
       />
     )}

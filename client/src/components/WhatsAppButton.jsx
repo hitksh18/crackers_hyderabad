@@ -7,30 +7,38 @@ import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { SPRING, DURATION } from '../lib/motion';
+import { normalizeWhatsappLinkNumber } from '../lib/whatsappContact';
 
 /**
  * Floating WhatsApp contact button — HOME PAGE ONLY.
  *
- * The number comes from the canvas "business information" section in the
- * admin page (HomepageBuilder → footer settings), stored in Firestore at
- * `footerSettings/main`. The dedicated `whatsapp` field wins; the general
- * `phone` field is the fallback. Every mount re-reads the document, so an
- * admin change is picked up on the next homepage visit — nothing is cached.
+ * The number is the Store Contact setting from the admin app
+ * (Site Settings → Store Contact → WhatsApp number), stored in Firestore at
+ * `footerSettings/main` under the `whatsapp` field — the single source of
+ * truth. Every mount re-reads the document, so an admin change is picked up
+ * on the next homepage visit with no code change and no cache.
+ *
+ * Safety: there is no hardcoded fallback number. Until the saved number
+ * loads — or when it is missing/unusable — the button renders nothing, so
+ * the shop can never link customers to a wrong number.
  */
 const WhatsAppButton = () => {
   const { pathname } = useLocation();
   const { isAdmin, isSales } = useAuth();
   const reduced = useReducedMotion();
-  const [whatsappNumber, setWhatsappNumber] = useState('+91 1234567890');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const fetchWhatsAppSettings = useCallback(async () => {
     try {
       const snap = await getDoc(doc(db, 'footerSettings', 'main'));
       if (snap.exists()) {
-        const data = snap.data();
-        const raw = (data.whatsapp || data.phone || '').trim();
-        if (raw) setWhatsappNumber(raw);
+        /* The Store Contact WhatsApp number only — no fallback to any other
+           field, so the button can never show a number the admin did not put
+           in this setting. Normalised for wa.me here; the stored value is
+           left untouched. */
+        const normalised = normalizeWhatsappLinkNumber(snap.data()?.whatsapp);
+        if (normalised) setWhatsappNumber(normalised);
       }
     } catch (error) {
       console.error('Error fetching WhatsApp settings:', error);
@@ -43,12 +51,12 @@ const WhatsAppButton = () => {
     fetchWhatsAppSettings();
   }, [fetchWhatsAppSettings]);
 
-  if (pathname !== '/' || !settingsLoaded || isAdmin || isSales) {
+  if (pathname !== '/' || !settingsLoaded || !whatsappNumber || isAdmin || isSales) {
     return null;
   }
 
   const message = 'Hi, I would like to know more about your crackers.';
-  const whatsappURL = `https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
+  const whatsappURL = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
 
   return (
     <motion.a

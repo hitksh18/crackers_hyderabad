@@ -86,6 +86,9 @@ const {
   sendManualEmail,
   sendDetailsUpdatedEmail,
 } = require('./lib/emailAutomation');
+// WhatsApp Cloud API sender (order status + invoice document). Staff-only
+// endpoint below; credentials live in WHATSAPP_* env vars, never in code.
+const whatsapp = require('./lib/whatsapp');
 const { handleReverseGeocode, handleSearchPlaces, handleGeocodeConfig } = require('./lib/geocode');
 // Order ID generation. The generator, its validation and the messages the admin
 // sees all live in one module so the API can never mint an id the settings
@@ -103,6 +106,9 @@ const {
   renderOrderId: renderConfiguredOrderId,
   isSafeOrderId,
   carriesOwnEntropy: orderIdCarriesOwnEntropy,
+  /* The single customer-facing Order ID reader (shortCode, strict — never
+     the document id). Used by every mail/SMS path below. */
+  getDisplayOrderId: displayOrderCode,
 } = require('./lib/orderId');
 // OFFLINE/STORE Order IDs — fully independent module (own config doc +
 // own counter). Imported only for the offline routes + POS path; the ONLINE
@@ -421,6 +427,20 @@ const upload = multer({
     // central error handler must return 400 JSON in every environment
     // (without it, production maps this to a generic 500).
     const err = new Error('Only JPEG, PNG, WebP or GIF images are allowed');
+    err.status = 400;
+    return cb(err);
+  },
+});
+
+/* Invoice PDF upload for the staff WhatsApp send (POST
+   /api/orders/:orderId/whatsapp). Memory-only like image uploads: the bytes
+   go straight to the Meta media endpoint and are never written to disk. */
+const uploadWhatsappPdf = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: whatsapp.MAX_PDF_BYTES, files: 1, fields: 5 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') return cb(null, true);
+    const err = new Error('Only a PDF invoice can be attached');
     err.status = 400;
     return cb(err);
   },
@@ -2167,7 +2187,10 @@ async function authoriseNotification(req, entry, channel) {
 // itemised invoice is generated client-side from the tracking page behind
 // DOWNLOAD INVOICE. */
 function buildOrderEmailHtml(order) {
-  const code = String(order.shortCode || order.orderId || order.id || 'N/A').toUpperCase();
+  /* The single customer-facing Order ID (shortCode, e.g. CHYD26-3001). Never
+     the Firestore document id: `displayOrderCode` refuses to fall back to it
+     and logs a diagnostic naming the document instead. */
+  const code = displayOrderCode(order) || 'N/A';
   const items = Array.isArray(order.items) ? order.items : [];
   const quantity = items.reduce((n, item) => n + (Number(item.quantity) || 0), 0);
   const trackBase = (process.env.TRACK_BASE_URL || process.env.PUBLIC_SITE_URL || 'https://crackershyderabad.com').replace(/\/+$/, '');
@@ -2188,7 +2211,10 @@ function buildOrderEmailHtml(order) {
 }
 
 function buildOrderEmailText(order) {
-  const code = String(order.shortCode || order.orderId || order.id || 'N/A').toUpperCase();
+  /* The single customer-facing Order ID (shortCode, e.g. CHYD26-3001). Never
+     the Firestore document id: `displayOrderCode` refuses to fall back to it
+     and logs a diagnostic naming the document instead. */
+  const code = displayOrderCode(order) || 'N/A';
   const items = Array.isArray(order.items) ? order.items : [];
   const quantity = items.reduce((n, item) => n + (Number(item.quantity) || 0), 0);
   const trackBase = (process.env.TRACK_BASE_URL || process.env.PUBLIC_SITE_URL || 'https://crackershyderabad.com').replace(/\/+$/, '');
@@ -2743,7 +2769,15 @@ app.post('/api/orders/email', notifyLimiter, requireFirebase, async (req, res) =
       return res.json({ success: true, messageId: result.messageId });
     }
 
-    const displayOrderId = String(order.shortCode || order.id).toUpperCase();
+    /* Staff manual resend renders the same canonical id as the automatic
+       confirmation — never the document id. A record missing its shortCode is
+       refused outright, so staff never mail a customer "Order Confirmed -
+       #N/A": the record must be migrated first. */
+    const displayOrderId = displayOrderCode(order);
+    if (!displayOrderId) {
+      console.error(`[orders/email] refusing resend for ${order.id}: missing shortCode`);
+      return res.status(422).json({ error: 'This order has no customer Order ID yet (missing shortCode). Migrate the record before resending.', code: 'ORDER_ID_MISSING' });
+    }
 
     const info = await getEmailTransporter().sendMail({
       from: `"Crackers Hyderabad" <${process.env.EMAIL_USER}>`,
@@ -2798,7 +2832,15 @@ app.post('/api/orders/sms', notifyLimiter, requireFirebase, async (req, res) => 
 
     const type = req.body?.type === 'status' ? 'status' : 'placed';
     const customerName = sanitiseSmsText(order.customer?.name || 'Customer', 40);
-    const code = sanitiseSmsText(order.shortCode || order.id, 24);
+    /* The customer SMS quotes the same canonical id as the email and the
+       invoice — never the document id. A record missing its shortCode is
+       refused outright rather than texted with a wrong id. */
+    const displayCode = displayOrderCode(order);
+    if (!displayCode) {
+      console.error(`[orders/sms] refusing send for ${order.id}: missing shortCode`);
+      return res.status(422).json({ error: 'This order has no customer Order ID yet (missing shortCode). Migrate the record before sending.', code: 'ORDER_ID_MISSING' });
+    }
+    const code = sanitiseSmsText(displayCode, 24);
 
     const message =
       type === 'status'
@@ -2826,6 +2868,100 @@ app.post('/api/orders/sms', notifyLimiter, requireFirebase, async (req, res) => 
     res.status(500).json({ success: false, error: 'Failed to send SMS' });
   }
 });
+
+/* Staff WhatsApp send: order status + invoice document via the Meta Cloud API.
+ *
+ * The frontend generates the invoice with the SAME pdfGenerator the
+ * Download/Print buttons use and uploads it as `invoice`; every
+ * customer-facing word here — name, shortCode, status, total, filename — is
+ * re-derived server-side from the stored order, so the document id can never
+ * leak into the message and a tampered upload cannot change what the
+ * customer reads. Phone numbers are logged redacted, like the email path.
+ *
+ * Errors carry machine-readable `code`s the admin UI switches on:
+ * ORDER_ID_MISSING / CUSTOMER_PHONE_MISSING / CUSTOMER_PHONE_INVALID /
+ * INVOICE_MISSING / WHATSAPP_NOT_CONFIGURED / WHATSAPP_MEDIA_FAILED /
+ * WHATSAPP_SEND_FAILED.
+ */
+app.post(
+  '/api/orders/:orderId/whatsapp',
+  notifyLimiter,
+  requireFirebase,
+  requireAdmin,
+  uploadWhatsappPdf.single('invoice'),
+  async (req, res) => {
+    try {
+      const entry = await loadOrderRef(req.params.orderId);
+      if (!entry) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      const { order } = entry;
+
+      let payload;
+      try {
+        payload = whatsapp.resolveOrderWhatsapp(order);
+      } catch (validationError) {
+        if (validationError instanceof whatsapp.WhatsappError) {
+          return res.status(validationError.status || 422).json({
+            code: validationError.code,
+            error: validationError.message,
+          });
+        }
+        throw validationError;
+      }
+
+      if (!req.file || !req.file.buffer || req.file.buffer.length === 0) {
+        return res.status(422).json({
+          code: 'INVOICE_MISSING',
+          error: 'Attach the generated invoice PDF (Invoice_<Order ID>.pdf).',
+        });
+      }
+
+      const config = whatsapp.readWhatsappConfig();
+      if (!config.enabled || !config.ok) {
+        if (config.problems.length > 0) {
+          console.warn(`[orders/whatsapp] not configured for ${order.id}: ${config.problems.join(', ')}`);
+        }
+        return res.status(503).json({
+          code: 'WHATSAPP_NOT_CONFIGURED',
+          error: 'WhatsApp is not configured.',
+          setupRequired: true,
+        });
+      }
+
+      try {
+        const mediaId = await whatsapp.uploadWhatsappMedia({
+          config,
+          buffer: req.file.buffer,
+          filename: payload.filename,
+          mimeType: 'application/pdf',
+        });
+        const messageId = await whatsapp.sendWhatsappDocument({
+          config,
+          to: payload.to,
+          mediaId,
+          filename: payload.filename,
+          caption: payload.message,
+        });
+        // Log the outcome, never the recipient number or the message body.
+        console.log(`[orders/whatsapp] status + invoice sent for ${payload.code} (messageId: ${messageId})`);
+        return res.json({ success: true, messageId, orderCode: payload.code, to: payload.to });
+      } catch (sendError) {
+        if (sendError instanceof whatsapp.WhatsappError) {
+          console.warn(`[orders/whatsapp] send failed for ${payload.code}: ${sendError.message}`);
+          return res.status(sendError.status >= 500 ? 502 : sendError.status || 502).json({
+            code: sendError.code,
+            error: sendError.message,
+          });
+        }
+        throw sendError;
+      }
+    } catch (error) {
+      console.error('Error sending WhatsApp message:', error.message || error);
+      res.status(500).json({ success: false, error: 'Failed to send WhatsApp message' });
+    }
+  }
+);
 
 /* ---------------------------------------------------------------------------
    Errors

@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import { pinOf, navUrlFor, formatCoords, QR_LABEL } from './deliveryLocation';
 import { qrMatrix } from './qr';
 import { LOGO_PNG_DATA_URL, MONEY_FONT_REGULAR_BASE64, MONEY_FONT_BOLD_BASE64 } from './invoiceAssets';
-import { orderIdOf } from '../lib/orderId';
+import { getDisplayOrderId } from '../lib/orderId';
 
 // Print palette, matched to the on-screen brand tokens in src/index.css.
 // jsPDF wants RGB triples, so these are the literal channel values.
@@ -130,12 +130,16 @@ export const generateInvoicePDF = (order, customerInfo, options = {}) => {
      address block, as the old layout did, invented a destination. */
   const isCounterSale = order.source === 'pos';
 
-  /* The canonical Order ID, exactly as the server minted it. The old code derived
-     a display id by slicing the last six characters of the Firestore document
-     id — a truncated internal id, not an order number — and only used shortCode
-     when it happened to be set. Now there is one id and it is printed whole, so
-     the invoice, the tracking link and the customer's confirmation all agree. */
-  const trackingId = `#${orderIdOf(order) || 'N/A'}`;
+  /* The canonical customer-facing Order ID: `order.shortCode`, exactly as the
+     server minted it (e.g. CHYD26-3001), printed whole. The Firestore document
+     id is internal-only and must never appear here — `getDisplayOrderId`
+     refuses to fall back to it and logs a diagnostic naming the document
+     instead, so a record missing its shortCode is reported rather than leaked.
+     The old code derived a display id by slicing the document id, and callers
+     used to inject the document id as `orderId` into the payload, which made the invoice
+     print the internal id. Both are gone: one id, printed whole, so the
+     invoice, the tracking link and the customer's confirmation all agree. */
+  const trackingId = `#${getDisplayOrderId(order) || 'N/A'}`;
 
   /* Admin screens hand over a Firestore Timestamp; the tracking page gets its
      order from /api/orders/track, where createdAt is an ISO string. Accept both
@@ -621,7 +625,9 @@ export const generateInvoicePDFBlob = (order, customerInfo, options = {}) => {
 
 export const downloadInvoicePDF = (order, customerInfo, options = {}) => {
   const doc = generateInvoicePDF(order, customerInfo, options);
-  doc.save(`Invoice_${orderIdOf(order) || 'ORDER'}.pdf`);
+  /* The downloaded file carries the same canonical id as the invoice inside
+     it — never the internal document id. */
+  doc.save(`Invoice_${getDisplayOrderId(order) || 'ORDER'}.pdf`);
 };
 
 export const printInvoicePDF = (order, customerInfo, options = {}) => {

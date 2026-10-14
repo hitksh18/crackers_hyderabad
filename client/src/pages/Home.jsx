@@ -185,6 +185,8 @@ const HomeSeo = ({ siteSettings }) => {
       image={image}
       ogTitle={seo?.ogTitle || undefined}
       ogDescription={seo?.ogDescription || undefined}
+      twitterTitle={seo?.twitterTitle || undefined}
+      twitterDescription={seo?.twitterDescription || undefined}
       twitterImage={seo?.twitterImage || undefined}
       jsonLd={jsonLd}
     />
@@ -599,24 +601,43 @@ const Home = () => {
       {hero}
 
       {/* Below the fold: code-split chunks + progressively hydrated Firestore
-          data stream in after the hero. fallback={null} keeps every section
-          out of the way until its own chunk arrives. */}
-      <Suspense fallback={null}>
-        {hasBuilder ? (
-          sections.map(renderSection)
-        ) : (
-          <>
+          data stream in after the hero. Each section owns its Suspense
+          boundary so chunks resolve independently in document order — one
+          slow chunk (or the separately-boundaried footer) can never hold
+          Categories or any other section back. fallback={null} keeps each
+          section out of the way only until its own chunk arrives. */}
+      {hasBuilder ? (
+        sections.map((s) => (
+          <Suspense key={s.id || s.type} fallback={null}>{renderSection(s)}</Suspense>
+        ))
+      ) : (
+        <>
+          <Suspense fallback={null}>
             <CategoryShowcase sectionRef={categoriesRef} countInCategory={countInCategory} categories={visibleCategories} heading={homepageContent.categories} />
+          </Suspense>
+          <Suspense fallback={null}>
             <FeaturedSection products={featuredShown} heading={homepageContent.featured} loading={loading} />
+          </Suspense>
+          <Suspense fallback={null}>
             <section className="section-pad" style={{ background: 'var(--surface-page)' }}>
               <div className="shell-wide">
                 <HomeProductRail eyebrow={homepageContent.bestSellers.eyebrow} title={homepageContent.bestSellers.title} subtitle={homepageContent.bestSellers.subtitle} products={bestShown} loading={loading} railLabel="best sellers" />
               </div>
             </section>
+          </Suspense>
+          <Suspense fallback={null}>
             <PromoSection promotionalBanners={promotionalBanners} />
+          </Suspense>
+          <Suspense fallback={null}>
             <SecondaryBannerGrid banners={homepageConfig?.secondaryBanners || []} />
+          </Suspense>
+          <Suspense fallback={null}>
             <ProductBannerGrid banners={homepageConfig?.productBanners || []} />
+          </Suspense>
+          <Suspense fallback={null}>
             {dealsShown.length > 0 && <DealsSection deals={dealsShown} heading={homepageContent.deals} />}
+          </Suspense>
+          <Suspense fallback={null}>
             {settingsLoading ? (
               <section className="section-pad-sm" style={{ background: 'var(--surface-card)' }}>
                 <div className="shell-wide" role="status" aria-live="polite" aria-busy="true">
@@ -633,7 +654,11 @@ const Home = () => {
                 </div>
               </section>
             ) : null}
+          </Suspense>
+          <Suspense fallback={null}>
             <TrustSection heading={homepageContent.trust} cards={trustCards} />
+          </Suspense>
+          <Suspense fallback={null}>
             <section className="section-pad" style={{ background: 'var(--surface-sunken)' }}>
               <div className="shell-wide">
                 <div className="grid gap-6 lg:grid-cols-[48fr_52fr] lg:gap-6">
@@ -642,10 +667,12 @@ const Home = () => {
                 </div>
               </div>
             </section>
+          </Suspense>
+          <Suspense fallback={null}>
             <WholesaleSection copy={wholesaleCopy} />
-          </>
-        )}
-      </Suspense>
+          </Suspense>
+        </>
+      )}
 
       {/* Homepage SEO companion, Canvas-controlled (seoGuide builder entry).
           OFF renders nothing — no container, no gap. The shared component

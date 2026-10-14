@@ -26,7 +26,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { revealVariants, staggerParent, DURATION, EASE_OUT_EXPO } from '../lib/motion';
 import EmptyState from '../components/ui/EmptyState';
 import Seo from '../components/Seo';
-import { orderIdOf, normalizeOrderIdInput, orderIdCarriesOwnEntropy } from '../lib/orderId';
+import { getDisplayOrderId, normalizeOrderIdInput, orderIdCarriesOwnEntropy } from '../lib/orderId';
 
 /* The timeline begins at Confirmed — successfully placed orders are born
    confirmed, so there is no Pending step. Legacy Pending orders (if any are
@@ -237,7 +237,12 @@ const TrackOrder = () => {
         city: '',
         pincode: ''
       };
-      downloadInvoicePDF({ orderId: order.id, ...order }, customerInfo, { isAdmin: false });
+      /* Pass the tracking result through untouched: the invoice generator
+         reads the canonical id (`shortCode`, which /api/orders/track always
+         returns) itself. Injecting the document id as `orderId` here used to overwrite
+         it with the internal Firestore document id, so the downloaded invoice
+         printed the document id instead of CHYD26-3001. */
+      downloadInvoicePDF({ ...order }, customerInfo, { isAdmin: false });
       toast.success('Invoice downloaded successfully!');
     } catch (error) {
       console.error('Error generating invoice:', error);
@@ -402,7 +407,7 @@ const TrackOrder = () => {
   const copyTrackingCode = async () => {
     if (!order) return;
     try {
-      await navigator.clipboard.writeText(orderIdOf(order));
+      await navigator.clipboard.writeText(getDisplayOrderId(order));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -601,7 +606,7 @@ const TrackOrder = () => {
                     className="tabular mt-1 break-all text-xl font-bold"
                     style={{ color: 'var(--white-soft)', fontFamily: 'var(--font-body)' }}
                   >
-                    #{orderIdOf(order)}
+                    #{getDisplayOrderId(order) || 'N/A'}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">

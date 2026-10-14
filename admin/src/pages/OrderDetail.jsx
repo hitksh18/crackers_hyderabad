@@ -23,12 +23,16 @@ import OrderActionBar from '../components/admin/OrderActionBar';
 import AdminHeader from '../components/admin/AdminHeader';
 import OrderDetailPanel from '../components/admin/OrderDetailPanel';
 import OrderEditModal from '../components/admin/OrderEditModal';
-import { orderIdOf } from '../lib/orderId';
+import { getDisplayOrderId } from '../lib/orderId';
 
 const statusOptions = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered', 'Cancelled'];
 
 /* The canonical Order ID, as minted on the server. See lib/orderId.js. */
-const orderCodeOf = (order) => orderIdOf(order) || 'N/A';
+/* The single visible Order ID: shortCode (CHYD26-3001). `order.id` is internal
+   only (Firestore access, routing, API calls) and must never be displayed as
+   the order number. A record missing its shortCode renders 'N/A' and logs a
+   diagnostic instead of leaking its document id. */
+const orderCodeOf = (order) => getDisplayOrderId(order) || 'N/A';
 
 const AdminOrderDetail = () => {
   const { orderId } = useParams();
@@ -45,6 +49,9 @@ const AdminOrderDetail = () => {
   const [products, setProducts] = useState([]);
   const [orderEditMinimum, setOrderEditMinimum] = useState(500);
   const [downloadingInvoice, setDownloadingInvoice] = useState(null);
+  /* True while this order's status + invoice is sending over WhatsApp (button
+     spinner + disabled state); the page itself stays interactive. */
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
   const [editingOrder, setEditingOrder] = useState(null);
   const [editedItems, setEditedItems] = useState([]);
@@ -244,34 +251,69 @@ const AdminOrderDetail = () => {
     });
   };
 
-  const openWhatsAppChat = () => {
+  /* Same staff send as the Orders table: the message text, the Order ID and
+     the recipient are re-derived server-side from the stored order; the
+     browser only uploads the invoice bytes, generated here with the SAME
+     pdfGenerator the Download button uses. The document id is the lookup key
+     only and never appears in customer-facing content. */
+  const handleSendWhatsApp = async () => {
+    if (!order || sendingWhatsApp) return;
+    const code = getDisplayOrderId(order);
+    if (!code) {
+      toast.error('This order has no customer Order ID yet.');
+      return;
+    }
     if (!order?.customer?.phone) {
       toast.error('Customer phone number not available');
       return;
     }
 
-    const phone = order.customer.phone.replace(/\D/g, '');
-    const formattedPhone = phone.startsWith('91') ? phone : `91${phone}`;
-    const status = order.status || 'Pending';
-    const customerName = order.customer?.name || 'Customer';
+    setSendingWhatsApp(true);
+    try {
+      const orderData = { ...order, items: order.items || [] };
+      const customerInfo = order.customer || { name: 'N/A', phone: 'N/A', email: '', address: '', city: '', pincode: '' };
+      const { generateInvoicePDFBlob } = await loadInvoicePdf();
+      const blob = generateInvoicePDFBlob(orderData, customerInfo, { isAdmin: true });
+      const form = new FormData();
+      form.append('invoice', blob, `Invoice_${code}.pdf`);
 
-    const message = encodeURIComponent(
-      `Hello ${customerName},\n\n` +
-      `*Order Update - Crackers Hyderabad*\n\n` +
-      `Order ID: #${orderCodeOf(order)}\n` +
-      `Status: ${status}\n` +
-      `Total: Rs.${order.total}\n\n` +
-      `Thank you for shopping with us!`
-    );
-
-    window.open(`https://wa.me/${formattedPhone}?text=${message}`, '_blank');
-    toast.success('WhatsApp opened in new tab');
+      const response = await authFetch(`/api/orders/${order.id}/whatsapp`, {
+        method: 'POST',
+        body: form,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.success !== true) {
+        if (data.code === 'WHATSAPP_NOT_CONFIGURED') {
+          toast.error('WhatsApp is not configured.');
+          return;
+        }
+        if (data.code === 'ORDER_ID_MISSING') {
+          toast.error('This order has no customer Order ID yet.');
+          return;
+        }
+        if (data.code === 'CUSTOMER_PHONE_MISSING' || data.code === 'CUSTOMER_PHONE_INVALID') {
+          toast.error('Customer phone number is missing or invalid.');
+          return;
+        }
+        toast.error(await readApiError(response, 'Failed to send WhatsApp message'));
+        return;
+      }
+      toast.success('WhatsApp message sent successfully');
+    } catch (error) {
+      console.error('Error sending WhatsApp message:', error);
+      toast.error('Failed to send WhatsApp message');
+    } finally {
+      setSendingWhatsApp(false);
+    }
   };
 
   const handleDownloadInvoice = async () => {
     setDownloadingInvoice(order.id);
     try {
-      const orderData = { orderId: order.id, ...order, items: order.items || [] };
+      /* No document-id-as-`orderId` injection — the generator reads `shortCode`
+         itself. The injection used to make the invoice print the internal
+         Firestore document id instead of CHYD26-3001. */
+      const orderData = { ...order, items: order.items || [] };
       const customerInfo = order.customer || { name: 'N/A', phone: 'N/A', email: '', address: '', city: '', pincode: '' };
       const { downloadInvoicePDF } = await loadInvoicePdf();
       downloadInvoicePDF(orderData, customerInfo, { isAdmin: true });
@@ -287,7 +329,10 @@ const AdminOrderDetail = () => {
   const handlePrintInvoice = async () => {
     setDownloadingInvoice(order.id);
     try {
-      const orderData = { orderId: order.id, ...order, items: order.items || [] };
+      /* No document-id-as-`orderId` injection — the generator reads `shortCode`
+         itself. The injection used to make the invoice print the internal
+         Firestore document id instead of CHYD26-3001. */
+      const orderData = { ...order, items: order.items || [] };
       const customerInfo = order.customer || { name: 'N/A', phone: 'N/A', email: '', address: '', city: '', pincode: '' };
       const { printInvoicePDF } = await loadInvoicePdf();
       printInvoicePDF(orderData, customerInfo, { isAdmin: true });
@@ -419,9 +464,10 @@ const AdminOrderDetail = () => {
               canEdit={canEditOrder}
               canDelete={canDeleteOrder}
               isBusy={downloadingInvoice === order.id}
+              isWhatsAppBusy={sendingWhatsApp}
               onDownloadInvoice={handleDownloadInvoice}
               onPrintInvoice={handlePrintInvoice}
-              onWhatsApp={openWhatsAppChat}
+              onWhatsApp={handleSendWhatsApp}
               onEdit={startEditingOrder}
               onDelete={handleDeleteOrder}
             />

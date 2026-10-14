@@ -29,6 +29,9 @@
 const nodemailer = require('nodemailer');
 const { FieldValue } = require('firebase-admin/firestore');
 const { orderConfirmationHtml, orderConfirmationText, statusCopy, emailSubject, internalNewOrderSubject, internalNewOrderHtml, internalNewOrderText } = require('./emailTemplates');
+/* The single customer-facing Order ID reader (shortCode, strict — never the
+   document id). Every mail path below reads the id through here. */
+const { getDisplayOrderId } = require('./orderId');
 
 const DEFAULT_FROM_NAME = 'Crackers Hyderabad';
 const DEFAULT_FROM_ADDRESS = 'crackershyderabad@gmail.com';
@@ -252,7 +255,15 @@ async function maybeSendOrderConfirmationEmail(db, orderRef, order, { transporte
     const items = Array.isArray(order.items) ? order.items : [];
     const quantity = items.reduce((n, item) => n + (Number(item.quantity) || 0), 0);
     const config = readEmailConfig();
-    const code = String(order.shortCode || '').toUpperCase();
+    /* The single customer-facing id. A record missing its shortCode must not
+       be mailed without an Order ID — fail safe and record it on the order
+       (notify.confirmationEmailError) so the record can be found and migrated
+       instead of silently leaking the document id to the customer. */
+    const code = getDisplayOrderId(order);
+    if (!code) {
+      console.error(`[email] confirmation skipped for order ${orderRef.id}: missing shortCode`);
+      return { ok: false, error: 'missing-short-code' };
+    }
     const trackUrl = `${config.trackBaseUrl}/track/${encodeURIComponent(code)}`;
     const invoiceUrl = `${config.trackBaseUrl}/track-order?id=${encodeURIComponent(code)}`;
 
@@ -386,7 +397,18 @@ async function sendStatusUpdateEmail(db, orderRef, order, targetStatus, { transp
     const items = Array.isArray(order.items) ? order.items : [];
     const quantity = items.reduce((n, item) => n + (Number(item.quantity) || 0), 0);
     const config = readEmailConfig();
-    const code = String(order.shortCode || '').toUpperCase();
+    /* Same rule as the confirmation hook: no shortCode, no customer mail —
+       the failure is logged to the delivery log so the record is reported
+       rather than mailed without (or with a wrong) Order ID. */
+    const code = getDisplayOrderId(order);
+    if (!code) {
+      console.error(`[email] status email skipped for order ${orderRef.id}: missing shortCode`);
+      automation.logDelivery(db, {
+        event, orderId: orderRef.id, recipient: to,
+        subject: '', status: 'failed', error: 'missing-short-code',
+      }).catch(() => {});
+      return { ok: false, error: 'missing-short-code' };
+    }
     const trackUrl = `${config.trackBaseUrl}/track/${encodeURIComponent(code)}`;
     const invoiceUrl = `${config.trackBaseUrl}/track-order?id=${encodeURIComponent(code)}`;
 
@@ -532,7 +554,10 @@ async function maybeSendInternalNewOrderEmail(db, orderRef, order, { transporter
 
     const items = Array.isArray(order.items) ? order.items : [];
     const quantity = items.reduce((n, item) => n + (Number(item.quantity) || 0), 0);
-    const code = String(order.shortCode || '').toUpperCase();
+    /* Staff notification: same canonical id (the subject template renders
+       'N/A' when it is absent, and the VIEW ORDER link keys off the document
+       id, which is correct internal use). */
+    const code = getDisplayOrderId(order) || '';
     const adminBase = config.adminBaseUrl;
     const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const delivery = internalDeliveryLines(order);

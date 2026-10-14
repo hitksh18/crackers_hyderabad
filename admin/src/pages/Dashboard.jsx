@@ -27,7 +27,7 @@ import OrderStatusBadge from '../components/admin/OrderStatusBadge';
 import DualTrendChart from '../components/admin/analytics/DualTrendChart';
 import { cachedGetDocs, ordersCacheTtl } from '../lib/firestoreCache';
 import { displayNameForCategory } from '../lib/categoryIcons';
-import { orderIdOf, orderIdMatches } from '../lib/orderId';
+import { getDisplayOrderId, orderIdMatches } from '../lib/orderId';
 import AdminTopBar from '../components/admin/AdminTopBar';
 
 /* The eight most-used destinations. Fixed — quick actions are shortcuts, not
@@ -195,7 +195,7 @@ const AdminDashboard = () => {
     const base = recentOrders.slice(0, 10).map(o => ({
       id: o.id,
       title: o.status === 'Delivered' ? 'Order Delivered' : o.status === 'Cancelled' ? 'Order Cancelled' : 'New Order Received',
-      desc: `Order #${orderIdOf(o)} for ₹${(o.total||0).toLocaleString('en-IN')} by ${o.customer?.name || 'customer'}`,
+      desc: `Order #${getDisplayOrderId(o) || 'N/A'} for ₹${(o.total||0).toLocaleString('en-IN')} by ${o.customer?.name || 'customer'}`,
       time: o.createdAt?.toDate ? o.createdAt.toDate().toLocaleString() : 'recently',
       type: 'Orders',
       unread: true,
@@ -339,7 +339,7 @@ const AdminDashboard = () => {
                   {feedOrders.map((order) => (
                     <Link key={order.id} to={`/orders/${order.id}`} className="dash-order-row flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 transition-colors duration-200" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)' }}>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium" style={{ color: 'var(--text-strong)' }}>#{orderIdOf(order)} — {order.customer?.name || 'Customer'}</p>
+                        <p className="truncate text-sm font-medium" style={{ color: 'var(--text-strong)' }}>#{getDisplayOrderId(order) || 'N/A'} — {order.customer?.name || 'Customer'}</p>
                         <p className="text-xs tabular" style={{ color: 'var(--text-muted)' }}>₹{(order.total || 0).toLocaleString('en-IN')} • {order.status || 'Pending'}</p>
                       </div>
                       <ArrowRight className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-subtle)' }} />
@@ -374,7 +374,7 @@ const AdminDashboard = () => {
                   {filteredOrders.map((order) => (
                     <div key={order.id} className="dash-order-row flex items-center justify-between gap-3 rounded-xl border px-3 py-3 transition-colors duration-200" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)' }}>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium" style={{ color: 'var(--text-strong)' }}>#{orderIdOf(order)} — {order.customer?.name || 'Customer'}</p>
+                        <p className="truncate text-sm font-medium" style={{ color: 'var(--text-strong)' }}>#{getDisplayOrderId(order) || 'N/A'} — {order.customer?.name || 'Customer'}</p>
                         <p className="text-xs tabular" style={{ color: 'var(--text-muted)' }}>₹{(order.total||0).toLocaleString('en-IN')} • {order.paymentMode || 'Online'} • {order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString() : new Date(order.createdAt).toLocaleDateString()}</p>
                       </div>
                       <OrderStatusBadge status={order.status || 'Pending'} className="shrink-0" />

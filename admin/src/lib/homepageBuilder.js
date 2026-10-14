@@ -40,10 +40,10 @@ export const DEFAULT_SECTIONS = [
   { id: 'trust', type: SECTION_TYPES.TRUST, label: 'Why Choose Us', enabled: true, order: 12 },
   { id: 'newsletter', type: SECTION_TYPES.NEWSLETTER, label: 'Newsletter', enabled: true, order: 13 },
   { id: 'wholesale', type: SECTION_TYPES.WHOLESALE, label: 'Wholesale Section', enabled: true, order: 14 },
-  /* Homepage SEO guide ("Firecrackers in Hyderabad"). Content lives in the
-     entry's `config` (edited in Canvas); empty config renders all defaults.
-     readBuilderConfig auto-appends this for existing installs. */
-  { id: 'seoGuide', type: SECTION_TYPES.SEO_GUIDE, label: 'Firecrackers in Hyderabad', enabled: true, order: 15, config: {} },
+  /* NOTE: the legacy homepage SEO guide ("Firecrackers in Hyderabad",
+     SECTION_TYPES.SEO_GUIDE) is intentionally absent from Canvas defaults.
+     Stored seoGuide entries in existing installs are left untouched in
+     Firestore but no Canvas surface lists, edits, or previews them. */
 ];
 
 export const BANNER_SECTION_TEMPLATE = (order) => ({

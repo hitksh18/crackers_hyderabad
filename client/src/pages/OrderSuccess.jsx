@@ -21,7 +21,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { revealVariants, staggerParent, DURATION, EASE_OUT_EXPO, SPRING } from '../lib/motion';
 import FireworksCanvas from '../components/ui/FireworksCanvas';
 import { RangoliDivider } from '../components/ui/Ornaments';
-import { orderIdOf } from '../lib/orderId';
+import { getDisplayOrderId } from '../lib/orderId';
 
 /* Sixteen decorative rays around the seal. Static geometry, one grouped fade. */
 const SEAL_RAYS = Array.from({ length: 16 }, (_, i) => i * 22.5);
@@ -251,11 +251,15 @@ const OrderSuccess = () => {
     }
   };
 
-  /* The Order ID the server minted, shown to the customer and used for the
-     tracking link and the copy button. `shortCode` arrives on router state from
-     the checkout response; the fallback exists only for a refresh, where the
-     internal document id is all that survives and is better than nothing. */
-  const trackingCode = orderIdOf({ shortCode, id: orderId });
+  /* The Order ID the server minted (CHYD26-3001), shown to the customer and
+     used for the tracking link and the copy button. `shortCode` arrives on
+     router state from the checkout response. There is deliberately NO fallback
+     to the internal document id: on a refresh the router state is gone, and
+     showing the document id as the order number would leak an internal
+     identifier. In that case the code rows stay hidden (the customer has the
+     id in their confirmation email/SMS) while feedback and the order summary
+     keep working off the internal `orderId`. */
+  const trackingCode = getDisplayOrderId({ shortCode });
 
   /* Summary numbers ride along on navigation state. They are absent on a
      refresh or a direct visit, in which case the line is not rendered at all. */
@@ -298,13 +302,15 @@ const OrderSuccess = () => {
             {orderId && (
               <motion.div variants={revealVariants(reduced, 18)} className="mt-8">
                 <div className="panel-editorial glass-card px-5 py-2 sm:px-7">
-                  <CodeRow
-                    label="Tracking Code"
-                    display={`#${trackingCode}`}
-                    value={trackingCode}
-                    copied={copiedField === 'Tracking Code'}
-                    onCopy={handleCopy}
-                  />
+                  {trackingCode && (
+                    <CodeRow
+                      label="Tracking Code"
+                      display={`#${trackingCode}`}
+                      value={trackingCode}
+                      copied={copiedField === 'Tracking Code'}
+                      onCopy={handleCopy}
+                    />
+                  )}
 
                   {hasSummary && (
                     <>
@@ -338,7 +344,7 @@ const OrderSuccess = () => {
                     your order&apos;s status.
                   </p>
 
-                  {shortCode && (
+                  {trackingCode && (
                     <>
                       <div className="h-px w-full" style={{ background: 'var(--hairline)' }} />
                       <div className="flex flex-wrap items-center justify-between gap-3 px-1 py-4 text-left">
