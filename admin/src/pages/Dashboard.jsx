@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import '../admin-portrait.css';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection } from 'firebase/firestore';
+import { collection, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import {
   Plus,
@@ -14,9 +14,24 @@ import {
   X,
   Image as ImageIcon,
   Star,
+  Pencil,
+  Boxes,
+  Award,
+  Settings,
+  Users,
+  Tag,
+  FileText,
+  Mail,
+  Sparkles,
+  Receipt,
+  Check,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from '../utils/toast';
+import { useAuth } from '../context/AuthContext';
+import { BILLING_URL } from '../lib/billingUrl';
+import { modalVariants } from '../lib/motion';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useNotifications } from '../contexts/NotificationContext';
 import { Skeleton, StatCardSkeleton } from '../components/ui/Skeleton';
 import OrderStatusBadge from '../components/admin/OrderStatusBadge';
@@ -26,16 +41,28 @@ import { displayNameForCategory } from '../lib/categoryIcons';
 import { getDisplayOrderId, orderIdMatches } from '../lib/orderId';
 import AdminTopBar from '../components/admin/AdminTopBar';
 
-/* The five most-used destinations. Fixed — quick actions are shortcuts, not
-   a second navigation system; everything else (Users, Categories, Brands,
-   Site Settings, Coupons) stays reachable from the sidebar. */
-const QUICK_ACTIONS = [
+/* Every admin destination that can be pinned as a quick action. Labels,
+   icons and routes mirror AdminSidebar exactly — the picker must never
+   invent a destination the sidebar doesn't have. */
+const AVAILABLE_QUICK_ACTIONS = [
   { id: 'analytics', to: '/analytics', label: 'Analytics', desc: 'View sales and performance', icon: BarChart3 },
   { id: 'add-product', to: '/products/add', label: 'Add Product', desc: 'Create a new product', icon: Plus },
   { id: 'products', to: '/products', label: 'Manage Products', desc: 'View and manage products', icon: Package },
   { id: 'orders', to: '/orders', label: 'Orders', desc: 'Manage customer orders', icon: ShoppingCart },
+  { id: 'price-list', to: '/price-list', label: 'Price List', desc: 'Print and price the register', icon: FileText },
   { id: 'homepage', to: '/canvas', label: 'Canvas', desc: 'Edit homepage', icon: ImageIcon },
+  { id: 'hero-products', to: '/hero-products', label: 'Hero Products', desc: 'Pick the hero product source', icon: Sparkles },
+  { id: 'categories', to: '/categories', label: 'Categories', desc: 'Manage product categories', icon: Boxes },
+  { id: 'brands', to: '/brands', label: 'Brands', desc: 'Manage product brands', icon: Award },
+  { id: 'coupons', to: '/coupons', label: 'Create Coupon', desc: 'Create and manage discount coupons', icon: Tag },
+  { id: 'users', to: '/users', label: 'Users', desc: 'Manage customers and users', icon: Users },
+  { id: 'site-settings', to: '/site-settings', label: 'Site Settings', desc: 'Configure the storefront and orders', icon: Settings },
+  { id: 'email-automation', to: '/email-automation', label: 'Email Automation', desc: 'Rules, templates and delivery log', icon: Mail },
+  { id: 'billing', to: BILLING_URL, label: 'Billing / POS', desc: 'Open the counter register', icon: Receipt, external: true },
 ];
+
+const DEFAULT_QUICK_ACTION_IDS = ['analytics', 'add-product', 'products', 'orders', 'homepage'];
+const MAX_QUICK_ACTIONS = 8;
 
 const AdminDashboard = () => {
   const [products, setProducts] = useState([]);
@@ -103,6 +130,82 @@ const AdminDashboard = () => {
       cancelled = true;
     };
   }, []);
+
+  /* ---------- Quick Actions: per-admin editable shortcuts ----------
+     The pinned actions live on the signed-in admin's own users/{uid}
+     document (the existing users rules already allow self read/update), so
+     each admin customises their own dashboard without changing what
+     anyone else sees. Absent/invalid stored data falls back to the
+     previous fixed five. */
+  const { user } = useAuth();
+  const reduced = useReducedMotion();
+  const [quickActionIds, setQuickActionIds] = useState(DEFAULT_QUICK_ACTION_IDS);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorDraft, setEditorDraft] = useState([]);
+  const [editorLimitHit, setEditorLimitHit] = useState(false);
+  const [editorSaving, setEditorSaving] = useState(false);
+
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+    let cancelled = false;
+    getDoc(doc(db, 'users', user.uid))
+      .then((snap) => {
+        if (cancelled || !snap.exists()) return;
+        const stored = snap.data()?.dashboardQuickActions;
+        if (!Array.isArray(stored)) return;
+        const valid = stored
+          .filter((id) => AVAILABLE_QUICK_ACTIONS.some((a) => a.id === id))
+          .slice(0, MAX_QUICK_ACTIONS);
+        if (valid.length > 0) setQuickActionIds(valid);
+      })
+      .catch((error) => {
+        console.error('Error loading quick actions:', error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid]);
+
+  const quickActions = useMemo(
+    () => quickActionIds
+      .map((id) => AVAILABLE_QUICK_ACTIONS.find((a) => a.id === id))
+      .filter(Boolean),
+    [quickActionIds]
+  );
+
+  const openQuickActionEditor = () => {
+    setEditorDraft([...quickActionIds]);
+    setEditorLimitHit(false);
+    setEditorOpen(true);
+  };
+
+  const toggleQuickAction = (id) => {
+    if (editorDraft.includes(id)) {
+      setEditorDraft(editorDraft.filter((x) => x !== id));
+      setEditorLimitHit(false);
+    } else if (editorDraft.length >= MAX_QUICK_ACTIONS) {
+      setEditorLimitHit(true);
+    } else {
+      setEditorDraft([...editorDraft, id]);
+      setEditorLimitHit(false);
+    }
+  };
+
+  const saveQuickActions = async () => {
+    if (!user?.uid || editorSaving || editorDraft.length === 0) return;
+    setEditorSaving(true);
+    try {
+      await setDoc(doc(db, 'users', user.uid), { dashboardQuickActions: editorDraft }, { merge: true });
+      setQuickActionIds([...editorDraft]);
+      setEditorOpen(false);
+      toast.success('Quick actions updated');
+    } catch (error) {
+      console.error('Error saving quick actions:', error);
+      toast.error('Failed to save quick actions');
+    } finally {
+      setEditorSaving(false);
+    }
+  };
 
   const dataReady = productsReady && ordersReady;
 
@@ -254,15 +357,29 @@ const AdminDashboard = () => {
         </div>
         )}
 
-        {/* Quick Actions — the five most-used destinations, fixed */}
+        {/* Quick Actions — up to eight admin-picked destinations (per user) */}
         <section className="shrink-0 rounded-2xl border p-3 transition-colors duration-200 lg:p-4" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', boxShadow: 'var(--shadow-sm)' }}>
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>Quick Actions</h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>Quick Actions</h2>
+            <button
+              type="button"
+              onClick={openQuickActionEditor}
+              title="Edit Quick Actions"
+              aria-label="Edit Quick Actions"
+              className="grid h-7 w-7 place-items-center rounded-lg border transition-colors duration-200 hover:border-[var(--ember-600)] hover:text-[var(--text-strong)]"
+              style={{ borderColor: 'var(--hairline)', color: 'var(--text-subtle)' }}
+            >
+              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
 
-          <div className="dash-qa-grid mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {QUICK_ACTIONS.map((action) => {
+          <div className="dash-qa-grid mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {quickActions.map((action) => {
               const Icon = action.icon;
-              return (
-                <Link key={action.id} to={action.to} className="dash-qa group flex min-w-0 items-center gap-3 rounded-2xl border p-3.5 transition hover:scale-[1.01] transition-colors duration-200" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)' }}>
+              const cardClass = 'dash-qa group flex min-w-0 items-center gap-3 rounded-2xl border p-3.5 transition hover:scale-[1.01] transition-colors duration-200';
+              const cardStyle = { borderColor: 'var(--hairline)', background: 'var(--surface-sunken)' };
+              const card = (
+                <>
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl" style={{ background: 'var(--surface-card)', border: '1px solid var(--hairline)' }}>
                     <Icon className="h-4 w-4" style={{ color: 'var(--ember-600)' }} />
                   </span>
@@ -271,7 +388,12 @@ const AdminDashboard = () => {
                     <span className="mt-0.5 hidden truncate text-xs leading-tight sm:block" style={{ color: 'var(--text-muted)' }}>{action.desc}</span>
                   </span>
                   <ArrowRight className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" style={{ color: 'var(--text-subtle)' }} />
-                </Link>
+                </>
+              );
+              return action.external ? (
+                <a key={action.id} href={action.to} target="_blank" rel="noreferrer" className={cardClass} style={cardStyle}>{card}</a>
+              ) : (
+                <Link key={action.id} to={action.to} className={cardClass} style={cardStyle}>{card}</Link>
               );
             })}
           </div>
@@ -465,6 +587,102 @@ const AdminDashboard = () => {
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Quick Actions editor — pick up to eight shortcuts for THIS admin.
+          Cancel discards the draft; Save writes users/{uid} and updates the
+          grid immediately (no page refresh needed). */}
+      <AnimatePresence>
+        {editorOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduced ? 0.001 : 0.18 }}
+            className="fixed inset-0 z-modal flex items-center justify-center bg-black/55 p-4"
+            onClick={() => { if (!editorSaving) setEditorOpen(false); }}
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="qa-editor-title"
+              variants={modalVariants(reduced)}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[var(--r-lg)] border"
+              style={{ background: 'var(--surface-card)', borderColor: 'var(--hairline-strong)', boxShadow: 'var(--shadow-xl)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-3 border-b px-5 py-4" style={{ background: 'var(--surface-sunken)', borderColor: 'var(--hairline)' }}>
+                <div className="min-w-0">
+                  <h2 id="qa-editor-title" className="card-title" style={{ color: 'var(--text-strong)' }}>Customize Quick Actions</h2>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Pick the shortcuts you want on your dashboard.</p>
+                </div>
+                <span
+                  className="tabular shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold"
+                  style={{
+                    borderColor: editorDraft.length >= MAX_QUICK_ACTIONS ? 'var(--ember-600)' : 'var(--hairline)',
+                    color: editorDraft.length >= MAX_QUICK_ACTIONS ? 'var(--ember-600)' : 'var(--text-muted)',
+                  }}
+                >
+                  {editorDraft.length} / {MAX_QUICK_ACTIONS} selected
+                </span>
+              </div>
+
+              <div className="space-y-4 p-5">
+                <div className="grid max-h-[46vh] gap-1.5 overflow-y-auto pr-1">
+                  {AVAILABLE_QUICK_ACTIONS.map((action) => {
+                    const Icon = action.icon;
+                    const selected = editorDraft.includes(action.id);
+                    return (
+                      <button
+                        key={action.id}
+                        type="button"
+                        onClick={() => toggleQuickAction(action.id)}
+                        aria-pressed={selected}
+                        className="flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition-colors duration-150"
+                        style={{
+                          borderColor: selected ? 'var(--ember-600)' : 'var(--hairline)',
+                          background: selected ? 'rgba(195, 58, 20, 0.10)' : 'var(--surface-sunken)',
+                        }}
+                      >
+                        <span
+                          className="grid h-4 w-4 shrink-0 place-items-center rounded border"
+                          style={{
+                            borderColor: selected ? 'var(--ember-600)' : 'var(--hairline-strong)',
+                            background: selected ? 'var(--ember-600)' : 'transparent',
+                            color: 'var(--surface-card)',
+                          }}
+                        >
+                          {selected && <Check className="h-3 w-3" strokeWidth={3} aria-hidden="true" />}
+                        </span>
+                        <Icon className="h-4 w-4 shrink-0" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{action.label}</span>
+                          <span className="block truncate text-xs" style={{ color: 'var(--text-muted)' }}>{action.desc}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {editorLimitHit && (
+                  <p role="status" className="text-xs font-semibold" style={{ color: 'var(--crimson-600)' }}>
+                    You can select up to {MAX_QUICK_ACTIONS} quick actions.
+                  </p>
+                )}
+
+                <div className="flex gap-2">
+                  <button type="button" disabled={editorSaving} onClick={() => setEditorOpen(false)} className="btn-outline flex-1">Cancel</button>
+                  <button type="button" disabled={editorSaving || editorDraft.length === 0} onClick={saveQuickActions} className="btn-primary flex-1">
+                    {editorSaving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
