@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { collection, deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { cachedGetDocs } from '../lib/firestoreCache';
+import { buildBrandLookup, normalizeBrandName, productBelongsToBrand } from '../lib/brands';
 import { GripVertical, Package, Plus, RotateCcw, Search, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from '../utils/toast';
@@ -60,6 +61,7 @@ const readSavedProductsState = () => {
     return {
       search: typeof parsed.search === 'string' ? parsed.search : '',
       category: validOption(parsed.category, categories),
+      brand: typeof parsed.brand === 'string' ? parsed.brand : 'All',
       stock: validOption(parsed.stock, STOCK_OPTIONS),
       featured: validOption(parsed.featured, FEATURED_OPTIONS),
       scrollY:
@@ -89,8 +91,10 @@ const AllProducts = () => {
   const [savedState] = useState(readSavedProductsState);
   const [searchQuery, setSearchQuery] = useState(savedState?.search ?? '');
   const [filterCategory, setFilterCategory] = useState(savedState?.category ?? 'All');
+  const [filterBrand, setFilterBrand] = useState(savedState?.brand ?? 'All');
   const [filterStock, setFilterStock] = useState(savedState?.stock ?? 'All');
   const [filterFeatured, setFilterFeatured] = useState(savedState?.featured ?? 'All');
+  const [brands, setBrands] = useState([]);
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const dirtyRef = useRef(false);
@@ -105,9 +109,11 @@ const AllProducts = () => {
       // Shared 60s cache: Dashboard, Orders editor, Categories and Canvas
       // all read `products` — one download per minute, not one per visit.
       // Pricing lives in `productPricing` and is cached under its own key.
-      const [productsResult, pricingResult] = await Promise.allSettled([
+      // Brands ride the same cache so the brand filter resolves from one read.
+      const [productsResult, pricingResult, brandsResult] = await Promise.allSettled([
         cachedGetDocs(collection(db, 'products'), 'products'),
         cachedGetDocs(collection(db, 'productPricing'), 'productPricing'),
+        cachedGetDocs(collection(db, 'brands'), 'brands'),
       ]);
 
       if (productsResult.status === 'rejected') throw productsResult.reason;
@@ -123,6 +129,9 @@ const AllProducts = () => {
 
       const productsData = mergeTradePricing(productsResult.value, pricingMap);
       setProducts(productsData);
+      if (brandsResult.status === 'fulfilled' && Array.isArray(brandsResult.value)) {
+        setBrands(brandsResult.value);
+      }
     } catch (error) {
       console.error('Error fetching products:', error);
       toast.error('Failed to fetch products');
@@ -286,17 +295,26 @@ const AllProducts = () => {
     setDragOverId(null);
   };
 
+  const brandLookup = useMemo(() => buildBrandLookup(brands), [brands]);
+  const sortedBrands = useMemo(() => [...brands].sort((a, b) =>
+    normalizeBrandName(a.name).localeCompare(normalizeBrandName(b.name), undefined, { sensitivity: 'base' }),
+  ), [brands]);
+
   const filteredProducts = useMemo(() => products.filter(p => {
     const matchesSearch = (p.name || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = filterCategory === 'All' || isProductInCategory(p, filterCategory);
+    const matchesBrand = filterBrand === 'All' || (() => {
+      const brand = brands.find((b) => String(b.id) === String(filterBrand));
+      return brand ? productBelongsToBrand(p, brand, brandLookup) : true;
+    })();
     const matchesStock = filterStock === 'All' ||
       (filterStock === 'In Stock' && !p.outOfStock) ||
       (filterStock === 'Out of Stock' && p.outOfStock);
     const matchesFeatured = filterFeatured === 'All' ||
       (filterFeatured === 'Featured' && p.isFeatured) ||
       (filterFeatured === 'Not Featured' && !p.isFeatured);
-    return matchesSearch && matchesCategory && matchesStock && matchesFeatured;
-  }), [products, searchQuery, filterCategory, filterStock, filterFeatured]);
+    return matchesSearch && matchesCategory && matchesBrand && matchesStock && matchesFeatured;
+  }), [products, brands, brandLookup, searchQuery, filterCategory, filterBrand, filterStock, filterFeatured]);
 
   /* Save the full page state (filters + scroll) before leaving for Edit.
      Passed to each row's Edit link; runs synchronously on click so nothing
@@ -311,6 +329,7 @@ const AllProducts = () => {
           savedAt: Date.now(),
           search: searchQuery,
           category: filterCategory,
+          brand: filterBrand,
           stock: filterStock,
           featured: filterFeatured,
           scrollY: el ? el.scrollTop : window.scrollY,
@@ -379,11 +398,12 @@ const AllProducts = () => {
   const clearFilters = () => {
     setSearchQuery('');
     setFilterCategory('All');
+    setFilterBrand('All');
     setFilterStock('All');
     setFilterFeatured('All');
   };
 
-  const hasActiveFilters = searchQuery || filterCategory !== 'All' || filterStock !== 'All' || filterFeatured !== 'All';
+  const hasActiveFilters = searchQuery || filterCategory !== 'All' || filterBrand !== 'All' || filterStock !== 'All' || filterFeatured !== 'All';
 
   if (loading) {
     return (
@@ -449,6 +469,22 @@ const AllProducts = () => {
               <option value="All">Category: All</option>
               {categories.map(cat => (
                 <option key={cat.value} value={cat.value}>{cat.name}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />
+          </div>
+
+          <div className="relative">
+            <select
+              value={filterBrand}
+              onChange={(e) => setFilterBrand(e.target.value)}
+              className="h-[42px] w-full appearance-none rounded-[10px] border bg-[var(--surface-sunken)] pl-3 pr-8 text-[13px] font-semibold focus:outline-none sm:w-auto"
+              style={{ borderColor: 'var(--hairline)', color: 'var(--text-body)' }}
+              aria-label="Filter by brand"
+            >
+              <option value="All">Brand: All</option>
+              {sortedBrands.map(brand => (
+                <option key={brand.id} value={brand.id}>{brand.name}</option>
               ))}
             </select>
             <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} />

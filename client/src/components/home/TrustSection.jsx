@@ -4,7 +4,7 @@ import { RangoliDivider } from '../ui/Ornaments';
 import { whyChoose } from './homeData';
 
 const TrustSection = ({ heading }) => (
-  <section className="section-pad" style={{ background: 'var(--surface-page)' }}>
+  <section className="section-pad home-sec-trust">
     <div className="shell-wide">
       <SectionHeading
         eyebrow={heading?.eyebrow || 'Why Us'}
@@ -16,7 +16,7 @@ const TrustSection = ({ heading }) => (
 
       <ScrollReveal
         stagger={0.05}
-        className="mx-auto grid max-w-4xl grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-5"
+        className="trust-compact mx-auto grid max-w-4xl grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-5"
       >
         {whyChoose.map((feature, index) => (
           <ScrollReveal.Item key={feature.title}>

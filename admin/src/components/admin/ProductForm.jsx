@@ -50,7 +50,7 @@ const ProductForm = ({
   onImageChange2,
   onImageURLChange2,
   onToggleUseURL2,
-  onBrandChange,
+  onBrandSelect,
   onShowAddBrand,
   onMarkTouched,
   onSubmit,
@@ -118,7 +118,7 @@ const ProductForm = ({
                 errors={errors}
                 brands={brands}
                 onFieldChange={onFieldChange}
-                onBrandChange={onBrandChange}
+                onBrandSelect={onBrandSelect}
                 onShowAddBrand={onShowAddBrand}
                 onMarkTouched={onMarkTouched}
               />

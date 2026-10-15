@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Sparkles } from 'lucide-react';
 import { readSiteSettings, announcementTexts } from '../lib/siteSettings';
 
 const DEFAULT_MESSAGES = [
@@ -11,10 +10,6 @@ const DEFAULT_MESSAGES = [
   'Festival Offers Live',
   'Same-Day Delivery in Hyderabad',
 ];
-
-/* Rangoli band — a single low-opacity ornament for the strip. Decorative. */
-const RANGOLI_BAND =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='36' viewBox='0 0 72 36'%3E%3Cg fill='none' stroke='%23D2A64F' stroke-opacity='0.30' stroke-width='1'%3E%3Cpath d='M36 5 L43 18 L36 31 L29 18 Z'/%3E%3Ccircle cx='0' cy='18' r='5'/%3E%3Ccircle cx='72' cy='18' r='5'/%3E%3Cpath d='M9 18 H24 M48 18 H63'/%3E%3C/g%3E%3C/svg%3E\")";
 
 const prefersReducedMotion =
   typeof window !== 'undefined' &&
@@ -84,16 +79,28 @@ function useMarqueeCopies(messageCount) {
   return { viewportRef, trackRef, copies, trackDuration };
 }
 
-/* The scrolling strip itself, shared by the storefront and the canvas preview. */
+/* Festive geometric pattern for the ticker: thin diamond outlines, short
+   connector lines and small circular nodes in gold at very low opacity.
+   Pure CSS (tiled SVG, no image asset), fixed behind the scrolling text,
+   pointer-events free and layout-neutral. */
+const TICKER_PATTERN =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='84' height='36' viewBox='0 0 84 36'%3E%3Cg fill='none' stroke='%23E2C177' stroke-opacity='0.16' stroke-width='1'%3E%3Cpath d='M42 6 L50 18 L42 30 L34 18 Z'/%3E%3Cpath d='M0 18 H26 M58 18 H84'/%3E%3Ccircle cx='30' cy='18' r='2'/%3E%3Ccircle cx='54' cy='18' r='2'/%3E%3Ccircle cx='42' cy='18' r='1.2' fill='%23E2C177' fill-opacity='0.16' stroke='none'/%3E%3C/g%3E%3C/svg%3E\")";
+
+/* Festive promotional ticker, shared by the storefront and the canvas live
+   preview. Deep festive red, subtle geometric pattern, cream uppercase text
+   with gold ✦ separators. Messages stay Firestore-driven (admin-editable);
+   only the presentation lives here. Compact (~34px desktop, ~30px mobile)
+   so it reads as a strip, never a section. */
 const BannerStrip = ({ messages, copies, viewportRef, trackRef, trackDuration }) => {
   const track = repeat(messages, copies);
 
   return (
     <div
-      className="relative isolate overflow-hidden w-full max-w-full"
+      className="relative isolate w-full max-w-full"
       style={{
-        background:
-          'linear-gradient(96deg, var(--maroon-900) 0%, var(--maroon-700) 36%, var(--maroon-600) 64%, var(--ember-600) 100%)',
+        background: 'linear-gradient(90deg, #65100F 0%, #8F1E16 45%, #B8321D 75%, #8A1712 100%)',
+        borderTop: '1px solid rgba(226, 193, 119, 0.18)',
+        borderBottom: '1px solid rgba(226, 193, 119, 0.18)',
         fontFamily: 'var(--font-body)',
         maxWidth: '100%',
         overflow: 'clip',
@@ -102,15 +109,15 @@ const BannerStrip = ({ messages, copies, viewportRef, trackRef, trackDuration })
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
-        style={{ backgroundImage: RANGOLI_BAND, backgroundSize: '72px 36px', opacity: 0.45 }}
+        style={{ backgroundImage: TICKER_PATTERN, backgroundSize: '84px 36px', backgroundRepeat: 'repeat' }}
       />
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
-        style={{ background: 'radial-gradient(58% 150% at 14% 0%, rgba(247, 174, 44, 0.24), transparent 62%)' }}
+        style={{ background: 'radial-gradient(circle at 30% 50%, rgba(226, 193, 119, 0.10), transparent 30%)' }}
       />
 
-      <div className="relative flex min-h-9 w-full max-w-full items-center overflow-hidden py-1.5 sm:py-2" aria-hidden="true" style={{ maxWidth: '100%', overflow: 'clip' }}>
+      <div className="relative flex min-h-[30px] w-full max-w-full items-center overflow-hidden sm:min-h-[34px]" aria-hidden="true" style={{ maxWidth: '100%', overflow: 'clip' }}>
         <div ref={viewportRef} className="marquee-viewport w-full max-w-full overflow-hidden" style={{ maxWidth: '100%', overflow: 'clip' }}>
           <div
             ref={trackRef}
@@ -123,40 +130,22 @@ const BannerStrip = ({ messages, copies, viewportRef, trackRef, trackDuration })
             {track.map((message, index) => (
               <span
                 key={index}
-                className="flex shrink-0 items-center gap-2.5 px-6 text-xs font-semibold tracking-[0.015em] sm:text-sm"
-                style={{ color: '#FFFFFF' }}
+                className="flex shrink-0 items-center gap-3 px-5 text-[13px] font-semibold uppercase"
+                style={{ color: '#FDF9F0', letterSpacing: '0.12em' }}
               >
-                <span
-                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
-                  style={{
-                    background: 'rgba(210, 166, 79, 0.18)',
-                    border: '1px solid rgba(210, 166, 79, 0.45)',
-                  }}
-                >
-                  <Sparkles
-                    className="h-3 w-3"
-                    strokeWidth={2.4}
-                    style={{ color: 'var(--gold-400)' }}
-                  />
-                </span>
                 <span className="whitespace-nowrap">{message}</span>
                 <span
                   aria-hidden="true"
-                  className="ml-3 h-1 w-1 shrink-0 rotate-45"
-                  style={{ background: 'var(--gold-400)', opacity: 0.85 }}
-                />
+                  className="ml-2 shrink-0 text-[11px]"
+                  style={{ color: '#E2C177', opacity: 0.85 }}
+                >
+                  ✦
+                </span>
               </span>
             ))}
           </div>
         </div>
       </div>
-
-      {/* Gold hairline seals the strip against the navbar. */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-x-0 bottom-0 h-px"
-        style={{ background: 'linear-gradient(90deg, transparent, rgba(210, 166, 79, 0.75), transparent)' }}
-      />
     </div>
   );
 };

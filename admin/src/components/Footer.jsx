@@ -1,5 +1,5 @@
 import { Phone, Mail, MapPin, Send, Headset } from 'lucide-react';
-import { FaFacebookF, FaInstagram, FaYoutube } from 'react-icons/fa';
+import { FaInstagram } from 'react-icons/fa';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
@@ -12,6 +12,8 @@ import { readSiteSettings } from '../lib/siteSettings';
 const quickLinks = [
   { to: '/', label: 'Home' },
   { to: '/products', label: 'Products' },
+  { to: '/about', label: 'About Us' },
+  { to: '/contact', label: 'Contact Us' },
   { to: '/my-orders', label: 'My Orders' },
   { to: '/track-order', label: 'Track Order' }
 ];
@@ -138,10 +140,11 @@ const Footer = ({ preview } = {}) => {
   const phone = preview?.phone ?? footerSettings.phone;
   const email = preview?.email ?? footerSettings.email;
   const address = preview?.address ?? footerSettings.address;
+  /* Only real configured profiles are linked. The previous hardcoded
+     facebook.com/youtube.com homepages were generic destinations, not brand
+     entity signals — they stay hidden until official URLs are configured. */
   const dynamicSocialLinks = [
     ...(instagramUrl ? [{ href: instagramUrl, label: 'Instagram', Icon: FaInstagram }] : []),
-    { href: 'https://facebook.com', label: 'Facebook', Icon: FaFacebookF },
-    { href: 'https://youtube.com', label: 'YouTube', Icon: FaYoutube }
   ];
 
   const handleSubscribe = (e) => {

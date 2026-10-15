@@ -34,17 +34,35 @@
   --mouse-y: 42%;
 }
 
-/* ---------------- 1. Night-sky background ---------------- */
+/* ---------------- 1. Night-sky background ----------------
+   A premium dark showroom stage: warm near-black base, two whisper-soft
+   radial glows (brand left, product right), a breath of burgundy at the
+   bottom, and a handful of single 1–2px distant sparks placed only at the
+   edges — never tiled, never beamed, never wallpapered. First layer on top.
+   Large areas stay within ~5–10% visual opacity; dots within 8–20%. */
 .fx-bg {
   position: absolute;
   inset: -24px;
   z-index: 0;
   background:
-    radial-gradient(52% 38% at 50% 30%, rgba(255, 178, 92, 0.13) 0%, transparent 70%),
-    radial-gradient(70% 46% at 18% 82%, rgba(154, 44, 16, 0.16) 0%, transparent 68%),
-    radial-gradient(60% 42% at 84% 78%, rgba(190, 140, 54, 0.12) 0%, transparent 70%),
-    radial-gradient(90% 30% at 50% 100%, rgba(120, 58, 20, 0.14) 0%, transparent 70%),
-    linear-gradient(180deg, #020202 0%, #060403 30%, #0d0705 55%, #160b05 78%, #0a0605 100%);
+    radial-gradient(115% 100% at 50% 46%, transparent 60%, rgba(3, 2, 2, 0.42) 100%),
+    radial-gradient(2px 2px at 5% 12%, rgba(215, 190, 130, 0.18), transparent 70%),
+    radial-gradient(2px 2px at 12% 34%, rgba(205, 130, 70, 0.12), transparent 70%),
+    radial-gradient(2px 2px at 95% 10%, rgba(215, 190, 130, 0.16), transparent 70%),
+    radial-gradient(3px 3px at 88% 30%, rgba(215, 190, 130, 0.12), transparent 70%),
+    radial-gradient(2px 2px at 2.5% 82%, rgba(205, 130, 70, 0.14), transparent 70%),
+    radial-gradient(2px 2px at 8% 62%, rgba(215, 190, 130, 0.1), transparent 70%),
+    radial-gradient(2px 2px at 97.5% 78%, rgba(215, 190, 130, 0.14), transparent 70%),
+    radial-gradient(3px 3px at 90% 42%, rgba(215, 190, 130, 0.11), transparent 70%),
+    radial-gradient(2px 2px at 9% 55%, rgba(215, 190, 130, 0.1), transparent 70%),
+    radial-gradient(4px 4px at 76% 8%, rgba(215, 190, 130, 0.1), transparent 70%),
+    radial-gradient(3px 3px at 60% 92%, rgba(205, 130, 70, 0.1), transparent 70%),
+    radial-gradient(46% 40% at 28% 48%, rgba(130, 55, 20, 0.16) 0%, transparent 55%),
+    radial-gradient(40% 38% at 5% 64%, rgba(74, 21, 16, 0.22) 0%, transparent 65%),
+    radial-gradient(44% 44% at 72% 48%, rgba(180, 120, 40, 0.1) 0%, transparent 50%),
+    radial-gradient(38% 30% at 52% 42%, rgba(199, 154, 77, 0.08) 0%, transparent 65%),
+    radial-gradient(70% 30% at 50% 102%, rgba(74, 21, 16, 0.36) 0%, transparent 70%),
+    linear-gradient(180deg, #090706 0%, #120907 30%, #1B0C08 58%, #24100A 84%, #100806 100%);
   transform: translate3d(calc(var(--px) * 2px), calc(var(--py) * 1.5px), 0);
   will-change: transform;
 }
@@ -88,17 +106,18 @@
   pointer-events: none;
 }
 
-/* ---------------- 4. Central content ---------------- */
+/* ---------------- 4. Central content ----------------
+   In normal document flow (never absolute): the hero's height comes from
+   this content, so there is no collapse, no clipping and no blank gap. */
 .fx-content {
-  position: absolute;
-  inset: 0;
+  position: relative;
   z-index: 8;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 3.5rem 1.25rem 4rem;
+  padding: 3rem 1.25rem;
   transform: translate3d(calc(var(--px) * 1px), calc(var(--py) * 1px), 0);
   will-change: transform;
 }
@@ -115,18 +134,20 @@
 }
 
 .fx-eyebrow {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.9rem;
+  align-self: flex-start;
+  gap: 0.8rem;
   margin-bottom: 1.4rem;
 }
 
 .fx-eyebrow::before,
 .fx-eyebrow::after {
   content: '';
-  width: 2.5rem;
+  width: 1.75rem;
   height: 1px;
-  background: rgba(178, 140, 70, 0.8);
+  background: rgba(178, 140, 70, 0.65);
+  flex: none;
 }
 
 .fx-eyebrow span {
@@ -143,21 +164,25 @@
   font-family: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
   font-size: clamp(56px, 6vw, 96px);
   line-height: 1.04;
-  letter-spacing: -0.01em;
-  text-shadow: 0 2px 28px rgba(0, 0, 0, 0.6), 0 0 64px rgba(201, 165, 92, 0.12);
+  letter-spacing: 0.005em;
+  text-shadow: 0 2px 28px rgba(0, 0, 0, 0.6), 0 0 40px rgba(190, 140, 54, 0.16);
 }
 
 .fx-title-crackers {
   display: block;
-  color: #f6efe0;
   font-weight: 500;
+  padding-bottom: 0.08em;
+  background: linear-gradient(180deg, #faf3e2 0%, #efe0c0 55%, #d9c193 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .fx-title-hyd {
   display: block;
   font-weight: 600;
   padding-bottom: 0.08em;
-  background: linear-gradient(180deg, #eed9a4 0%, #d4af68 55%, #b08a44 100%);
+  background: linear-gradient(115deg, #eed9a4 0%, #d29a41 42%, #a87c2c 68%, #dcb968 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -165,30 +190,19 @@
 
 /* Desktop: single-line title where horizontal space allows. Small screens
    keep the stacked two-line treatment so nothing overflows. */
-@media (min-width: 768px) {
-  .fx-title {
-    white-space: nowrap;
-  }
 
-  .fx-title-crackers {
-    display: inline;
-    margin-right: 0.28em;
-  }
-
-  .fx-title-hyd {
-    display: inline;
-  }
-}
 
 .fx-sub {
   margin: 1.3rem 0 0;
   font-family: var(--font-body);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.26em;
+  letter-spacing: 0.24em;
   text-indent: 0.1em;
-  color: rgba(248, 242, 231, 0.66);
+  color: rgba(240, 230, 210, 0.72);
 }
+
+
 
 .fx-ctas {
   margin-top: 2.6rem;
@@ -218,12 +232,12 @@
   background: linear-gradient(180deg, #ddbb72 0%, #be9550 100%);
   color: #241a0c;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 8px 26px rgba(190, 149, 80, 0.28);
+  box-shadow: 0 8px 26px rgba(190, 149, 80, 0.28), 0 0 18px rgba(194, 74, 29, 0.12);
 }
 
 .fx-btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 32px rgba(190, 149, 80, 0.4);
+  box-shadow: 0 12px 32px rgba(190, 149, 80, 0.4), 0 0 26px rgba(194, 74, 29, 0.18);
 }
 
 /* ---------------- 6. Cinematic grade (top, always readable) -------- */
@@ -245,8 +259,14 @@
   .fx-content { transform: none; }
 }
 
-/* ---------------- Small screens: scene stays, intensity drops --------- */
+/* ---------------- Small screens: calm and instant --------------------
+   No canvas (not rendered), no rise stagger, no parallax transforms —
+   content is simply visible. Desktop keeps the full cinematic language. */
 @media (max-width: 767px) {
+  .fx-rise { animation: none; opacity: 1; }
+  .fx-bg,
+  .fx-content { transform: none; }
+
   .fx-hero {
     height: clamp(560px, 92svh, 720px);
     min-height: 520px;
@@ -255,7 +275,7 @@
   .fx-content { padding: 3.5rem 1.25rem 4rem; }
 
   .fx-title {
-    font-size: clamp(42px, 12vw, 64px);
+    font-size: clamp(2rem, 8vw, 4.5rem);
     line-height: 1.08;
   }
 
@@ -278,4 +298,572 @@
     justify-content: center;
     width: 100%;
   }
+}
+
+/* =========================================================================
+   PREMIUM TWO-COLUMN HERO — brand left, product showcase right (dark only)
+   -------------------------------------------------------------------------
+   ONE clear source of truth: .fx-grid is a two-column grid on desktop and a
+   vertical stack below 1024px. The brand (eyebrow, title, subtitle, button)
+   is a single flex column in normal flow — the button always follows the
+   text with an intentional gap, never absolute, never stranded. The hero's
+   height comes from its content (min-height floor only), so there is no
+   blank gap before the trust bar. Fireworks canvas, grade and trust strip
+   are untouched.
+   ========================================================================= */
+
+.fx-grid {
+  display: grid;
+  width: min(1400px, 100%);
+  margin: 0 auto;
+  align-items: center;
+  column-gap: clamp(2rem, 4vw, 4rem);
+  padding-inline: clamp(24px, 4vw, 72px);
+  grid-template-columns: minmax(0, 45fr) minmax(0, 55fr);
+  grid-template-areas: 'brand showcase';
+}
+
+/* One central axis: the whole brand group is centered within its column —
+   eyebrow, stacked two-line heading, subtitle and CTA share one alignment. */
+.fx-brand {
+  grid-area: brand;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  min-width: 0;
+}
+
+.fx-brand .fx-eyebrow {
+  justify-content: center;
+  align-self: center;
+  margin-bottom: 24px;
+}
+
+.fx-brand .fx-title,
+.fx-brand .fx-sub {
+  text-align: center;
+}
+
+.fx-brand .fx-title {
+  margin-bottom: 20px;
+}
+
+.fx-brand .fx-sub {
+  margin-top: 0;
+  max-width: 26rem;
+}
+
+/* The button belongs to the text block: comfortable, intentional, in-flow. */
+.fx-brand .fx-ctas {
+  margin-top: 34px;
+  justify-content: center;
+}
+
+.fx-brand .fx-ctas .fx-btn-primary {
+  min-width: 170px;
+  justify-content: center;
+}
+
+.fx-showcase {
+  grid-area: showcase;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  /* Content-driven height with a controlled floor — the hero ends where its
+     content ends, directly above the trust bar. */
+  .fx-hero {
+    min-height: 560px;
+  }
+
+  .fx-content {
+    padding: 1.25rem;
+  }
+
+  /* One-line luxury heading: inline spans, never wrapped. Fluid size tuned
+     for the 45% column — nowrap can never overflow the page because the
+     grid column is minmax(0, …) and the hero clips horizontally by design. */
+  .fx-brand .fx-title {
+    max-width: 100%;
+    white-space: nowrap;
+    letter-spacing: -0.01em;
+    font-size: clamp(44px, 3.8vw, 58px);
+    line-height: 1.04;
+  }
+
+  .fx-brand .fx-title-crackers {
+    display: inline;
+    margin-right: 0.25em;
+  }
+
+  .fx-brand .fx-title-hyd {
+    display: inline;
+  }
+}
+
+/* Stacked hero: brand (with button) → product → info. Height grows with
+   content; the canvas still covers the full hero behind it. */
+@media (max-width: 1023.5px) {
+  .fx-hero {
+    height: auto;
+    min-height: 0;
+  }
+
+  .fx-content {
+    padding: 2rem 1.25rem 2.5rem;
+  }
+
+  .fx-grid {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0;
+    max-width: 640px;
+    padding-inline: 0;
+  }
+
+  .fx-brand {
+    align-items: center;
+    text-align: center;
+  }
+
+  .fx-brand .fx-eyebrow {
+    justify-content: center;
+    align-self: center;
+    margin-bottom: 16px;
+  }
+
+  .fx-brand .fx-title {
+    margin-bottom: 16px;
+  }
+
+  /* One line while it fits: fluid vw sizing + tight tracking keep the full
+     name on a single line down to small phones; only the narrowest screens
+     may wrap, and then only between the two words. */
+  .fx-brand .fx-title {
+    font-size: clamp(30px, 9.5vw, 44px);
+  }
+
+  .fx-brand .fx-title-crackers,
+  .fx-brand .fx-title-hyd {
+    display: inline;
+    white-space: nowrap;
+  }
+
+  .fx-brand .fx-title,
+  .fx-brand .fx-sub {
+    text-align: center;
+  }
+
+  .fx-brand .fx-ctas {
+    margin-top: 28px;
+    justify-content: center;
+  }
+
+  .fx-showcase {
+    width: min(100%, 560px);
+    margin-top: 32px;
+  }
+}
+
+/* =========================================================================
+   HERO SHOWCASE FRAME — dark glass, gold border, inner glow (dark only)
+   ========================================================================= */
+
+/* Frameless editorial showcase — no frame, no arch, no card, no border, no
+   ornaments. One large product floats over a whisper of warm light with a
+   soft ground shadow; name, price and a tiny annotation sit beneath it. */
+.hs-showcase {
+  position: relative;
+  width: min(100%, 600px);
+  margin-inline: auto;
+  outline: none;
+}
+
+.hs-showcase:focus-visible {
+  outline: 2px solid rgba(212, 175, 104, 0.6);
+  outline-offset: 8px;
+  border-radius: 12px;
+}
+
+
+
+/* Single-product stage: every slide shares one fixed grid cell, so exactly
+   ONE product is ever visible and the hero never changes size between
+   products. Inactive slides are visibility-hidden (unfocusable). */
+.hs-stage {
+  display: grid;
+  min-width: 0;
+}
+
+.hs-slide {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px) scale(0.97);
+  transition:
+    opacity var(--hs-t, 800ms) ease-out,
+    transform var(--hs-t, 800ms) ease-out,
+    visibility 0s linear var(--hs-t, 800ms);
+}
+
+.hs-slide.is-active {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    opacity var(--hs-t, 800ms) ease-out,
+    transform var(--hs-t, 800ms) ease-out,
+    visibility 0s;
+}
+
+.hs-slide-link {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  text-decoration: none;
+  border-radius: 12px;
+}
+
+.hs-slide-link:focus-visible {
+  outline: 2px solid #d4af68;
+  outline-offset: 2px;
+}
+
+/* Product zone — a fixed responsive stage with generous negative space.
+   Every aspect ratio (tall boxes, wide fireworks, square, transparent PNG)
+   stays fully visible via max-bounds + contain; nothing can overflow, crop,
+   or touch the text. */
+.hs-product-zone {
+  position: relative;
+  flex: none;
+  width: min(42vw, 520px);
+  max-width: 100%;
+  margin-inline: auto;
+  height: min(52vh, 520px);
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 16px;
+}
+
+/* Almost invisible stage light — a whisper of warmth so the product feels
+   photographed. Never a defined circle, halo, border, panel or card. */
+.hs-glow {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: min(78%, 340px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    rgba(170, 115, 45, 0.1),
+    transparent 65%
+  );
+}
+
+.hs-product-image {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  max-width: 92%;
+  max-height: 92%;
+  margin: auto;
+  object-fit: contain;
+  object-position: center;
+  opacity: 0;
+  filter: drop-shadow(0 16px 26px rgba(0, 0, 0, 0.5));
+}
+
+.hs-product-image.is-loaded {
+  opacity: 1;
+  transition: opacity 0.6s ease;
+}
+
+/* Soft grounding shadow beneath the product — no platform, no pedestal. */
+.hs-ground {
+  position: absolute;
+  left: 50%;
+  bottom: 7%;
+  width: 52%;
+  height: 20px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      closest-side,
+      rgba(0, 0, 0, 0.5) 0%,
+      rgba(120, 70, 25, 0.12) 55%,
+      transparent 100%
+    );
+  filter: blur(2px);
+}
+
+.hs-img-fallback {
+  font-family: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
+  font-size: 44px;
+  font-weight: 600;
+  color: #c9a961;
+}
+
+/* Tiny editorial saving note — plain muted-gold text inside the price row.
+   Never rendered without a discount; never overlaps the product. */
+.hs-save {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #d9bc7a;
+  white-space: nowrap;
+}
+
+/* Product meta — directly beneath the product, no box of any kind. */
+.hs-product-meta {
+  display: block;
+  flex: none;
+  padding: 6px 4px 0;
+}
+
+.hs-product-name {
+  display: block;
+  min-height: 2.5em;
+  max-width: 90%;
+  margin-inline: auto;
+  padding: 0 6px;
+  text-align: center;
+  text-wrap: balance;
+  font-family: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.28;
+  color: #F3EBDD;
+  overflow: hidden;
+}
+
+/* Thin dwell progress — fills over each display period, resets per product.
+   No numbers, no total, ever. */
+.hs-progress {
+  flex: none;
+  height: 2px;
+  max-width: 200px;
+  margin: 14px auto 0;
+  border-radius: 999px;
+  background: rgba(212, 175, 104, 0.16);
+  overflow: hidden;
+}
+
+.hs-progress span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: rgba(201, 169, 97, 0.85);
+  animation: hs-dwell linear forwards;
+}
+
+@keyframes hs-dwell {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+.hs-showcase .hs-price {
+  justify-content: center;
+  padding: 8px 10px 2px;
+}
+
+.hs-showcase .hs-price-now {
+  font-size: 21px;
+}
+
+.hs-price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.hs-price-now {
+  font-size: 14px;
+  font-weight: 800;
+  color: #eed9a4;
+}
+
+.hs-price-was {
+  font-size: 12px;
+  color: rgba(248, 242, 231, 0.45);
+  text-decoration: line-through;
+}
+
+
+
+/* Skeleton slots — dark shimmer, stage keeps its size while hydrating. */
+.hs-skel-line {
+  display: block;
+  background: linear-gradient(100deg, #1c130d 30%, #2b1d12 50%, #1c130d 70%);
+  background-size: 200% 100%;
+  animation: hs-shimmer 1.4s linear infinite;
+}
+
+/* Skeleton echoes a real product's footprint inside the fixed stage. */
+.hs-product-zone .hs-skel-product {
+  width: 56%;
+  height: 68%;
+  border-radius: 12px;
+  background: linear-gradient(100deg, #1c130d 30%, #2b1d12 50%, #1c130d 70%);
+  background-size: 200% 100%;
+  animation: hs-shimmer 1.4s linear infinite;
+}
+
+.hs-stage .hs-skel-line {
+  margin-inline: auto;
+}
+
+.hs-skel-line {
+  height: 10px;
+  border-radius: 6px;
+  margin: 8px 10px 0;
+}
+
+.hs-skel-line-a {
+  width: 82%;
+}
+
+.hs-skel-line-b {
+  width: 46%;
+  margin-bottom: 10px;
+}
+
+@keyframes hs-shimmer {
+  to { background-position: -200% 0; }
+}
+
+/* Smaller screens: product stays centered and fully visible, one product,
+   no page overflow. */
+@media (max-width: 1023.5px) {
+  .hs-showcase {
+    width: min(100%, 480px);
+  }
+
+  .hs-product-zone {
+    width: min(86vw, 420px);
+    height: max(300px, min(48vh, 440px));
+    padding: 14px;
+  }
+
+  .hs-product-name {
+    font-size: 18px;
+  }
+}
+
+/* Reduced motion: no transitions at all — products swap instantly.
+   (Auto-advance is already disabled in JS via useReducedMotion.) */
+@media (prefers-reduced-motion: reduce) {
+  .hs-product-zone .hs-skel-product,
+  .hs-skel-line,
+  .hs-progress span {
+    animation: none;
+  }
+
+  .hs-slide,
+  .hs-slide.is-active,
+  .hs-product-image,
+  .hs-product-image.is-loaded {
+    transform: none;
+    transition: none;
+  }
+
+  .fx-grid,
+  .fx-brand,
+  .fx-showcase {
+    transform: none;
+  }
+}
+/* =========================================================================
+   HERO ARTWORK MOTION (Canvas → Hero → Artwork Animation)
+   -------------------------------------------------------------------------
+   Applied to the COMPLETE artwork group (.hs-stage) only — never to
+   individual product images. The class and the duration come from the saved
+   configuration (heroArtworkAnimation) — nothing about the timing is
+   hardcoded here beyond the keyframes. Amplitude is intentionally small and
+   shrinks further on tablet/mobile so the artwork can never cause overflow;
+   reduced-motion keeps it completely static. Slide enter/exit fades stay on
+   .hs-slide (product-change transitions only) and never combine with this.
+   ========================================================================= */
+
+.hs-art {
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+@keyframes hs-art-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(calc(var(--hs-art-amp, 1) * -8px)); }
+}
+
+@keyframes hs-art-sway {
+  0%, 100% { transform: rotate(calc(var(--hs-art-amp, 1) * -3deg)); }
+  50% { transform: rotate(calc(var(--hs-art-amp, 1) * 3deg)); }
+}
+
+@keyframes hs-art-float-sway {
+  0%, 100% { transform: translateY(0) rotate(calc(var(--hs-art-amp, 1) * -1.6deg)); }
+  50% { transform: translateY(calc(var(--hs-art-amp, 1) * -7px)) rotate(calc(var(--hs-art-amp, 1) * 1.6deg)); }
+}
+
+@keyframes hs-art-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(calc(1 + var(--hs-art-amp, 1) * 0.015)); }
+}
+
+@keyframes hs-art-hover {
+  0%, 100% { transform: translateY(calc(var(--hs-art-amp, 1) * -4px)) rotate(calc(var(--hs-art-amp, 1) * -1.2deg)); }
+  50% { transform: translateY(calc(var(--hs-art-amp, 1) * 4px)) rotate(calc(var(--hs-art-amp, 1) * 1.2deg)); }
+}
+
+/* Circular orbit: rotation and translation travel together around the
+   center, so the group traces a small loop instead of rocking side to
+   side. First and last frames match for a seamless loop. */
+@keyframes hs-art-orbit {
+  0% { transform: translate(0, 0) rotate(calc(var(--hs-art-amp, 1) * -2deg)); }
+  25% { transform: translate(calc(var(--hs-art-amp, 1) * 3px), calc(var(--hs-art-amp, 1) * -3px)) rotate(calc(var(--hs-art-amp, 1) * -0.7deg)); }
+  50% { transform: translate(0, calc(var(--hs-art-amp, 1) * -5px)) rotate(calc(var(--hs-art-amp, 1) * 1deg)); }
+  75% { transform: translate(calc(var(--hs-art-amp, 1) * -3px), calc(var(--hs-art-amp, 1) * -3px)) rotate(calc(var(--hs-art-amp, 1) * 0.7deg)); }
+  100% { transform: translate(0, 0) rotate(calc(var(--hs-art-amp, 1) * -2deg)); }
+}
+
+.hs-art-gentle-float { animation-name: hs-art-float; }
+.hs-art-slow-sway { animation-name: hs-art-sway; }
+.hs-art-float-sway { animation-name: hs-art-float-sway; }
+.hs-art-orbit { animation-name: hs-art-orbit; }
+.hs-art-pulse { animation-name: hs-art-pulse; }
+.hs-art-hover { animation-name: hs-art-hover; }
+
+/* Movement amplitude shrinks on smaller viewports (timing is unaffected). */
+@media (max-width: 1023.5px) {
+  .hs-art { --hs-art-amp: 0.6; }
+}
+
+@media (max-width: 767px) {
+  .hs-art { --hs-art-amp: 0.4; }
+}
+
+/* Reduced motion: the artwork stays static (no timing changes, no motion). */
+@media (prefers-reduced-motion: reduce) {
+  .hs-art { animation: none; }
 }

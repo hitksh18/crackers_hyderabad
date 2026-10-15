@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Trash2, Minus, Plus, ShoppingBag, Truck, ArrowRight, PackageSearch } from 'lucide-react';
+import { Trash2, Minus, Plus, ShoppingBag, Truck, ArrowRight, ArrowLeft, PackageSearch } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import CouponOffers from '../components/CouponOffers';
 import QuantityInput from '../components/QuantityInput';
@@ -47,6 +47,17 @@ const rowVariants = (reduced) => ({
 const Cart = () => {
   const reduced = useReducedMotion();
   const { cart, hydrated, removeFromCart, updateQuantity, getCartTotal, coupon } = useCart();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  /* Small back navigation: previous page when the app owns the history
+     entry, otherwise a safe fallback to the catalogue (a direct visit to
+     /cart in a fresh tab must never trap the shopper here). */
+  const goBack = () => {
+    const hasAppHistory = location.key !== 'default' && window.history.length > 1;
+    if (hasAppHistory) navigate(-1);
+    else navigate('/products', { replace: true });
+  };
   const total = coupon ? coupon.total : getCartTotal();
   /* Minimum-order gate — same source of truth as checkout: the live
      adminSettings/main document, falling back to the shared threshold.
@@ -237,6 +248,26 @@ const Cart = () => {
     <div ref={lockRef} className="section-pad-sm cart-fit flex flex-col overflow-hidden pb-24 lg:pb-6">
       <Seo title="Your Cart | Crackers Hyderabad" noindex />
       <div className="shell shell-checkout flex min-h-0 flex-1 flex-col">
+        {/* Compact back navigation — explicit full-width, left-aligned row
+            above the shipping banner so no parent flex rule can centre it. */}
+        <div className="mb-2 flex w-full shrink-0 justify-start">
+          <button
+            type="button"
+            onClick={goBack}
+            aria-label="Go back to the previous page"
+            className="inline-flex min-h-[42px] items-center gap-1.5 rounded-[10px] border px-3.5 text-[13px] font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgba(210,166,79,0.65)] hover:bg-[rgba(210,166,79,0.08)] hover:text-[color:var(--gold-400)]"
+            style={{
+              background: 'transparent',
+              borderColor: 'rgba(210, 166, 79, 0.32)',
+              color: 'var(--text-body)',
+              fontFamily: 'var(--font-body)',
+            }}
+          >
+            <ArrowLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
+            Back
+          </button>
+        </div>
+
         {/* Compact shipping status — the single banner, same logic. */}
         <div className="panel-editorial glass-card mb-2 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2 sm:px-4">
           <span

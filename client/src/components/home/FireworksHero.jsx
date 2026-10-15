@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ShoppingBag } from 'lucide-react';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import HeroProductShowcase from './HeroProductShowcase';
 import {
   DEPTHS,
   PALETTES,
@@ -83,9 +84,11 @@ const glowSprite = (inner, outer, size, blur) => {
   return c;
 };
 
-const FireworksHero = ({ copy } = {}) => {
+const FireworksHero = ({ copy, products, showcaseLoading, artworkAnimation } = {}) => {
   /* Hero copy is Canvas-editable (settings/homepageConfig.heroCopy) with the
-     long-standing editorial below as fallback, so the hero never blanks. */
+     long-standing editorial below as fallback, so the hero never blanks.
+     `products` hydrates the right-column showcase progressively — the brand
+     copy never waits for it. */
   const c = {
     eyebrow: 'PREMIUM FIREWORKS STORE',
     titleA: 'Crackers',
@@ -853,7 +856,7 @@ const FireworksHero = ({ copy } = {}) => {
 
     /* Opening shell, then the director owns the sky forever. */
     st.last = performance.now();
-    st.nextAt = st.last + 700;
+    st.nextAt = st.last + 400;
     st.lastEventAt = st.last;
     st.raf = requestAnimationFrame(frame);
 
@@ -908,29 +911,43 @@ const FireworksHero = ({ copy } = {}) => {
     <div ref={rootRef} className="fx-hero" role="img" aria-label="Crackers Hyderabad fireworks celebration">
       <div aria-hidden="true" className="fx-bg" />
       <div aria-hidden="true" className="fx-mouselight" />
-      {/* Mobile (<768px): no canvas at all — the static CSS night sky stays.
-          The canvas effect early-returns without canvasRef, so no loop,
-          observers, or listeners start. Desktop is untouched. */}
-      {!isMobile && <canvas aria-hidden="true" ref={canvasRef} className="fx-canvas" />}
+      {/* The canvas runs on every viewport, phones included: the simulation
+          self-tunes via the isMobile/isTablet budgets (1 concurrent shell,
+          fewer particles, lower DPR), so mobile gets the same launch →
+          explosion → fade show at a fraction of the cost. pointer-events are
+          off (see CSS) so it can never block content interaction. */}
+      <canvas aria-hidden="true" ref={canvasRef} className="fx-canvas" />
 
       <div className="fx-content">
-        <p className="fx-eyebrow fx-rise" style={{ '--d': '0.15s' }}>
-          <span>{c.eyebrow}</span>
-        </p>
-        {/* Display type only — the page H1 lives once in Home.jsx, so this
-            stays a styled paragraph and the hero looks pixel-identical. */}
-        <p className="fx-title fx-rise" style={{ '--d': '0.3s' }}>
-          <span className="fx-title-crackers">{c.titleA}</span>
-          <span className="fx-title-hyd">{c.titleB}</span>
-        </p>
-        <p className="fx-sub fx-rise" style={{ '--d': '0.45s' }}>
-          {c.sub}
-        </p>
-        <div className="fx-ctas fx-rise" style={{ '--d': '0.6s' }}>
-          <Link to={c.ctaLink || '/products'} className="fx-btn-primary">
-            <ShoppingBag className="h-4 w-4" strokeWidth={2.1} aria-hidden="true" />
-            <span>{c.ctaText}</span>
-          </Link>
+        <div className="fx-grid">
+          {/* One cohesive brand group — eyebrow, title, subtitle and button
+              flow together in normal document flow; the button is never
+              separated from the text by grid rows or absolute offsets. */}
+          <div className="fx-brand">
+            <p className="fx-eyebrow fx-rise" style={{ '--d': '0.15s' }}>
+              <span>{c.eyebrow}</span>
+            </p>
+            {/* Display type only — the page H1 lives once in Home.jsx, so this
+                stays a styled paragraph and the hero looks pixel-identical. */}
+            <p className="fx-title fx-rise" style={{ '--d': '0.3s' }}>
+              <span className="fx-title-crackers">{c.titleA}</span>
+              <span className="fx-title-hyd">{c.titleB}</span>
+            </p>
+            <p className="fx-sub fx-rise" style={{ '--d': '0.45s' }}>
+              {c.sub}
+            </p>
+            <div className="fx-ctas fx-rise" style={{ '--d': '0.6s' }}>
+              <Link to={c.ctaLink || '/products'} className="fx-btn-primary" aria-label={c.ctaText || 'Shop now'}>
+                <ShoppingBag className="h-4 w-4" strokeWidth={2.1} aria-hidden="true" />
+                <span>{c.ctaText}</span>
+              </Link>
+            </div>
+          </div>
+          {/* Right-column showcase: renders instantly with a stable
+              placeholder and hydrates products when the catalogue arrives. */}
+          <div className="fx-showcase">
+            <HeroProductShowcase products={products} loading={showcaseLoading} artworkAnimation={artworkAnimation} />
+          </div>
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { ArchFrame, Diya } from '../ui/Ornaments';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { productPath } from '../../lib/productLinks';
+import { normalizeImageUrl } from '../../lib/normalizeImageUrl';
 
 const DISPLAY_MS = 3800;
 const FADE_MS = 420;
@@ -19,6 +20,13 @@ function shuffle(arr) {
 
 export default function ProductShowcase({ products = [] }) {
   const reduced = useReducedMotion();
+  /* Mobile (<768px): static first product — no rotation, no scale/fade.
+     Desktop and reduced-motion behavior are untouched. */
+  const isMobile = useMemo(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches,
+    []
+  );
+  const calm = reduced || isMobile;
 
   const eligible = useMemo(
     () => products.filter((p) => p.imageURL && !p.outOfStock),
@@ -57,10 +65,11 @@ export default function ProductShowcase({ products = [] }) {
   }, [current, eligible, secondaryProduct]);
 
   const preload = useCallback((product) => {
-    if (!product?.imageURL || preloadedRef.current.has(product.id)) return;
+    const src = normalizeImageUrl(product?.imageURL);
+    if (!src || preloadedRef.current.has(product.id)) return;
     preloadedRef.current.add(product.id);
     const img = new Image();
-    img.src = product.imageURL;
+    img.src = src;
   }, []);
 
   useEffect(() => {
@@ -72,7 +81,7 @@ export default function ProductShowcase({ products = [] }) {
   }, [sequence, seqIndex, preload]);
 
   useEffect(() => {
-    if (sequence.length < 2 || paused || reduced) return;
+    if (sequence.length < 2 || paused || calm) return;
 
     timerRef.current = setInterval(() => {
       setSeqIndex((prev) => {
@@ -85,7 +94,7 @@ export default function ProductShowcase({ products = [] }) {
     }, DISPLAY_MS);
 
     return () => clearInterval(timerRef.current);
-  }, [sequence, paused, reduced]);
+  }, [sequence, paused, calm]);
 
   useEffect(() => {
     const onVis = () => setPaused(document.visibilityState === 'hidden');
@@ -114,21 +123,21 @@ export default function ProductShowcase({ products = [] }) {
               background: 'rgba(26,23,20,0.92)',
               boxShadow: 'var(--shadow-lg)',
             }}
-            initial={{ opacity: 0, scale: reduced ? 1 : 0.85 }}
+            initial={{ opacity: 0, scale: calm ? 1 : 0.85 }}
             animate={{
               opacity: 1,
               scale: 1,
-              transition: { duration: reduced ? 0.001 : 0.4, ease: [0.16, 1, 0.3, 1] },
+              transition: { duration: calm ? 0.001 : 0.4, ease: [0.16, 1, 0.3, 1] },
             }}
             exit={{
               opacity: 0,
-              scale: reduced ? 1 : 0.88,
-              transition: { duration: reduced ? 0.001 : 0.28, ease: [0.55, 0.06, 0.68, 0.19] },
+              scale: calm ? 1 : 0.88,
+              transition: { duration: calm ? 0.001 : 0.28, ease: [0.55, 0.06, 0.68, 0.19] },
             }}
           >
-            {secondaryProduct?.imageURL && (
+            {normalizeImageUrl(secondaryProduct?.imageURL) && (
               <img
-                src={secondaryProduct.imageURL}
+                src={normalizeImageUrl(secondaryProduct.imageURL)}
                 alt={secondaryProduct.name || 'Featured firework'}
                 loading="lazy"
                 className="h-full w-full object-contain p-2"
@@ -147,7 +156,7 @@ export default function ProductShowcase({ products = [] }) {
       >
         <motion.div
           className="relative h-full w-full"
-          whileHover={reduced ? undefined : { scale: 1.03 }}
+          whileHover={calm ? undefined : { scale: 1.03 }}
           transition={{ type: 'spring', stiffness: 300, damping: 24 }}
         >
           <ArchFrame />
@@ -181,26 +190,26 @@ export default function ProductShowcase({ products = [] }) {
               <motion.div
                 key={mainProduct.id}
                 className="absolute inset-0 flex items-center justify-center"
-                initial={{ opacity: 0, scale: reduced ? 1 : 0.97 }}
+                initial={{ opacity: 0, scale: calm ? 1 : 0.97 }}
                 animate={{
                   opacity: 1,
                   scale: 1,
                   transition: {
-                    duration: reduced ? 0.001 : FADE_MS / 1000,
+                    duration: calm ? 0.001 : FADE_MS / 1000,
                     ease: [0.16, 1, 0.3, 1],
                   },
                 }}
                 exit={{
                   opacity: 0,
-                  scale: reduced ? 1 : 0.97,
+                  scale: calm ? 1 : 0.97,
                   transition: {
-                    duration: reduced ? 0.001 : FADE_MS / 1000,
+                    duration: calm ? 0.001 : FADE_MS / 1000,
                     ease: [0.55, 0.06, 0.68, 0.19],
                   },
                 }}
               >
                 <img
-                  src={mainProduct.imageURL}
+                  src={normalizeImageUrl(mainProduct.imageURL)}
                   alt={mainProduct.name || 'Premium firework product'}
                   loading="eager"
                   className="block max-h-[70%] max-w-[80%] object-contain sm:max-h-[72%] sm:max-w-[82%] md:max-h-[74%] md:max-w-[84%] lg:max-h-[76%] lg:max-w-[86%]"

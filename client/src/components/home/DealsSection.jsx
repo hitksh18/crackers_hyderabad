@@ -22,7 +22,7 @@ const DealsSection = ({ deals, heading }) => {
   if (!deals || deals.length === 0) return null;
 
   return (
-    <section className="section-pad" style={{ background: 'var(--surface-page)' }}>
+    <section className="section-pad home-sec-deals">
       <div className="shell-wide">
         <SectionHeading
           eyebrow={heading?.eyebrow || 'Festive Offers'}

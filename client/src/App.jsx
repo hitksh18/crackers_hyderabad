@@ -25,6 +25,7 @@ import { trackPageview } from './utils/siteTracker';
 // download the page they navigate to, never on the first load.
 import Home from './pages/Home';
 const Products = lazy(() => import('./pages/Products'));
+const Wishlist = lazy(() => import('./pages/Wishlist'));
 const About = lazy(() => import('./pages/About'));
 const Contact = lazy(() => import('./pages/Contact'));
 const ProductDetail = lazy(() => import('./pages/ProductDetail'));
@@ -36,6 +37,7 @@ const OrderTracking = lazy(() => import('./pages/OrderTracking'));
 const Login = lazy(() => import('./pages/Login'));
 const Profile = lazy(() => import('./pages/Profile'));
 const MyOrders = lazy(() => import('./pages/MyOrders'));
+const OrderDetails = lazy(() => import('./pages/OrderDetails'));
 
 // Staff and admin surfaces live in the separate admin frontend
 // (admin.crackershyderabad.com); the counter register lives at
@@ -145,6 +147,7 @@ function AppContent() {
             <Routes location={location}>
               <Route path="/" element={<Home />} />
               <Route path="/products" element={<Products />} />
+              <Route path="/wishlist" element={<Wishlist />} />
               <Route path="/about" element={<About />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/product/:slug" element={<ProductDetail />} />
@@ -167,6 +170,14 @@ function AppContent() {
                 element={
                   <ProtectedRoute>
                     <MyOrders />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/my-orders/:orderId"
+                element={
+                  <ProtectedRoute>
+                    <OrderDetails />
                   </ProtectedRoute>
                 }
               />

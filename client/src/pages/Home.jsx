@@ -40,6 +40,7 @@ import { readSiteSettings, firstAnnouncementText, DEFAULT_SEO } from '../lib/sit
 import { resolveTrustCards } from '../lib/trustIcons';
 import { buildBrandLookup, withResolvedBrands } from '../lib/resolveBrand';
 import { normalizeImageUrl } from '../lib/normalizeImageUrl';
+import { resolveHeroProducts } from '../lib/heroProducts';
 import Seo, { SITE_URL } from '../components/Seo';
 import toast from '../utils/toast';
 
@@ -433,6 +434,19 @@ const Home = () => {
         (a.name || '').localeCompare(b.name || '')
     ), [allProducts]);
 
+  /* Hero showcase pool — resolved from the Admin → Hero Products config
+     (mode/category/custom group) against the SAME catalogue fetch above (no
+     second request). Deterministic: the seeded random set is identical on
+     every render/session and only changes when the admin saves a new seed. */
+  const heroProducts = useMemo(
+    () => resolveHeroProducts(
+      allProducts,
+      homepageConfig?.heroProducts,
+      homepageConfig?.heroProductGroups,
+    ).list,
+    [allProducts, homepageConfig]
+  );
+
   /* Canvas-editable copy. Every field falls back to the long-standing
      hardcoded editorial, so a homepage saved before the canvas still
      renders exactly as before. maxItems 0/undefined means "show all". */
@@ -528,12 +542,20 @@ const Home = () => {
       durationSec={homepageConfig?.carouselDurationSec ?? 5}
       loading={false}
       copy={homepageConfig?.heroCopy}
+      heroProducts={heroProducts}
+      showcaseLoading={loading}
+      heroArtworkAnimation={homepageConfig?.heroArtworkAnimation}
     />
   );
 
   // Builder-driven section order with fallback
   const sections = (builderConfig?.sections || []).filter(s => s.enabled !== false).sort((a,b) => (a.order??999)-(b.order??999));
   const hasBuilder = sections.length > 0;
+  /* The hero renders unless the builder carries an explicitly-disabled hero
+     entry — matching what Canvas previews. No builder entry (or no builder
+     at all) means the hero always shows, preserving legacy behavior. */
+  const heroEntry = (builderConfig?.sections || []).find((s) => s.type === 'hero');
+  const showHero = !heroEntry || heroEntry.enabled !== false;
 
   const renderSection = (section) => {
     switch (section.type) {
@@ -554,7 +576,7 @@ const Home = () => {
         return <FeaturedSection key={section.id} products={featuredShown} heading={homepageContent.featured} loading={loading} />;
       case 'bestSellers':
         return (
-          <section key={section.id} className="section-pad" style={{ background: 'var(--surface-page)' }}>
+          <section key={section.id} className="section-pad home-sec-best">
             <div className="shell-wide">
               <HomeProductRail eyebrow={homepageContent.bestSellers.eyebrow} title={homepageContent.bestSellers.title} subtitle={homepageContent.bestSellers.subtitle} products={bestShown} loading={loading} railLabel="best sellers" />
             </div>
@@ -589,7 +611,7 @@ const Home = () => {
         return <TrustSection key={section.id} heading={homepageContent.trust} cards={trustCards} />;
       case 'newsletter':
         return (
-          <section key={section.id} className="section-pad" style={{ background: 'var(--surface-sunken)' }}>
+          <section key={section.id} className="section-pad home-sec-news">
             <div className="shell-wide">
               <div className="grid gap-6 lg:grid-cols-[48fr_52fr] lg:gap-6">
                 <NewsletterBlock email={newsletterEmail} onEmailChange={(e) => setNewsletterEmail(e.target.value)} onSubmit={handleSubscribe} copy={newsletterCopy} />
@@ -635,7 +657,7 @@ const Home = () => {
           the critical early sections below never sit inside a Suspense
           boundary, so lazy below-fold chunks can never delay them or let
           the footer jump up before them. */}
-      {hero}
+      {showHero && hero}
 
       {/* Below the fold: synchronously-bundled critical sections render
           immediately in document order; heavy optional chunks resolve in
@@ -658,7 +680,7 @@ const Home = () => {
         <>
           <CategoryShowcase sectionRef={categoriesRef} countInCategory={countInCategory} categories={visibleCategories} heading={homepageContent.categories} />
           <FeaturedSection products={featuredShown} heading={homepageContent.featured} loading={loading} />
-          <section className="section-pad" style={{ background: 'var(--surface-page)' }}>
+          <section className="section-pad home-sec-best">
             <div className="shell-wide">
               <HomeProductRail eyebrow={homepageContent.bestSellers.eyebrow} title={homepageContent.bestSellers.title} subtitle={homepageContent.bestSellers.subtitle} products={bestShown} loading={loading} railLabel="best sellers" />
             </div>
@@ -706,7 +728,7 @@ const Home = () => {
           <TrustSection heading={homepageContent.trust} cards={trustCards} />
           <SectionErrorBoundary>
             <Suspense fallback={null}>
-              <section className="section-pad" style={{ background: 'var(--surface-sunken)' }}>
+              <section className="section-pad home-sec-news">
                 <div className="shell-wide">
                   <div className="grid gap-6 lg:grid-cols-[48fr_52fr] lg:gap-6">
                     <NewsletterBlock email={newsletterEmail} onEmailChange={(e) => setNewsletterEmail(e.target.value)} onSubmit={handleSubscribe} copy={newsletterCopy} />

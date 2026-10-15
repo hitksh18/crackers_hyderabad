@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { cachedGetDocs, invalidateCache } from '../lib/firestoreCache';
+import { brandSlugify, ensureUniqueBrandSlug, findDuplicateBrand, normalizeBrandName } from '../lib/brands';
 import { uploadImage } from '../utils/uploadImage';
 import { useNavigate } from 'react-router-dom';
 import toast from '../utils/toast';
@@ -42,6 +44,7 @@ const AddProduct = () => {
     description: '',
     isFeatured: false,
     sortOrder: '',
+    brandId: '',
     brand: '',
     highlightBrand: '',
     highlightQuantity: '',
@@ -64,15 +67,19 @@ const AddProduct = () => {
 
   const fetchBrands = async () => {
     try {
-      const snapshot = await getDocs(collection(db, 'brands'));
-      const brandsList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setBrands(brandsList);
+      /* Shared cache with the Brands page — one download per minute. */
+      const brandsList = await cachedGetDocs(collection(db, 'brands'), 'brands');
+      setBrands(Array.isArray(brandsList) ? brandsList : []);
     } catch (error) {
       console.error('Error fetching brands:', error);
     }
+  };
+
+  /* Managed brand pick: the stable id is the source of truth, the name rides
+     along as denormalized display text for legacy compatibility. */
+  const handleBrandSelect = (brand) => {
+    if (!brand) setFormData((prev) => ({ ...prev, brandId: '', brand: '' }));
+    else setFormData((prev) => ({ ...prev, brandId: brand.id, brand: brand.name }));
   };
 
   const handleBrandLogoFileChange = (e) => {
@@ -88,14 +95,19 @@ const AddProduct = () => {
   };
 
   const handleAddBrand = async () => {
-    if (!newBrandName.trim()) {
+    const name = normalizeBrandName(newBrandName);
+    if (!name) {
       toast.error('Please enter a brand name');
+      return;
+    }
+    if (findDuplicateBrand(brands, name)) {
+      toast.error(`"${name}" already exists — pick it from the list instead`);
       return;
     }
 
     try {
       setUploadingBrandLogo(true);
-      let logoURL = newBrandLogo.trim();
+      let logoURL = normalizeBrandName(newBrandLogo);
 
       if (brandLogoFile) {
         try {
@@ -109,21 +121,26 @@ const AddProduct = () => {
           toast.dismiss('brand-logo-upload');
           console.error('Logo upload failed:', uploadError);
           toast.error('Logo upload failed. Using URL instead if provided.');
-          logoURL = newBrandLogo.startsWith('data:') ? '' : newBrandLogo.trim();
+          logoURL = newBrandLogo.startsWith('data:') ? '' : normalizeBrandName(newBrandLogo);
         }
       }
 
+      const slug = await ensureUniqueBrandSlug(brandSlugify(name));
       const brandData = {
-        name: newBrandName.trim(),
+        name,
+        slug,
         logo: logoURL,
-        description: newBrandDescription.trim() || '',
-        createdAt: new Date()
+        description: normalizeBrandName(newBrandDescription),
+        active: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
 
       const docRef = await addDoc(collection(db, 'brands'), brandData);
 
       setBrands([...brands, { id: docRef.id, ...brandData }]);
-      setFormData({ ...formData, brand: newBrandName.trim() });
+      invalidateCache('coll:brands');
+      setFormData({ ...formData, brandId: docRef.id, brand: name });
       setNewBrandName('');
       setNewBrandLogo('');
       setNewBrandDescription('');
@@ -308,6 +325,7 @@ const AddProduct = () => {
         imageURL2: finalImageURL2,
         isFeatured: formData.isFeatured,
         ...(formData.sortOrder !== '' ? { sortOrder: parseInt(formData.sortOrder, 10) } : {}),
+        brandId: formData.brandId || null,
         brand: formData.brand || null,
         highlights: {
           brand: (formData.highlightBrand || '').trim(),
@@ -389,7 +407,7 @@ const AddProduct = () => {
         onImageChange2={handleImageChange2}
         onImageURLChange2={handleImageURLChange2}
         onToggleUseURL2={handleToggleUseURL2}
-        onBrandChange={handleChange}
+        onBrandSelect={handleBrandSelect}
         onShowAddBrand={() => setShowAddBrand(true)}
         onMarkTouched={markTouched}
         onSubmit={handleSubmit}

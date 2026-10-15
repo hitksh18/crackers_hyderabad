@@ -1,9 +1,9 @@
 /* =========================================================================
    Fireworks director — composition rules for the hero show.
 
-   A motion-designer's rundown, not a particle function:
+    A motion-designer's rundown, not a particle function:
 
-     1. pick a launch lane (five fixed pads, centre rarely used)
+    1. pick a launch lane (five fixed pads across the full sky band)
      2. pick a size on the 70 / 25 / 5 curve (small-medium / large /
         spectacular, with cooldowns so the big ones stay special)
      3. pick an apex almost directly above the pad — near-vertical flight
@@ -30,21 +30,30 @@ const weighted = (items) => {
   return items[items.length - 1];
 };
 
-/* Hard protected brand block, as fractions of hero size. No burst disc may
-   touch it; no rocket may pass through it. */
-export const SAFE = { x0: 0.28, x1: 0.72, y0: 0.3, y1: 0.72 };
+/* Protected content band, as fractions of hero size. The hero is a two-column
+   composition — brand copy left-of-centre, product showcase right-of-centre,
+   both vertically centred — so there is no single central block to avoid any
+   more. The whole band below the open sky is protected instead: no burst
+   disc may touch it, no rocket may pass through it. Bursts live in the top
+   sky band (see ALTITUDE), arcing over both columns; the DOM content paints
+   above the canvas, so text, buttons and product stay readable and clickable
+   while bursts bloom behind/around them. */
+export const SAFE = { x0: 0.0, x1: 1.0, y0: 0.3, y1: 0.8 };
 
 /* Bursts must stay above this fraction of hero height — shells climb out of
    the dark bottom band and break in the open sky. */
 export const SKYLINE_TOP = 0.875;
 
-/* Four launch pads across the bottom edge; the centre stays clear for the
-   brand. Shells emerge from below the hero's bottom edge. */
+/* Five launch pads across the bottom edge, centre included: the sky band
+   above the two hero columns is open across the full width, so top-centre
+   bursts arc over (never through) the content. Shells emerge from below the
+   hero's bottom edge. */
 export const LANES = [
-  { x: 0.15, weight: 26 },
-  { x: 0.3, weight: 24 },
-  { x: 0.7, weight: 24 },
-  { x: 0.85, weight: 26 },
+  { x: 0.15, weight: 22 },
+  { x: 0.3, weight: 19 },
+  { x: 0.5, weight: 20 },
+  { x: 0.7, weight: 19 },
+  { x: 0.85, weight: 22 },
 ];
 
 /* Six sky zones (A-F: far left through far right). The director remembers
@@ -53,10 +62,11 @@ export const LANES = [
 const ZONE_COUNT = 6;
 const zoneOf = (x, w) => Math.min(ZONE_COUNT - 1, Math.max(0, Math.floor((x / w) * ZONE_COUNT)));
 
-/* Apex altitude bands per size, as fractions of hero height. */
+/* Apex altitude bands per size, as fractions of hero height. All apices sit
+   inside the open sky band, clear of the protected content below. */
 const ALTITUDE = {
-  small: [0.12, 0.35],
-  medium: [0.1, 0.3],
+  small: [0.1, 0.28],
+  medium: [0.08, 0.24],
   large: [0.06, 0.22],
   spectacular: [0.05, 0.18],
 };
@@ -222,9 +232,10 @@ export const planShot = (scene, now, opts) => {
     let radius = (rand(size.r[0], size.r[1]) * w) / 2;
     radius *= D.scale;
 
-    /* The whole burst disc must clear the brand block with margin — streaks
-       and glow travel past the nominal radius. */
-    if (rectHitsSafe(apexX, apexY, radius * 1.15, w, h)) continue;
+    /* The burst core must clear the content band — only the nominal radius
+       is enforced, so soft outer glow may kiss the content edge (it paints
+       behind the DOM content, never over it). */
+    if (rectHitsSafe(apexX, apexY, radius, w, h)) continue;
     /* Bursts live in the sky, never in the skyline band. */
     if (apexY / h > SKYLINE_TOP - 0.03) continue;
 

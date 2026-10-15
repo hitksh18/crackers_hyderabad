@@ -492,7 +492,7 @@ async function resolveSendCustom(db, { event, order, code, trackUrl, invoiceUrl,
  * Returns { ok, messageId?, skipped?, error?, unresolved? }. Never throws.
  */
 async function sendAutomationEmail(db, {
-  event, order, code, status, trackUrl, invoiceUrl, transporter,
+  event, order, code, status, trackUrl, invoiceUrl, transporter, fallbackSubject,
 } = {}) {
   try {
     const rules = (await readAutomationRules(db).catch(() => null)) || null;
@@ -523,7 +523,13 @@ async function sendAutomationEmail(db, {
       items: order.items, subtotal: order.subtotal, discount: order.discount,
       couponCode: order.coupon?.code,
     });
-    const subject = renderSubject(code, status, customSubject);
+    const subject = renderSubject(
+      code,
+      status,
+      // A stored template subject always wins; the fallback only covers the
+      // default template, so an update mail never reads "is confirmed".
+      (customSubject && String(customSubject).trim()) ? customSubject : fallbackSubject
+    );
 
     const emailConfig = require('./email').readEmailConfig();
     if (!emailConfig.enabled) return { ok: false, skipped: 'disabled' };
@@ -668,6 +674,9 @@ async function sendDetailsUpdatedEmail(db, orderId) {
 
     const result = await sendAutomationEmail(db, {
       event: 'detailsUpdated', order, code, status: order.status || 'Pending', trackUrl, invoiceUrl,
+      // Default subject when the stored template sets none: the order status
+      // did not change, so "is confirmed" would be wrong — say it was updated.
+      fallbackSubject: `Your Crackers Hyderabad Order #${code} was updated`,
     });
     try {
       if (result.ok) {

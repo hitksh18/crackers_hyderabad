@@ -25,7 +25,7 @@ import { modalVariants, revealVariants, staggerParent } from '../lib/motion';
 import { inr } from '../lib/currency';
 import { normalizeImageUrl, logBrokenImageUrl } from '../lib/normalizeImageUrl';
 import { productPath, slugify } from '../lib/productLinks';
-import { buildBrandLookup, resolveBrand, withResolvedBrands } from '../lib/resolveBrand';
+import { buildBrandLookup, brandSlugOf, resolveBrand, withResolvedBrands } from '../lib/resolveBrand';
 import { trackProductEvent } from '../lib/analytics';
 import { trackViewItem } from '../lib/ga4';
 import Seo, { SITE_URL } from '../components/Seo';
@@ -345,6 +345,10 @@ const ProductDetail = () => {
   const hasDiscount = product.discountPrice && product.discountPrice < originalPrice;
   const brandName = brandInfo.name || (typeof product.brand === 'string' ? product.brand : (product.brand?.name || null));
   const brandLogo = normalizeImageUrl(brandInfo.logo || product.brand?.logo || null);
+  /* Brand collection link — the same Products page filtered by ?brand=slug. */
+  const brandLink = brandName
+    ? `/products?brand=${encodeURIComponent(brandSlugOf({ ...brandInfo, name: brandName }) || brandName)}`
+    : null;
   const outOfStock = product.outOfStock === true;
   const wished = isWishlisted(product.id);
   const stockLeft = typeof product.stock === 'number' ? product.stock : null;
@@ -723,7 +727,13 @@ const ProductDetail = () => {
                   onError={(e) => { e.currentTarget.style.display = 'none'; }}
                 />
               )}
-              <span className="pd-brandname">{brandName || 'Crackers Hyderabad'}</span>
+              {brandLink ? (
+                <Link to={brandLink} className="pd-brandname" title={`More from ${brandName}`}>
+                  {brandName || 'Crackers Hyderabad'}
+                </Link>
+              ) : (
+                <span className="pd-brandname">{brandName || 'Crackers Hyderabad'}</span>
+              )}
               <span className="pd-licensed">
                 <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden="true" />
                 Licensed Product

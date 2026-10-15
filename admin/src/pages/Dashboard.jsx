@@ -16,6 +16,7 @@ import {
   Image as ImageIcon,
   Settings,
   Boxes,
+  Award,
   Star,
   TicketPercent,
 } from 'lucide-react';
@@ -38,6 +39,7 @@ const QUICK_ACTIONS = [
   { id: 'users', to: '/users', label: 'Users', desc: 'Manage customers and users', icon: Users },
   { id: 'homepage', to: '/canvas', label: 'Canvas', desc: 'Edit homepage', icon: ImageIcon },
   { id: 'categories', to: '/categories', label: 'Categories', desc: 'Manage product categories', icon: Boxes },
+  { id: 'brands', to: '/brands', label: 'Brands', desc: 'Manage product brands', icon: Award },
   { id: 'site-settings', to: '/site-settings', label: 'Site Settings', desc: 'Configure site/order settings', icon: Settings },
   { id: 'products', to: '/products', label: 'Manage Products', desc: 'View and manage products', icon: Package },
   { id: 'coupons', to: '/coupons', label: 'Create Coupon', desc: 'Create and manage discount coupons', icon: TicketPercent },

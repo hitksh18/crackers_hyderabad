@@ -6,6 +6,7 @@ import {
   Home as HomeIcon,
   ShoppingBag,
   ShoppingCart,
+  Heart,
   User,
   LogIn,
   LogOut,
@@ -33,6 +34,7 @@ const MobileMenu = ({
   pathname,
   user,
   cartCount,
+  wishlistCount,
   onSignOut,
   phoneHref,
 }) => {
@@ -86,7 +88,8 @@ const MobileMenu = ({
   const primaryLinks = [
     { to: '/', label: 'Home', icon: HomeIcon },
     { to: '/products', label: 'Products', icon: ShoppingBag },
-    { to: '/cart', label: 'Cart', icon: ShoppingCart, count: cartCount },
+    { to: '/cart', label: 'Cart', icon: ShoppingCart, count: cartCount, unit: 'items in cart' },
+    { to: '/wishlist', label: 'Favorites', icon: Heart, count: wishlistCount, unit: 'items in favorites' },
   ];
 
   /* Staff surfaces live in the separate admin frontend — the storefront menu
@@ -179,7 +182,7 @@ const MobileMenu = ({
                     {item.count > 0 && (
                       <span className="badge badge-ember tabular shrink-0">
                         {item.count}
-                        <span className="sr-only"> items in cart</span>
+                        <span className="sr-only"> {item.unit || 'items'}</span>
                       </span>
                     )}
                     <Icon

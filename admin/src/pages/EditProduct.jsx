@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { doc, getDoc, updateDoc, collection, getDocs, addDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { cachedGetDocs, invalidateCache } from '../lib/firestoreCache';
+import { brandSlugify, ensureUniqueBrandSlug, findDuplicateBrand, normalizeBrandName } from '../lib/brands';
 import { uploadImage } from '../utils/uploadImage';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from '../utils/toast';
@@ -52,6 +54,7 @@ const EditProduct = () => {
     description: '',
     isFeatured: false,
     sortOrder: '',
+    brandId: '',
     brand: '',
     highlightBrand: '',
     highlightQuantity: '',
@@ -68,7 +71,20 @@ const EditProduct = () => {
     tags: '',
   });
 
-  const fetchProduct = useCallback(async () => {
+  const fetchBrands = useCallback(async () => {
+    try {
+      /* Shared cache with the Brands page — one download per minute. */
+      const brandsList = await cachedGetDocs(collection(db, 'brands'), 'brands');
+      const list = Array.isArray(brandsList) ? brandsList : [];
+      setBrands(list);
+      return list;
+    } catch (error) {
+      console.error('Error fetching brands:', error);
+      return [];
+    }
+  }, []);
+
+  const fetchProduct = useCallback(async (brandsList = []) => {
     try {
       const docRef = doc(db, 'products', id);
       const [docSnap, pricing] = await Promise.all([
@@ -86,6 +102,28 @@ const EditProduct = () => {
         currentOldSlugsRef.current = Array.isArray(data.oldSlugs)
           ? data.oldSlugs.filter((s) => typeof s === 'string')
           : [];
+        /* Brand resolution: stable id first; a legacy brand string that
+           matches a managed record adopts that record; unmatched text is
+           preserved as-is so nothing the shop already shows is lost. */
+        const matchByName = (raw) => (Array.isArray(brandsList) ? brandsList : []).find(
+          (b) => normalizeBrandName(b.name).toLowerCase() === normalizeBrandName(raw).toLowerCase(),
+        );
+        const rawId = (typeof data.brandId === 'string' && data.brandId)
+          || (data.brand && typeof data.brand === 'object' && data.brand.id) || '';
+        const rawName = typeof data.brand === 'string' ? data.brand : (data.brand?.name || '');
+        let brandId = '';
+        let brandName = normalizeBrandName(rawName);
+        const idMatch = rawId ? (brandsList || []).find((b) => String(b.id) === String(rawId)) : null;
+        if (idMatch) {
+          brandId = idMatch.id;
+          brandName = normalizeBrandName(idMatch.name);
+        } else if (brandName) {
+          const nameMatch = matchByName(brandName);
+          if (nameMatch) {
+            brandId = nameMatch.id;
+            brandName = normalizeBrandName(nameMatch.name);
+          }
+        }
         setFormData({
           name: data.name || '',
           categories: data.categories || (data.category ? [data.category] : []),
@@ -98,7 +136,8 @@ const EditProduct = () => {
           description: data.description || '',
           isFeatured: data.isFeatured || false,
           sortOrder: data.sortOrder != null ? String(data.sortOrder) : '',
-          brand: typeof data.brand === 'string' ? data.brand : (data.brand?.name || ''),
+          brandId,
+          brand: brandName,
           highlightBrand: data.highlights?.brand || '',
           highlightQuantity: data.highlights?.quantity || '',
           highlightEffect: data.highlights?.effect || '',
@@ -127,22 +166,12 @@ const EditProduct = () => {
     }
   }, [id]);
 
-  const fetchBrands = useCallback(async () => {
-    try {
-      const snapshot = await getDocs(collection(db, 'brands'));
-      const brandsList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setBrands(brandsList);
-    } catch (error) {
-      console.error('Error fetching brands:', error);
-    }
-  }, []);
-
   useEffect(() => {
-    fetchProduct();
-    fetchBrands();
+    /* Brands first — product brand resolution needs the managed records. */
+    (async () => {
+      const list = await fetchBrands();
+      await fetchProduct(list);
+    })();
   }, [fetchProduct, fetchBrands]);
 
   const handleBrandLogoFileChange = (e) => {
@@ -157,15 +186,27 @@ const EditProduct = () => {
     }
   };
 
+  /* Managed brand pick: the stable id is the source of truth, the name rides
+     along as denormalized display text for legacy compatibility. */
+  const handleBrandSelect = (brand) => {
+    if (!brand) setFormData((prev) => ({ ...prev, brandId: '', brand: '' }));
+    else setFormData((prev) => ({ ...prev, brandId: brand.id, brand: brand.name }));
+  };
+
   const handleAddBrand = async () => {
-    if (!newBrandName.trim()) {
+    const name = normalizeBrandName(newBrandName);
+    if (!name) {
       toast.error('Please enter a brand name');
+      return;
+    }
+    if (findDuplicateBrand(brands, name)) {
+      toast.error(`"${name}" already exists — pick it from the list instead`);
       return;
     }
 
     try {
       setUploadingBrandLogo(true);
-      let logoURL = newBrandLogo.trim();
+      let logoURL = normalizeBrandName(newBrandLogo);
 
       if (brandLogoFile) {
         try {
@@ -179,21 +220,26 @@ const EditProduct = () => {
           toast.dismiss('brand-logo-upload');
           console.error('Logo upload failed:', uploadError);
           toast.error('Logo upload failed. Using URL instead if provided.');
-          logoURL = newBrandLogo.startsWith('data:') ? '' : newBrandLogo.trim();
+          logoURL = newBrandLogo.startsWith('data:') ? '' : normalizeBrandName(newBrandLogo);
         }
       }
 
+      const slug = await ensureUniqueBrandSlug(brandSlugify(name));
       const brandData = {
-        name: newBrandName.trim(),
+        name,
+        slug,
         logo: logoURL,
-        description: newBrandDescription.trim() || '',
-        createdAt: new Date()
+        description: normalizeBrandName(newBrandDescription),
+        active: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
 
       const docRef = await addDoc(collection(db, 'brands'), brandData);
 
       setBrands([...brands, { id: docRef.id, ...brandData }]);
-      setFormData({ ...formData, brand: newBrandName.trim() });
+      invalidateCache('coll:brands');
+      setFormData({ ...formData, brandId: docRef.id, brand: name });
       setNewBrandName('');
       setNewBrandLogo('');
       setNewBrandDescription('');
@@ -366,6 +412,7 @@ const EditProduct = () => {
         imageURL2: imageURL2Final,
         isFeatured: formData.isFeatured,
         ...(formData.sortOrder !== '' ? { sortOrder: parseInt(formData.sortOrder, 10) } : {}),
+        brandId: formData.brandId || null,
         brand: formData.brand || null,
         highlights: {
           brand: (formData.highlightBrand || '').trim(),
@@ -450,7 +497,7 @@ const EditProduct = () => {
         onImageChange2={handleImageChange2}
         onImageURLChange2={handleImageURLChange2}
         onToggleUseURL2={handleToggleUseURL2}
-        onBrandChange={handleChange}
+        onBrandSelect={handleBrandSelect}
         onShowAddBrand={() => setShowAddBrand(true)}
         onMarkTouched={markTouched}
         onSubmit={handleSubmit}

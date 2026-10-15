@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
+  Award,
   BarChart3,
   Boxes,
   ChevronLeft,
@@ -16,6 +17,7 @@ import {
   Receipt,
   Settings,
   ShoppingCart,
+  Sparkles,
   Tag,
   Users,
   X,
@@ -55,6 +57,7 @@ const GROUPS = [
       },
       { to: '/products/add', label: 'Add Product', icon: Plus },
       { to: '/categories', label: 'Categories', icon: Boxes },
+      { to: '/brands', label: 'Brands', icon: Award, prefetch: true },
       { to: '/coupons', label: 'Coupons', icon: Tag, prefetch: true },
       { to: '/price-list', label: 'Price List', icon: FileText },
       { to: BILLING_URL, label: 'Billing / POS', icon: Receipt, external: true },
@@ -64,6 +67,7 @@ const GROUPS = [
     title: 'Website',
     items: [
       { to: '/canvas', label: 'Canvas', icon: ImageIcon, prefetch: true },
+      { to: '/hero-products', label: 'Hero Products', icon: Sparkles, prefetch: true },
       { to: '/site-settings', label: 'Site Settings', icon: Settings },
     ],
   },
@@ -83,9 +87,11 @@ const COLLAPSE_KEY = 'admin_sidebar_collapsed';
    prefetch is a no-op once cached. */
 const ROUTE_PREFETCHERS = {
   '/canvas': () => import('../../pages/Canvas'),
+  '/hero-products': () => import('../../pages/HeroProducts'),
   '/orders': () => import('../../pages/Orders'),
   '/analytics': () => import('../../pages/Analytics'),
   '/products': () => import('../../pages/Products'),
+  '/brands': () => import('../../pages/Brands'),
   '/coupons': () => import('../../pages/Coupons'),
   '/email-automation': () => import('../../pages/EmailAutomation'),
 };

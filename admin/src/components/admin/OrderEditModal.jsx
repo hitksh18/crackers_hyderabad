@@ -1,13 +1,16 @@
+import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Minus, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { modalVariants } from '../../lib/motion';
+import OrderDiscountSection from './OrderDiscountSection';
 
 /**
  * Order editor.
  *
- * Purely presentational — every mutation is handed back to the Orders page,
- * which owns the Firestore write, the minimum-order rule and the totals maths.
+ * Purely presentational — the line-total preview below is display-only. The
+ * owning page saves through POST /api/admin/orders/:id/items, and the server
+ * recalculates and persists the authoritative subtotal/discount/total.
  */
 
 const lineTotal = (item) => (item.discountPrice || item.price) * item.quantity;
@@ -28,10 +31,36 @@ const OrderEditModal = ({
   onRemoveItem,
   onCancel,
   onSave,
+  busy = false,
+  discountData = null,
+  discountLoading = false,
+  discountError = '',
+  onApplyCoupon = () => {},
+  onApplyCustom = () => {},
+  onRemoveCoupon = () => {},
+  couponBusy = false,
 }) => {
   const reduced = useReducedMotion();
-  const newTotal = items.reduce((sum, item) => sum + lineTotal(item), 0);
-  const totalChanged = order.total !== newTotal;
+
+  /* Lock background scrolling while the editor is open; the modal content
+     area scrolls on its own below. */
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  const editedSubtotal = items.reduce((sum, item) => sum + lineTotal(item), 0);
+  /* Edited lines vs the SAVED order: coupon actions always run against the
+     saved order, so they stay disabled until item edits are saved. */
+  const savedSig = JSON.stringify((order.items || []).map((item) => [item.id, item.quantity]));
+  const editedSig = JSON.stringify(items.map((item) => [item.id, item.quantity]));
+  const itemsDirty = savedSig !== editedSig;
+  const savedDiscount = Number(order.discount) || 0;
+  const previewTotal = Math.max(0, editedSubtotal - savedDiscount);
+  const totalChanged = order.total !== previewTotal;
 
   return (
     <motion.div
@@ -50,8 +79,9 @@ const OrderEditModal = ({
         animate="visible"
         exit="exit"
         variants={modalVariants(reduced)}
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden"
+        className="flex max-h-[90vh] w-full flex-col overflow-hidden"
         style={{
+          width: 'min(1100px, calc(100vw - 40px))',
           background: 'var(--surface-card)',
           border: '1px solid var(--hairline)',
           borderRadius: 'var(--r-xl)',
@@ -82,14 +112,17 @@ const OrderEditModal = ({
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+            <div className="min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="card-title">Order items</h3>
             <button
               type="button"
               onClick={onToggleProductSearch}
               aria-expanded={showProductSearch}
-              className="btn-outline min-h-[44px] px-4 text-sm"
+              className="btn-outline px-3 text-sm"
+              style={{ minHeight: 40 }}
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
               Add product
@@ -217,25 +250,56 @@ const OrderEditModal = ({
               No items in order. Add products to continue.
             </p>
           )}
-
-          <div
-            className="mt-5 rounded-[var(--r-md)] border p-4"
-            style={{ borderColor: 'rgba(210, 166, 79, 0.40)', background: 'rgba(210, 166, 79, 0.12)' }}
-          >
+          </div>
+          <div className="min-w-0">
+            <div
+              className="rounded-[var(--r-md)] border p-3"
+              style={{ borderColor: 'rgba(210, 166, 79, 0.40)', background: 'rgba(210, 166, 79, 0.12)' }}
+            >
             <div className="flex items-baseline justify-between gap-3">
+              <span className="label-caps">Subtotal</span>
+              <span className="tabular text-sm font-bold" style={{ color: 'var(--text-strong)' }}>
+                &#8377;{editedSubtotal.toFixed(0)}
+              </span>
+            </div>
+            <div className="mt-1.5 flex items-baseline justify-between gap-3">
+              <span className="label-caps">Discount</span>
+              {savedDiscount > 0 ? (
+                <span className="tabular text-sm font-bold" style={{ color: '#3E9A6B' }}>
+                  −&#8377;{savedDiscount.toFixed(0)}{order.coupon?.code ? ` · ${order.coupon.code}` : ''}
+                </span>
+              ) : (
+                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>None</span>
+              )}
+            </div>
+            <div className="mt-2 flex items-baseline justify-between gap-3 border-t pt-2" style={{ borderColor: 'rgba(210, 166, 79, 0.30)' }}>
               <span className="label-caps">New total</span>
               <span className="tabular text-xl font-bold" style={{ color: 'var(--text-strong)' }}>
-                &#8377;{newTotal.toFixed(0)}
+                &#8377;{previewTotal.toFixed(0)}
               </span>
             </div>
             {totalChanged && (
               <p className="tabular mt-1 text-right text-xs" style={{ color: 'var(--text-muted)' }}>
-                Original total &#8377;{order.total}
+                Original total &#8377;{order.total} · preview only, the server recalculates on save
               </p>
             )}
           </div>
 
-          <div className="mt-5">
+          <OrderDiscountSection
+            order={order}
+            current={discountData?.current || null}
+            eligible={discountData?.eligible || []}
+            allOffers={discountData?.all || []}
+            loading={discountLoading}
+            error={discountError}
+            onApplyCoupon={onApplyCoupon}
+            onApplyCustom={onApplyCustom}
+            onRemove={onRemoveCoupon}
+            busy={couponBusy}
+            gated={itemsDirty}
+          />
+
+          <div className="mt-4">
             <label htmlFor="order-edit-note" className="block text-sm font-bold" style={{ color: 'var(--text-strong)' }}>
               Internal note{' '}
               <span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>
@@ -251,18 +315,20 @@ const OrderEditModal = ({
               className="input-premium mt-2 resize-y"
             />
           </div>
+          </div>
+        </div>
         </div>
 
         <footer
-          className="flex flex-col gap-3 border-t px-5 py-4 sm:flex-row sm:px-6"
+          className="flex gap-2 border-t px-4 py-2.5 sm:flex-row sm:px-5"
           style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)' }}
         >
-          <button type="button" onClick={onCancel} className="btn-outline flex-1">
+          <button type="button" onClick={onCancel} className="btn-outline flex-1" style={{ minHeight: 44 }}>
             Cancel
           </button>
-          <button type="button" onClick={onSave} disabled={items.length === 0} className="btn-primary flex-1">
+          <button type="button" onClick={onSave} disabled={items.length === 0 || busy} className="btn-primary flex-1" style={{ minHeight: 44 }}>
             <Save className="h-4 w-4" aria-hidden="true" />
-            Save changes
+            {busy ? 'Saving…' : 'Save changes'}
           </button>
         </footer>
       </motion.div>

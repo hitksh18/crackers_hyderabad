@@ -24,8 +24,8 @@ const CategoryShowcase = ({ sectionRef, countInCategory, categories = categoryDe
   <section
     ref={sectionRef}
     id="categories"
-    className="section-pad"
-    style={{ background: 'var(--surface-card)', scrollMarginTop: '84px' }}
+    className="section-pad home-sec-categories"
+    style={{ scrollMarginTop: '84px' }}
   >
     <div className="shell-wide">
       <SectionHeading

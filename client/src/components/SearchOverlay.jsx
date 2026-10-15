@@ -1,20 +1,38 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, X, ArrowRight } from 'lucide-react';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { sheetVariants } from '../lib/motion';
+import SearchSuggestions from './SearchSuggestions';
 
 /**
  * Focused search surface for viewports below `lg`.
  *
- * The query state and the submit handler live in Navbar — this component only
- * presents them, so the `/products?q=` navigation stays in one place.
+ * The query state and the submit handler live in Navbar — this component
+ * only presents them, so the `/products?q=` navigation stays in one place.
+ *
+ * When `enableSuggestions` is true (every route except /products, where the
+ * grid filters live instead), the same suggestion dropdown as the desktop
+ * header renders inside the panel, with Add to Cart per row.
  */
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-const SearchOverlay = ({ onClose, value, onChange, onSubmit }) => {
+const MOBILE_LISTBOX_ID = 'mobile-search-suggestions';
+
+const SearchOverlay = ({
+  onClose,
+  value,
+  onChange,
+  onSubmit,
+  onPickProduct,
+  onViewAll,
+  enableSuggestions = true,
+  showAddToCart = false,
+}) => {
+  const withSuggestions = enableSuggestions && typeof onPickProduct === 'function';
+  const [suggestOpen, setSuggestOpen] = useState(false);
   const reduced = useReducedMotion();
   const panelRef = useRef(null);
   const inputRef = useRef(null);
@@ -120,13 +138,54 @@ const SearchOverlay = ({ onClose, value, onChange, onSubmit }) => {
               ref={inputRef}
               type="text"
               value={value}
-              onChange={onChange}
+              onChange={(e) => {
+                onChange(e);
+                if (withSuggestions) setSuggestOpen(e.target.value.trim().length > 0);
+              }}
+              onFocus={() => {
+                if (withSuggestions && value.trim().length > 0) setSuggestOpen(true);
+              }}
               placeholder="Search crackers, gift boxes and more..."
               autoComplete="off"
-              className="input-premium is-glass pl-11 pr-4 text-base"
+              aria-label="Search products"
+              role={withSuggestions ? 'combobox' : undefined}
+              aria-expanded={withSuggestions ? suggestOpen && hasQuery : undefined}
+              aria-controls={withSuggestions ? MOBILE_LISTBOX_ID : undefined}
+              aria-autocomplete={withSuggestions ? 'list' : undefined}
+              className={`input-premium is-glass pl-11 text-base${value ? ' pr-10' : ' pr-4'}`}
               style={{ borderRadius: 'var(--r-pill)' }}
             />
+            {value && (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange({ target: { value: '' } });
+                  if (withSuggestions) setSuggestOpen(false);
+                  inputRef.current?.focus();
+                }}
+                onMouseDown={(e) => e.preventDefault()}
+                aria-label="Clear search"
+                className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full transition-colors hover:bg-black/5 dark:hover:bg-white/10"
+                style={{ color: 'var(--text-subtle)' }}
+              >
+                <X className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
+              </button>
+            )}
           </div>
+
+          {withSuggestions && (
+            <SearchSuggestions
+              query={value}
+              open={suggestOpen}
+              onOpenChange={setSuggestOpen}
+              onPick={onPickProduct}
+              onViewAll={onViewAll}
+              inputRef={inputRef}
+              listboxId={MOBILE_LISTBOX_ID}
+              floating={false}
+              showAddToCart={showAddToCart}
+            />
+          )}
 
           <button type="submit" className="btn-primary w-full" disabled={!hasQuery}>
             <span>Search products</span>

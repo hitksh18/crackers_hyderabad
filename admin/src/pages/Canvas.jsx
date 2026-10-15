@@ -18,6 +18,7 @@ import toast from '../utils/toast';
 import { uploadImage } from '../utils/uploadImage';
 import { isLocalOnlyUrl } from '../utils/storageUrls';
 import { readHomepageConfig, saveHomepageConfig, defaultSecondaryBanner, defaultProductBanner, DEFAULT_HERO_BANNERS, DEFAULT_PROMO_CARDS } from '../lib/homepage';
+import { normalizeImageUrl } from '../lib/normalizeImageUrl';
 import { readBuilderConfig, saveSections, moveSection, duplicateSection, BANNER_SECTION_TEMPLATE } from '../lib/homepageBuilder';
 
 import { readSiteSettings, saveSiteSettings, announcementTexts } from '../lib/siteSettings';
@@ -32,6 +33,14 @@ import {
   RowMenu,
 } from '../components/admin/homepage/CanvasChrome';
 import { BannerModal, DealModal, TrustModal } from '../components/admin/homepage/CanvasModals';
+import {
+  ARTWORK_SPEED_MAX,
+  ARTWORK_SPEED_MIN,
+  ARTWORK_SPEED_PRESETS,
+  HERO_ARTWORK_TYPES,
+  artworkDurationSec,
+  normalizeHeroArtworkAnimation,
+} from '../lib/heroArtwork';
 import { useCanvasHistory } from '../components/admin/canvas/CanvasHistory';
 import CanvasToolbar from '../components/admin/canvas/CanvasToolbar';
 import CanvasSidebar from '../components/admin/canvas/CanvasSidebar';
@@ -485,6 +494,23 @@ export default function HomepageBuilder() {
     [products]
   );
 
+  /* Hero showcase pool — same derivation as the customer homepage: every
+     product with a usable image is eligible (in-stock preferred), drawn from
+     the already-loaded catalogue so the preview adds zero new requests. */
+  const heroProducts = useMemo(() => {
+    const withImage = products.filter(
+      (p) => normalizeImageUrl(p.imageURL) || normalizeImageUrl(p.imageURL2)
+    );
+    const inStock = withImage.filter((p) => p.outOfStock !== true);
+    return inStock.length >= 4 ? inStock : withImage;
+  }, [products]);
+
+  /* First hero product image for the artwork-animation preview tile. */
+  const artworkPreviewImage = useMemo(() => {
+    const p = heroProducts.find((x) => String(x.imageURL || x.imageUrl || x.image || '').trim());
+    return p ? String(p.imageURL || p.imageUrl || p.image) : '';
+  }, [heroProducts]);
+
   const countInCategory = (matchNames) => products.filter((p) => {
     if (Array.isArray(p.categories)) {
       return p.categories.some((cat) => matchNames.some((m) => m.toLowerCase() === String(cat).toLowerCase()));
@@ -535,6 +561,18 @@ export default function HomepageBuilder() {
     ...d,
     homepage: { ...d.homepage, heroCopy: { ...(d.homepage.heroCopy || {}), ...patch } },
   }));
+  /* Hero artwork motion — normalized on write so an invalid value can never
+     reach the storefront. Persisted with the rest of the homepage on save. */
+  const patchHeroArtwork = (patch) => setDraft((d) => ({
+    ...d,
+    homepage: {
+      ...d.homepage,
+      heroArtworkAnimation: {
+        ...normalizeHeroArtworkAnimation(d.homepage.heroArtworkAnimation),
+        ...patch,
+      },
+    },
+  }));
   const moveBuilderSection = (id, dir) => setDraft((d) => ({
     ...d, builder: { ...d.builder, sections: moveSection(d.builder.sections, id, dir) },
   }));
@@ -542,6 +580,8 @@ export default function HomepageBuilder() {
   /* ================= section workspaces ================= */
 
   const heroCopy = draft?.homepage?.heroCopy || {};
+  const heroArtwork = normalizeHeroArtworkAnimation(draft?.homepage?.heroArtworkAnimation);
+  const heroArtworkOn = heroArtwork.enabled && heroArtwork.type !== 'none';
 
   const editors = {
     hero: (
@@ -572,7 +612,80 @@ export default function HomepageBuilder() {
             <input className="cv-input" value={heroCopy.ctaLink || ''} onChange={(e) => patchHeroCopy({ ctaLink: e.target.value })} placeholder="/products" />
           </Field>
         </div>
-        <p className="cv-note">The animated fireworks scene stays as designed — only the text above is editable here.</p>
+        {/* ---- Artwork Animation (Hero Products showcase motion) ---- */}
+        <div className="cv-art-block">
+          <div className="cv-art-head">
+            <span className="cv-label">Artwork Animation</span>
+            <Toggle
+              checked={heroArtwork.enabled}
+              onChange={(v) => patchHeroArtwork({ enabled: v })}
+              label={heroArtwork.enabled ? 'On' : 'Off'}
+            />
+          </div>
+
+          <div className="cv-row2">
+            <Field label="Animation Style">
+              <select
+                className="cv-select"
+                value={heroArtwork.type}
+                disabled={!heroArtwork.enabled}
+                onChange={(e) => patchHeroArtwork({ type: e.target.value })}
+                aria-label="Artwork animation style"
+              >
+                {HERO_ARTWORK_TYPES.map((t) => (
+                  <option key={t.id} value={t.id}>{t.label}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label={`Animation Speed — ${heroArtwork.speed}%`}>
+              <input
+                className="cv-range"
+                type="range"
+                min={ARTWORK_SPEED_MIN}
+                max={ARTWORK_SPEED_MAX}
+                step={5}
+                value={heroArtwork.speed}
+                disabled={!heroArtwork.enabled}
+                onChange={(e) => patchHeroArtwork({ speed: Number(e.target.value) })}
+                aria-label="Artwork animation speed"
+              />
+              <div className="cv-art-presets">
+                {Object.entries(ARTWORK_SPEED_PRESETS).map(([label, value]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    disabled={!heroArtwork.enabled}
+                    onClick={() => patchHeroArtwork({ speed: value })}
+                    className={`cv-art-preset${heroArtwork.speed === value ? ' is-active' : ''}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <span className="cv-art-dur tabular">
+                  {artworkDurationSec(heroArtwork.speed)}s loop
+                </span>
+              </div>
+            </Field>
+          </div>
+
+          <Field label="Preview">
+            <div className="cv-art-preview">
+              {artworkPreviewImage ? (
+                <img
+                  src={artworkPreviewImage}
+                  alt=""
+                  className={`cv-art-preview-img${heroArtworkOn ? ` hs-art hs-art-${heroArtwork.type}` : ''}`}
+                  style={heroArtworkOn ? { animationDuration: `${artworkDurationSec(heroArtwork.speed)}s` } : undefined}
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              ) : (
+                <span className="cv-art-preview-ph" aria-hidden="true">PRODUCT</span>
+              )}
+            </div>
+          </Field>
+        </div>
+
+        <p className="cv-note">The animated fireworks scene stays as designed — only the text and artwork motion above are editable here.</p>
       </>
     ),
     messages: (
@@ -1269,6 +1382,9 @@ export default function HomepageBuilder() {
                 heroBanners={heroBanners}
                 promoCards={promoCards}
                 heroCopy={heroCopy}
+                heroArtworkAnimation={heroArtwork}
+                heroProducts={heroProducts}
+                showcaseLoading={false}
                 texts={texts}
                 featuredBase={featuredBase}
                 bestBase={bestBase}

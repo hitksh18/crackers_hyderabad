@@ -5,18 +5,22 @@ import {
   Home as HomeIcon,
   ShoppingBag,
   ShoppingCart,
+  Heart,
   User,
   LogOut,
   ClipboardList,
   LogIn,
   Search,
+  X,
   Phone,
   Menu,
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { useWishlist } from '../context/WishlistContext';
 import { useAuth } from '../context/AuthContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { readSiteSettings } from '../lib/siteSettings';
+import { productPath } from '../lib/productLinks';
 import { popoverVariants, SPRING } from '../lib/motion';
 import UserAvatar from './UserAvatar';
 // Interaction-only surfaces: the mobile menu, the mobile search overlay and
@@ -27,6 +31,11 @@ import UserAvatar from './UserAvatar';
 const CartNotificationPill = lazy(() => import('./CartNotificationPill'));
 const MobileMenu = lazy(() => import('./MobileMenu'));
 const SearchOverlay = lazy(() => import('./SearchOverlay'));
+/* Suggestion dropdown overlays the header only while typing — split out so
+   the header's first render stays synchronous (see note above). */
+const SearchSuggestions = lazy(() => import('./SearchSuggestions'));
+const DESKTOP_LISTBOX_ID = 'site-search-suggestions';
+
 
 const PHONE_HREF = 'tel:+919876543210';
 
@@ -60,15 +69,23 @@ const CartCountBadge = ({ count, reduced }) => {
 
 const Navbar = () => {
   const { getCartCount } = useCart();
+  const { wishlistCount } = useWishlist();
   const { user, signOut } = useAuth();
   const reduced = useReducedMotion();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const navigate = useNavigate();
   const isActive = (path) => pathname === path;
+  /* /products is a search RESULTS page: the navbar input filters the grid
+     in real time (via ?q=) and the suggestion dropdown NEVER renders there.
+     Every other route keeps the suggestion dropdown (with Add to Cart). */
+  const isProductsPage = pathname === '/products';
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  /* Suggestion dropdown state — overlay only, never affects bar layout. */
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const searchInputRef = useRef(null);
   const [logoUrl, setLogoUrl] = useState(DEFAULT_LOGO);
   /* Compact solid treatment once the page scrolls (see nav-scrolled CSS). */
   const [scrolled, setScrolled] = useState(false);
@@ -158,6 +175,7 @@ const Navbar = () => {
     setShowProfileMenu(false);
     setMobileMenuOpen(false);
     setSearchOpen(false);
+    setSuggestOpen(false);
   }, [pathname]);
 
   /* The mobile surfaces have no meaning once the desktop bar takes over. */
@@ -180,14 +198,79 @@ const Navbar = () => {
     return () => mql.removeListener(onChange);
   }, []);
 
+  /* Submit-only fallback is the form submit; live suggestions overlay the
+     header search bar (desktop) and the mobile search sheet, sharing the
+     home hero's ranking engine. Submitting navigates to /products?q=, which
+     filters the catalogue inline. The query clears so the bar resets. */
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     const q = searchQuery.trim();
     if (!q) return;
+    setSuggestOpen(false);
+    if (isProductsPage) {
+      /* Results page: flush the filter immediately, keep the typed text. */
+      pushProductsQuery(q);
+      setSearchOpen(false);
+      return;
+    }
     navigate(`/products?q=${encodeURIComponent(q)}`);
     setSearchQuery('');
     setSearchOpen(false);
   };
+
+  /* Live results-page plumbing: on /products the input writes the query
+     into ?q= (other params preserved) so the grid filters in real time.
+     lastPushed separates OUR pushes from external navigation, keeping the
+     input and the URL in sync without feedback loops. */
+  const lastPushedRef = useRef(null);
+
+  const pushProductsQuery = useCallback((rawQuery) => {
+    const q = String(rawQuery || '').trim();
+    const params = new URLSearchParams(search);
+    if ((params.get('q') || '') === q) return;
+    lastPushedRef.current = q;
+    if (q) params.set('q', q);
+    else params.delete('q');
+    const qs = params.toString();
+    navigate(`/products${qs ? `?${qs}` : ''}`, { replace: true });
+  }, [navigate, search]);
+
+  /* URL → input (deep links, back/forward): only when the URL query was
+     not produced by this input. */
+  useEffect(() => {
+    if (!isProductsPage) return;
+    const qParam = new URLSearchParams(search).get('q') || '';
+    if (lastPushedRef.current === qParam) return;
+    lastPushedRef.current = qParam;
+    setSearchQuery((prev) => (prev === qParam ? prev : qParam));
+  }, [isProductsPage, search]);
+
+  /* input → URL on /products, short debounce so typing feels instant but
+     navigation is not spammed per keystroke. */
+  useEffect(() => {
+    if (!isProductsPage) return undefined;
+    const t = window.setTimeout(() => pushProductsQuery(searchQuery), 120);
+    return () => window.clearTimeout(t);
+  }, [searchQuery, isProductsPage, pushProductsQuery]);
+
+  /* Suggestion picks share the existing routes — product page for a row,
+     /products?q= for "view all". The query clears so the bar resets. */
+  const handleSuggestionPick = useCallback((product) => {
+    if (!product) return;
+    setSuggestOpen(false);
+    setSearchQuery('');
+    setSearchOpen(false);
+    navigate(productPath(product));
+  }, [navigate]);
+
+  const handleSearchViewAll = useCallback(() => {
+    const q = searchQuery.trim();
+    if (!q) return;
+    setSuggestOpen(false);
+    setSearchQuery('');
+    setSearchOpen(false);
+    navigate(`/products?q=${encodeURIComponent(q)}`);
+  }, [navigate, searchQuery]);
 
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
   const closeSearch = useCallback(() => setSearchOpen(false), []);
@@ -289,14 +372,43 @@ const Navbar = () => {
                 />
                 <input
                   id="site-search"
+                  ref={searchInputRef}
                   type="text"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (!isProductsPage) setSuggestOpen(e.target.value.trim().length > 0);
+                  }}
+                  onFocus={() => {
+                    if (!isProductsPage && searchQuery.trim().length > 0) setSuggestOpen(true);
+                  }}
                   placeholder="Search crackers, gift boxes and more..."
                   autoComplete="off"
-                  className="input-premium is-glass pl-11 pr-4 text-sm"
+                  aria-label="Search products"
+                  role={isProductsPage ? 'searchbox' : 'combobox'}
+                  aria-expanded={isProductsPage ? undefined : suggestOpen && searchQuery.trim().length > 0}
+                  aria-controls={isProductsPage ? undefined : DESKTOP_LISTBOX_ID}
+                  aria-autocomplete={isProductsPage ? undefined : 'list'}
+                  className={`input-premium is-glass pl-11 text-sm${searchQuery ? ' pr-10' : ' pr-4'}`}
                   style={{ borderRadius: 'var(--r-pill)' }}
                 />
+                {/* Subtle clear control — resets the bar in place, never navigates. */}
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSuggestOpen(false);
+                      searchInputRef.current?.focus();
+                    }}
+                    onMouseDown={(e) => e.preventDefault()}
+                    aria-label="Clear search"
+                    className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full transition-colors hover:bg-black/5 dark:hover:bg-white/10"
+                    style={{ color: 'var(--text-subtle)' }}
+                  >
+                    <X className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
+                  </button>
+                )}
               </div>
               <button
                 type="submit"
@@ -305,6 +417,24 @@ const Navbar = () => {
               >
                 Search
               </button>
+              {/* Live suggestions overlay — absolute, out of flow: the bar's
+                  size and position never change. Never rendered on
+                  /products, where the input filters the grid instead. */}
+              {!isProductsPage && (
+                <Suspense fallback={null}>
+                  <SearchSuggestions
+                    query={searchQuery}
+                    open={suggestOpen}
+                    onOpenChange={setSuggestOpen}
+                    onPick={handleSuggestionPick}
+                    onViewAll={handleSearchViewAll}
+                    inputRef={searchInputRef}
+                    listboxId={DESKTOP_LISTBOX_ID}
+                    floating
+                    showAddToCart
+                  />
+                </Suspense>
+              )}
             </form>
 
             <div className="flex shrink-0 items-center gap-2 xl:gap-3">
@@ -319,6 +449,20 @@ const Navbar = () => {
                   <CartCountBadge count={cartCount} reduced={reduced} />
                 </span>
                 <span>Cart</span>
+              </Link>
+
+              <Link
+                to="/wishlist"
+                className={navLinkClass('/wishlist')}
+                title="Favorites"
+                aria-label={wishlistCount > 0 ? `Favorites, ${wishlistCount} items` : 'Favorites'}
+                aria-current={isActive('/wishlist') ? 'page' : undefined}
+              >
+                <span className="relative inline-flex">
+                  <Heart className="h-[18px] w-[18px]" strokeWidth={2.2} aria-hidden="true" />
+                  <CartCountBadge count={wishlistCount} reduced={reduced} />
+                </span>
+                <span>Favorites</span>
               </Link>
 
               <a href={PHONE_HREF} className="arrow-btn shrink-0" aria-label="Call us" title="Call us">
@@ -532,6 +676,7 @@ const Navbar = () => {
               pathname={pathname}
               user={user}
               cartCount={cartCount}
+              wishlistCount={wishlistCount}
               onSignOut={signOut}
               phoneHref={PHONE_HREF}
             />
@@ -548,6 +693,10 @@ const Navbar = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onSubmit={handleSearchSubmit}
+              onPickProduct={handleSuggestionPick}
+              onViewAll={handleSearchViewAll}
+              enableSuggestions={!isProductsPage}
+              showAddToCart
             />
           </Suspense>
         )}

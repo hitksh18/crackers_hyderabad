@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef, useState } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Check, ChevronDown, Search } from 'lucide-react';
 
 /**
  * DarkSelect — theme-owned replacement for native <select>.
@@ -27,12 +27,25 @@ const DarkSelect = ({
   describedBy,
   invalid = false,
   className = '',
+  searchable = false,
+  searchPlaceholder = 'Search...',
 }) => {
   const listId = useId();
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [query, setQuery] = useState('');
   const rootRef = useRef(null);
   const optionRefs = useRef([]);
+
+  /* Search filters the open list only — the trigger label and the stored
+     value are untouched. The empty-value option stays visible so a choice
+     can always be cleared. */
+  const visibleOptions = useMemo(() => {
+    if (!searchable) return options;
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((o, i) => i === 0 && o.value === '' ? true : String(o.label || '').toLowerCase().includes(q));
+  }, [options, query, searchable]);
 
   const selectedIndex = options.findIndex((o) => o.value === value);
   const selected = selectedIndex >= 0 ? options[selectedIndex] : null;
@@ -40,6 +53,7 @@ const DarkSelect = ({
   const close = () => {
     setOpen(false);
     setActiveIndex(-1);
+    setQuery('');
   };
 
   // Close on outside interaction (pointer + focus leaving the control).
@@ -67,13 +81,14 @@ const DarkSelect = ({
   }, [open, activeIndex]);
 
   const choose = (index) => {
-    const option = options[index];
+    const option = visibleOptions[index];
     if (!option || option.disabled) return;
     onChange(option.value);
     close();
   };
 
   const openWithIndex = (index) => {
+    setQuery('');
     setActiveIndex(index);
     setOpen(true);
   };
@@ -84,18 +99,18 @@ const DarkSelect = ({
       case 'ArrowDown':
         event.preventDefault();
         if (!open) openWithIndex(selectedIndex >= 0 ? selectedIndex : 0);
-        else setActiveIndex((i) => Math.min(options.length - 1, (i < 0 ? selectedIndex : i) + 1));
+        else setActiveIndex((i) => Math.min(visibleOptions.length - 1, (i < 0 ? selectedIndex : i) + 1));
         break;
       case 'ArrowUp':
         event.preventDefault();
-        if (!open) openWithIndex(selectedIndex >= 0 ? selectedIndex : options.length - 1);
+        if (!open) openWithIndex(selectedIndex >= 0 ? selectedIndex : visibleOptions.length - 1);
         else setActiveIndex((i) => Math.max(0, (i < 0 ? selectedIndex : i) - 1));
         break;
       case 'Home':
         if (open) { event.preventDefault(); setActiveIndex(0); }
         break;
       case 'End':
-        if (open) { event.preventDefault(); setActiveIndex(options.length - 1); }
+        if (open) { event.preventDefault(); setActiveIndex(visibleOptions.length - 1); }
         break;
       case 'Enter':
       case ' ':
@@ -157,7 +172,34 @@ const DarkSelect = ({
               No options yet.
             </li>
           )}
-          {options.map((option, index) => {
+          {searchable && options.length > 0 && (
+            <li className="sticky top-0 px-2 pb-1.5 pt-1" style={{ background: 'var(--surface-card)' }} role="none">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: 'var(--text-subtle)' }} aria-hidden="true" />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => { setQuery(e.target.value); setActiveIndex(-1); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') { e.stopPropagation(); close(); }
+                    else if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex(0); }
+                  }}
+                  placeholder={searchPlaceholder}
+                  aria-label={searchPlaceholder}
+                  autoFocus
+                  className="h-9 w-full rounded-[8px] border pl-8 pr-2 text-sm focus:outline-none"
+                  style={{ borderColor: 'var(--hairline)', background: 'var(--surface-sunken)', color: 'var(--text-strong)' }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            </li>
+          )}
+          {searchable && visibleOptions.length === 0 && (
+            <li className="px-4 py-2.5 text-sm" style={{ color: 'var(--text-subtle)' }}>
+              No matches found.
+            </li>
+          )}
+          {visibleOptions.map((option, index) => {
             const isSelected = option.value === value;
             const isActive = index === activeIndex;
             return (

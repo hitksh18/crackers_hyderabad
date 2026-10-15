@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { normalizeImageUrl } from '../../lib/normalizeImageUrl';
 import ScrollReveal from '../ui/ScrollReveal';
 import SectionHeading from '../ui/SectionHeading';
 import { promoBanners } from './homeData';
@@ -20,14 +21,15 @@ const PromoSection = ({ promotionalBanners }) => (
       {(promotionalBanners || []).filter((b) => b.enabled !== false).length > 0 && (
         <div className="rail mb-10">
           {(promotionalBanners || []).filter((b) => b.enabled !== false).map((banner, index) => {
-            const img = (
+            const bannerSrc = normalizeImageUrl(banner.imageUrl);
+            const img = bannerSrc ? (
               <img
-                src={banner.imageUrl}
+                src={bannerSrc}
                 alt={`Promotional banner ${(banner.order ?? index) + 1}`}
                 loading="lazy"
                 className="h-auto w-full object-cover"
               />
-            );
+            ) : null;
             return (
               <div
                 key={banner.id}

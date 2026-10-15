@@ -5,6 +5,7 @@ const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestor
 const { normaliseCoords } = require('./geocode');
 const { STAFF_ROLES } = require('./security');
 const { maybeSendOrderConfirmationEmail, maybeSendInternalNewOrderEmail, orderPaymentNote } = require('./email');
+const { eligibleSubtotal, computeDiscountAmount, getCouponByCode, normalizeCode, isValidCodeShape, validateCouponForCart } = require('./coupons');
 const {
   renderOrderId,
   readOrderIdConfig,
@@ -1403,6 +1404,1020 @@ async function handlePublicTrack(req, res) {
   }
 }
 
+/**
+ * ONE authoritative order-total calculation, shared by the admin item-edit
+ * endpoint below (and unit-tested in tests/order-totals.test.js).
+ *
+ * Operates from CURRENT line items only — never from a cached subtotal:
+ *
+ *   lineTotal  = unitPrice × quantity            (per line)
+ *   subtotal   = SUM(all current lineTotals)
+ *   discount   = coupon math on the NEW eligible subtotal (existing coupon
+ *                rules: percentage/fixed, maximum cap, minimum order value,
+ *                product/category restrictions)
+ *   total      = subtotal − discount
+ *
+ * Pure math, no database: the caller resolves prices and the coupon first.
+ * Rounding is paise-exact (Math.round(x*100)/100), the same convention as
+ * priceCart/createOrder, so every surface prints identical figures.
+ *
+ * lines:  [{ id, name, quantity, price, categories?, category? }]
+ * coupon: null, or { code, couponId, discountType, discountValue,
+ *           maximumDiscount, minimumOrderValue, applicableProductIds,
+ *           applicableCategoryIds }
+ */
+const roundPaise = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+/**
+ * Custom admin percentage discount — pure math, unit-tested.
+ *
+ * discount = round(subtotal × percent / 100), total = max(0, subtotal − discount).
+ * Same paise-exact convention as every other money path, so the admin preview,
+ * the persisted order, the invoice, the email and the customer page agree.
+ *
+ * Returns { ok:true, percent, discount, total } or { ok:false, error }.
+ * 0% is rejected here on purpose — removing a discount has its own explicit
+ * endpoint (DELETE …/coupon), so "0" can never silently wipe one.
+ */
+function adminPercentDiscount(subtotal, percent) {
+  const base = Number(subtotal);
+  const pct = Number(percent);
+  if (!Number.isFinite(base) || base < 0) {
+    return { ok: false, error: 'The order subtotal is invalid.' };
+  }
+  if (!Number.isFinite(pct)) {
+    return { ok: false, error: 'Enter a discount percentage.' };
+  }
+  if (pct < 0.01 || pct > 100) {
+    return { ok: false, error: 'Discount must be between 0.01% and 100%. To remove a discount, use Remove discount.' };
+  }
+  const roundedPct = Math.round(pct * 100) / 100;
+  const discount = roundPaise(base * (roundedPct / 100));
+  if (discount <= 0) {
+    return { ok: false, error: 'That percentage gives no discount on this order.' };
+  }
+  return { ok: true, percent: roundedPct, discount, total: Math.max(0, roundPaise(base - discount)) };
+}
+
+function recalculateOrderTotals({ lines, coupon }) {
+  const items = (Array.isArray(lines) ? lines : [])
+    .map((line) => ({
+      id: String(line?.id ?? ''),
+      name: String(line?.name ?? ''),
+      quantity: Math.max(0, Math.trunc(Number(line?.quantity)) || 0),
+      price: Math.max(0, Number(line?.price) || 0),
+    }))
+    .filter((line) => line.id && line.quantity > 0);
+
+  const subtotal = roundPaise(items.reduce((sum, it) => sum + it.price * it.quantity, 0));
+
+  let discount = 0;
+  let couponSnapshot = null;
+  let couponRemoved = null;
+  if (coupon && typeof coupon === 'object' && coupon.code) {
+    const eligible = roundPaise(eligibleSubtotal(coupon, items));
+    const minimum = Number(coupon.minimumOrderValue || 0);
+    if (eligible <= 0) {
+      couponRemoved = { code: coupon.code, reason: 'This coupon does not apply to the items in the order.' };
+    } else if (minimum > 0 && eligible < minimum) {
+      couponRemoved = { code: coupon.code, reason: `This coupon needs a minimum order of ₹${minimum}.` };
+    } else {
+      discount = computeDiscountAmount(coupon, eligible);
+      couponSnapshot = {
+        code: coupon.code,
+        couponId: coupon.couponId || null,
+        discountType: coupon.discountType,
+        discountValue: coupon.discountValue,
+        discountAmount: discount,
+      };
+    }
+  }
+
+  const total = Math.max(0, roundPaise(subtotal - discount));
+  return { items, subtotal, discount, coupon: couponSnapshot, couponRemoved, total };
+}
+
+/**
+ * POST /api/admin/orders/:orderId/items — staff-only order item editing.
+ *
+ * This is the ONLY write path for changing an order's items after placement.
+ * The admin UI used to compute a total in the browser and write { items, total }
+ * straight to Firestore, which left subtotal/discount/coupon stale, dropped
+ * coupon discounts from the total, bypassed server pricing and the minimum
+ * order rule, and never notified the customer. Every one of those now happens
+ * here, from persisted data, in one operation:
+ *
+ *   1. Validate the requested lines.
+ *   2. Load the latest order.
+ *   3. Snapshot safety: lines already on the order keep their STORED unit
+ *      price (history never reprices); only NEW product ids are priced from
+ *      the trusted records — online precedence (discountPrice → onlinePrice
+ *      → price, like priceCart) for storefront orders, offline precedence
+ *      (offlineDiscountPrice → offlineMRP → offlinePrice → onlinePrice, like
+ *      pricePosCart) for counter orders.
+ *   4. Recalculate the COMPLETE order with recalculateOrderTotals above.
+ *      An order-carried coupon is recomputed against the NEW eligible
+ *      subtotal under its current rules (its redemption was already consumed
+ *      at placement, so time/usage windows are not re-litigated here).
+ *      Counter bills re-apply their stored discountPercent instead.
+ *   5. Persist items + subtotal + discount + coupon + total atomically.
+ *   6. AFTER the confirmed persist, send the updated-order customer email
+ *      (existing detailsUpdated automation, read from the fresh document).
+ *      Mail is best-effort: a failure is logged and reported, never rolled
+ *      back — the persisted order is the source of truth.
+ *   7. Return the authoritative order; the admin UI renders from this, never
+ *      from a locally computed total.
+ *
+ * Order ids (shortCode/orderNumber/tracking) are never touched: an edit can
+ * neither mint nor change an order's identity.
+ */
+async function updateOrderItems(req, res) {
+  const db = getFirestore();
+  try {
+    const orderId = String(req.params?.orderId || '').trim();
+    if (!orderId || orderId.length > 128) {
+      return res.status(400).json({ error: 'Missing order id' });
+    }
+
+    const body = req.body || {};
+    if (!Array.isArray(body.items) || body.items.length === 0) {
+      return res.status(400).json({ error: 'Order must have at least one item' });
+    }
+    if (body.items.length > MAX_ITEMS) {
+      return res.status(400).json({ error: `An order cannot contain more than ${MAX_ITEMS} different products` });
+    }
+
+    // Collapse duplicates (summed, capped) so a repeated id cannot inflate work.
+    const wanted = new Map();
+    for (const raw of body.items) {
+      const id = typeof raw?.id === 'string' ? raw.id.trim().slice(0, 128) : '';
+      const quantity = Number.parseInt(raw?.quantity, 10);
+      if (!id || id.includes('/')) {
+        return res.status(400).json({ error: 'One of the order items is invalid' });
+      }
+      if (!Number.isFinite(quantity) || quantity < 1 || quantity > MAX_QUANTITY_PER_ITEM) {
+        return res.status(400).json({ error: 'One of the order quantities is invalid' });
+      }
+      wanted.set(id, Math.min((wanted.get(id) || 0) + quantity, MAX_QUANTITY_PER_ITEM));
+    }
+
+    const orderRef = db.collection('orders').doc(orderId);
+    const snap = await orderRef.get();
+    if (!snap.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const current = snap.data() || {};
+    const isStoreOrder = Boolean(current.paymentMode) || current.source === 'pos' || current.channel === 'offline';
+
+    const storedById = new Map();
+    for (const it of Array.isArray(current.items) ? current.items : []) {
+      if (it && typeof it.id === 'string' && it.id && !storedById.has(it.id)) storedById.set(it.id, it);
+    }
+
+    // One batched read for every involved product (+ offline pricing for
+    // counter orders), so this stays a single round trip, not one per line.
+    const ids = [...wanted.keys()];
+    const productSnaps = await db.getAll(...ids.map((id) => db.collection('products').doc(id)));
+    let pricingById = new Map();
+    if (isStoreOrder) {
+      const pricingSnaps = await db.getAll(...ids.map((id) => db.collection('productPricing').doc(id)));
+      pricingById = new Map(pricingSnaps.filter((s) => s.exists).map((s) => [s.id, s.data() || {}]));
+    }
+    const productById = new Map(productSnaps.map((s) => [s.id, s.exists ? s.data() || {} : null]));
+
+    const lines = [];
+    const persistedItems = [];
+    for (const id of ids) {
+      const product = productById.get(id);
+      if (!product) {
+        return res.status(400).json({ error: 'One of the products is no longer available' });
+      }
+      const quantity = wanted.get(id);
+      const stored = storedById.get(id);
+      const cats = Array.isArray(product.categories)
+        ? product.categories.map(String)
+        : (product.category ? [String(product.category)] : []);
+
+      if (stored) {
+        // Snapshot safety: history keeps its stored unit price. A legacy line
+        // without a usable stored price falls back to live pricing so the
+        // order stays editable instead of bricking the save.
+        const storedPrice = Number(stored?.price);
+        if (Number.isFinite(storedPrice) && storedPrice >= 0) {
+          lines.push({ id, name: stored.name || cleanText(product.name, 200), quantity, price: storedPrice, categories: cats });
+          persistedItems.push({
+            id,
+            name: stored.name || cleanText(product.name, 200),
+            quantity,
+            price: storedPrice,
+            ...(stored.discountPrice !== undefined ? { discountPrice: stored.discountPrice } : {}),
+            ...(stored.onlinePrice !== undefined ? { onlinePrice: stored.onlinePrice } : {}),
+          });
+          continue;
+        }
+        // Fall through to live pricing below.
+      }
+
+      // New line: priced live from the trusted records.
+      if (product.outOfStock === true) {
+        return res.status(400).json({ error: `${product.name || 'A product'} is out of stock` });
+      }
+      let unitPrice;
+      let discountPriceField = null;
+      let onlinePriceField = null;
+      if (isStoreOrder) {
+        const pricing = pricingById.get(id) || {};
+        unitPrice = Number(
+          pricing.offlineDiscountPrice || pricing.offlineMRP || pricing.offlinePrice || product.onlinePrice || product.price || 0
+        );
+        discountPriceField = pricing.offlineDiscountPrice ?? null;
+        onlinePriceField = product.onlinePrice ?? null;
+      } else {
+        unitPrice = Number(product.discountPrice || product.onlinePrice || product.price || 0);
+        discountPriceField = product.discountPrice ?? null;
+        onlinePriceField = product.onlinePrice ?? null;
+      }
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+        return res.status(400).json({ error: 'A product is mispriced. Please check the price list.' });
+      }
+      lines.push({ id, name: cleanText(product.name, 200), quantity, price: unitPrice, categories: cats });
+      persistedItems.push({ id, name: cleanText(product.name, 200), quantity, price: unitPrice, discountPrice: discountPriceField, onlinePrice: onlinePriceField });
+    }
+
+    // Coupon carried by the order is recomputed under its CURRENT rules
+    // against the NEW eligible subtotal (redemption already consumed).
+    let couponForMath = null;
+    const storedCode = current.coupon?.code || current.couponCode || null;
+    if (storedCode) {
+      const fresh = await getCouponByCode(db, storedCode);
+      if (!fresh || fresh.status !== 'active') {
+        couponForMath = { code: storedCode, __removed: true, __reason: 'This coupon is no longer active.' };
+      } else {
+        couponForMath = {
+          code: fresh.normalizedCode || storedCode,
+          couponId: fresh.id,
+          discountType: fresh.discountType,
+          discountValue: fresh.discountValue,
+          maximumDiscount: fresh.maximumDiscount,
+          minimumOrderValue: fresh.minimumOrderValue,
+          applicableProductIds: fresh.applicableProductIds,
+          applicableCategoryIds: fresh.applicableCategoryIds,
+        };
+      }
+    }
+
+    let computed;
+    if (couponForMath && couponForMath.__removed) {
+      computed = recalculateOrderTotals({ lines, coupon: null });
+      computed.couponRemoved = { code: couponForMath.code, reason: couponForMath.__reason };
+    } else {
+      computed = recalculateOrderTotals({ lines, coupon: couponForMath });
+    }
+    // Counter bills carry a percentage discount instead of a coupon. The same
+    // branch also recomputes an ADMIN_PERCENTAGE custom discount, which is
+    // stored in the same discountPercent field.
+    const storedPct = Number(current.discountPercent);
+    const pctRecomputed = !couponForMath && Number.isFinite(storedPct) && storedPct > 0;
+    if (pctRecomputed) {
+      const pct = Math.min(100, storedPct);
+      computed.discount = roundPaise(computed.subtotal * (pct / 100));
+      computed.total = Math.max(0, roundPaise(computed.subtotal - computed.discount));
+    }
+
+    // Same floor as placement: the minimum applies to the pre-discount total.
+    // Counter bills never had one, so store orders skip it here too.
+    if (!isStoreOrder) {
+      const settings = await readCheckoutSettings(db);
+      if (settings.minimum.enabled && computed.subtotal < settings.minimum.value) {
+        return res.status(400).json({
+          error: `Order total must be at least Rs ${settings.minimum.value}. Current total: Rs ${computed.subtotal}`,
+          minimumOrderValue: settings.minimum.value,
+          cartTotal: computed.subtotal,
+        });
+      }
+    }
+
+    // Note-only vs money changes: an internal-note edit alone must not mail
+    // the customer.
+    const noteKeyPresent = body.adminNote !== undefined;
+    const newNote = noteKeyPresent ? (String(body.adminNote || '').trim() || null) : (current.adminNote || null);
+    const noteChanged = noteKeyPresent && newNote !== (current.adminNote || null);
+
+    // Discount provenance follows the money: a recomputed coupon (carried or
+    // override) stays COUPON with its override flag preserved; an admin custom
+    // percent keeps ADMIN_PERCENTAGE via the branch above; anything else
+    // resets to NONE — except a counter bill's own percent input, which is
+    // never touched here.
+    const hadAdminMeta = current.discountSource === 'COUPON' || current.discountSource === 'ADMIN_PERCENTAGE';
+    const normSource = (s, hasCoupon) => s || (hasCoupon ? 'COUPON' : 'NONE');
+    const patchMeta = {};
+    if (computed.coupon) {
+      patchMeta.discountSource = 'COUPON';
+      patchMeta.adminOverride = current.coupon?.adminOverride === true;
+      if (computed.coupon.discountType === 'percentage') {
+        patchMeta.discountPercent = computed.coupon.discountValue;
+      } else {
+        patchMeta.discountPercent = FieldValue.delete();
+      }
+    } else if (!(pctRecomputed && current.discountSource === 'ADMIN_PERCENTAGE') && !(pctRecomputed && !hadAdminMeta)) {
+      patchMeta.discountSource = 'NONE';
+      patchMeta.adminOverride = false;
+      if (!isStoreOrder) patchMeta.discountPercent = FieldValue.delete();
+    }
+
+    const moneyEqual =
+      JSON.stringify(persistedItems.map((it) => [it.id, it.quantity, it.price])) ===
+        JSON.stringify((Array.isArray(current.items) ? current.items : []).map((it) => [it?.id, it?.quantity, Number(it?.price)])) &&
+      Number(current.total) === computed.total &&
+      Number(current.subtotal) === computed.subtotal &&
+      Number(current.discount) === computed.discount;
+    const metaEqual =
+      (patchMeta.discountSource !== undefined
+        ? patchMeta.discountSource
+        : normSource(current.discountSource, current.coupon)) ===
+        normSource(current.discountSource, current.coupon) &&
+      (patchMeta.adminOverride !== undefined
+        ? patchMeta.adminOverride
+        : current.adminOverride === true) === (current.adminOverride === true) &&
+      (patchMeta.discountPercent === undefined ||
+        (typeof patchMeta.discountPercent === 'object'
+          ? current.discountPercent === undefined
+          : current.discountPercent === patchMeta.discountPercent));
+    const sameMoney = moneyEqual && metaEqual;
+
+    if (sameMoney && !noteChanged) {
+      return res.json({
+        success: true,
+        unchanged: true,
+        order: orderMoneySummary(snap.id, current),
+      });
+    }
+
+    const patch = {
+      items: persistedItems,
+      subtotal: computed.subtotal,
+      discount: computed.discount,
+      coupon: computed.coupon,
+      couponCode: computed.coupon ? computed.coupon.code : null,
+      ...patchMeta,
+      total: computed.total,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: req.caller?.uid || null,
+    };
+    if (noteKeyPresent) {
+      patch.adminNote = newNote;
+      if (noteChanged) patch.adminNoteUpdatedAt = FieldValue.serverTimestamp();
+    }
+    await orderRef.update(patch);
+
+    const freshSnap = await orderRef.get();
+    const fresh = freshSnap.exists ? freshSnap.data() || {} : {};
+    // Fresh doc wins; computed values are the fallback so a slow index can
+    // never surface zeroes for money that was just persisted.
+    const updatedOrder = orderMoneySummary(snap.id, {
+      subtotal: computed.subtotal,
+      discount: computed.discount,
+      coupon: computed.coupon,
+      couponCode: computed.coupon ? computed.coupon.code : null,
+      total: computed.total,
+      ...fresh,
+      items: fresh.items || persistedItems,
+    });
+
+    /* Updated-order customer email, strictly AFTER the confirmed persist and
+       read from the FRESH document, so items, subtotal, discount and total
+       are the persisted values. Best-effort by contract (same as placement):
+       a mail failure is logged and reported, never rolled back. */
+    let emailed = false;
+    let emailSkipped = null;
+    if (!sameMoney) {
+      try {
+        const { sendDetailsUpdatedEmail } = require('./emailAutomation');
+        const result = await sendDetailsUpdatedEmail(db, orderId);
+        emailed = Boolean(result && result.ok);
+        if (!emailed) emailSkipped = result.skipped || result.error || 'failed';
+      } catch (emailError) {
+        console.warn(`[orders/items] update-email hook threw for ${orderId}:`, emailError.message);
+        emailSkipped = 'failed';
+      }
+    }
+
+    console.log(`[orders/items] ${orderId} (${updatedOrder.shortCode || 'no-code'}) items=${updatedOrder.items.length} subtotal=${updatedOrder.subtotal} discount=${updatedOrder.discount} total=${updatedOrder.total}${computed.couponRemoved ? ` coupon-removed=${computed.couponRemoved.code}` : ''} emailed=${emailed}`);
+    return res.json({
+      success: true,
+      unchanged: false,
+      noteOnly: sameMoney && noteChanged,
+      order: updatedOrder,
+      emailed,
+      emailSkipped,
+      couponRemoved: computed.couponRemoved,
+    });
+  } catch (error) {
+    console.error('[orders/items] update failed:', error);
+    return res.status(500).json({ error: 'Could not update the order. Please try again.' });
+  }
+}
+
+/**
+ * Current persisted lines, priced from their STORED snapshot with fresh
+ * category data for coupon-restriction matching.
+ *
+ * Used by the coupon endpoints below, which never change quantities — only
+ * the discount. Same snapshot-safety contract as updateOrderItems: history
+ * keeps its stored unit price.
+ *
+ * strict=true fails closed when a product record is gone (apply path);
+ * strict=false degrades to empty categories (eligibility preview path).
+ */
+async function pricedLinesForOrder(db, current, { strict = false } = {}) {
+  const stored = (Array.isArray(current.items) ? current.items : [])
+    .filter((it) => it && typeof it.id === 'string' && it.id);
+  if (stored.length === 0) return { ok: false, error: 'Order has no items' };
+
+  const snaps = await db.getAll(...stored.map((it) => db.collection('products').doc(it.id)));
+  const byId = new Map(snaps.map((s) => [s.id, s.exists ? (s.data() || {}) : null]));
+
+  const lines = [];
+  for (const it of stored) {
+    const price = Number(it.price);
+    if (!Number.isFinite(price) || price < 0) {
+      return { ok: false, error: 'A stored order line has an invalid price.' };
+    }
+    const product = byId.get(it.id);
+    if (!product && strict) {
+      return { ok: false, error: 'One of the products is no longer available' };
+    }
+    const cats = product
+      ? (Array.isArray(product.categories)
+        ? product.categories.map(String)
+        : (product.category ? [String(product.category)] : []))
+      : [];
+    lines.push({
+      id: it.id,
+      name: it.name || '',
+      quantity: Math.max(0, Math.trunc(Number(it.quantity)) || 0),
+      price,
+      categories: cats,
+    });
+  }
+  return { ok: true, lines };
+}
+
+/** Money/id summary returned to the admin UI — never timestamps, never PII.
+ *
+ * Discount provenance (safe defaults — old orders simply lack the fields):
+ *   discountSource: 'COUPON' | 'ADMIN_PERCENTAGE' | 'NONE'
+ *   discountPercent: the applied percent, or null
+ *   adminOverride: true when an admin explicitly bypassed normal eligibility
+ */
+function orderMoneySummary(id, doc) {
+  return {
+    id,
+    items: doc.items || [],
+    subtotal: doc.subtotal ?? 0,
+    discount: doc.discount ?? 0,
+    coupon: doc.coupon || null,
+    couponCode: doc.couponCode || null,
+    discountSource: doc.discountSource || (doc.coupon ? 'COUPON' : 'NONE'),
+    discountPercent: doc.discountPercent ?? null,
+    adminOverride: doc.adminOverride === true,
+    total: doc.total ?? 0,
+    status: doc.status || null,
+    shortCode: doc.shortCode || null,
+  };
+}
+
+function orderCustomerKey(order) {
+  return order.userId || order.customer?.email || order.customer?.phone || order.userEmail || null;
+}
+
+/**
+ * Map a stored coupon snapshot onto the CURRENT coupon document for carried
+ * discount math. Returns { coupon } for recalculateOrderTotals, or
+ * { removed: { code, reason } } when the coupon can no longer apply.
+ *
+ * Carried-coupon contract (same as updateOrderItems): the redemption was
+ * already consumed at placement, so time windows and usage counters are NOT
+ * re-litigated here — only existence, active status, eligibility and the
+ * minimum survive an edit.
+ */
+async function resolveCarriedCoupon(db, current) {
+  const storedCode = current.coupon?.code || current.couponCode || null;
+  if (!storedCode) return { coupon: null };
+  const fresh = await getCouponByCode(db, storedCode);
+  if (!fresh || fresh.status !== 'active') {
+    return {
+      removed: {
+        code: storedCode,
+        reason: !fresh ? 'This coupon no longer exists.' : 'This coupon is no longer active.',
+      },
+    };
+  }
+  return {
+    coupon: {
+      code: fresh.normalizedCode || storedCode,
+      couponId: fresh.id,
+      discountType: fresh.discountType,
+      discountValue: fresh.discountValue,
+      maximumDiscount: fresh.maximumDiscount,
+      minimumOrderValue: fresh.minimumOrderValue,
+      applicableProductIds: fresh.applicableProductIds,
+      applicableCategoryIds: fresh.applicableCategoryIds,
+    },
+  };
+}
+
+/**
+ * GET /api/admin/orders/:orderId/eligible-coupons — what MAY be applied.
+ *
+ * Evaluated against the CURRENT persisted order only (never edited-but-unsaved
+ * lines): the carried coupon's live status plus every OTHER coupon that passes
+ * the FULL existing validation (validateCouponForCart — status, window,
+ * usage and per-customer limits, minimum, eligibility). Nothing is applied
+ * here; the admin picks explicitly via POST …/coupon.
+ */
+async function listEligibleCoupons(req, res) {
+  const db = getFirestore();
+  try {
+    const orderId = String(req.params?.orderId || '').trim();
+    if (!orderId || orderId.length > 128) {
+      return res.status(400).json({ error: 'Missing order id' });
+    }
+    const orderRef = db.collection('orders').doc(orderId);
+    const snap = await orderRef.get();
+    if (!snap.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const current = snap.data() || {};
+
+    const priced = await pricedLinesForOrder(db, current, { strict: false });
+    if (!priced.ok) {
+      return res.status(400).json({ error: priced.error });
+    }
+    const subtotal = recalculateOrderTotals({ lines: priced.lines, coupon: null }).subtotal;
+
+    // Carried coupon: live status under the carried contract.
+    let currentCoupon = null;
+    const storedCode = current.coupon?.code || current.couponCode || null;
+    if (storedCode) {
+      const resolved = await resolveCarriedCoupon(db, current);
+      if (resolved.removed) {
+        currentCoupon = { code: storedCode, amount: current.discount ?? 0, valid: false, reason: resolved.removed.reason };
+      } else {
+        const math = recalculateOrderTotals({ lines: priced.lines, coupon: resolved.coupon });
+        currentCoupon = math.couponRemoved
+          ? { code: storedCode, amount: current.discount ?? 0, valid: false, reason: math.couponRemoved.reason }
+          : { code: resolved.coupon.code, amount: current.discount ?? 0, valid: true, recomputedAmount: math.discount };
+      }
+    }
+
+    // Every other coupon through the FULL new-redemption validation. The
+    // `eligible` list is what normally qualifies; `all` additionally carries
+    // every other ACTIVE coupon with its normal rule outcome, so the admin
+    // override selector can show normal minimums and mark what would need an
+    // explicit override — without ever weakening checkout validation.
+    const {
+      COUPONS_COLLECTION: COUPON_COLL,
+    } = require('./coupons');
+    const all = await db.collection(COUPON_COLL).get();
+    const customerKey = orderCustomerKey(current);
+    const eligible = [];
+    const allOffers = [];
+    for (const doc of all.docs) {
+      const data = doc.data() || {};
+      if (data.status !== 'active') continue;
+      const code = data.normalizedCode || normalizeCode(data.code);
+      if (!code) continue;
+      if (storedCode && normalizeCode(storedCode) === code) continue;
+      const check = await validateCouponForCart(db, {
+        code,
+        pricedItems: priced.lines,
+        customerKey,
+      });
+      const estimatedAmount = check.ok
+        ? check.discountAmount
+        : computeDiscountAmount(
+          {
+            discountType: data.discountType,
+            discountValue: data.discountValue,
+            maximumDiscount: data.maximumDiscount,
+          },
+          Math.round(eligibleSubtotal(
+            {
+              applicableProductIds: data.applicableProductIds,
+              applicableCategoryIds: data.applicableCategoryIds,
+            },
+            priced.lines
+          ) * 100) / 100
+        );
+      const offer = {
+        code,
+        discountType: data.discountType,
+        discountValue: data.discountValue,
+        maximumDiscount: data.maximumDiscount ?? null,
+        minimumOrderValue: Number(data.minimumOrderValue || 0),
+        eligibleSubtotal: check.ok ? check.eligibleSubtotal : null,
+        estimatedAmount,
+        qualifies: check.ok,
+        reason: check.ok ? null : check.error,
+      };
+      allOffers.push(offer);
+      if (!check.ok) continue;
+      eligible.push({
+        code: check.coupon.normalizedCode,
+        discountType: check.coupon.discountType,
+        discountValue: check.coupon.discountValue,
+        maximumDiscount: check.coupon.maximumDiscount ?? null,
+        minimumOrderValue: Number(check.coupon.minimumOrderValue || 0),
+        eligibleSubtotal: check.eligibleSubtotal,
+        estimatedAmount: check.discountAmount,
+      });
+    }
+    eligible.sort((a, b) => b.estimatedAmount - a.estimatedAmount);
+    allOffers.sort((a, b) => (b.qualifies - a.qualifies) || (b.estimatedAmount - a.estimatedAmount));
+
+    return res.json({ current: currentCoupon, eligible, all: allOffers, subtotal });
+  } catch (error) {
+    console.error('[orders/eligible-coupons] failed:', error);
+    return res.status(500).json({ error: 'Could not check eligible discounts. Please try again.' });
+  }
+}
+
+/**
+ * POST /api/admin/orders/:orderId/coupon { code, override? } — admin applies a coupon.
+ *
+ * The frontend sends ONLY the coupon code (plus an explicit override flag).
+ * Normal path: full validation + one atomic redemption burn, as before.
+ * Override path (override === true, admin route only): the coupon must exist
+ * and be active, but minimum / usage / per-customer / window / restriction
+ * gates are waived by explicit admin decision — recorded as adminOverride on
+ * both the snapshot and the order, with the acting admin in updatedBy. No
+ * usage is burned by overrides. The amount always uses existing coupon math.
+ */
+async function applyOrderCoupon(req, res) {
+  const db = getFirestore();
+  try {
+    const orderId = String(req.params?.orderId || '').trim();
+    if (!orderId || orderId.length > 128) {
+      return res.status(400).json({ error: 'Missing order id' });
+    }
+    const code = normalizeCode(req.body?.code);
+    if (!code || !isValidCodeShape(code)) {
+      return res.status(400).json({ error: 'Enter a valid coupon code.' });
+    }
+
+    const orderRef = db.collection('orders').doc(orderId);
+    const snap = await orderRef.get();
+    if (!snap.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const current = snap.data() || {};
+    if (normalizeCode(current.coupon?.code || '') === code) {
+      return res.json({ success: true, unchanged: true, order: orderMoneySummary(snap.id, current) });
+    }
+
+    const priced = await pricedLinesForOrder(db, current, { strict: true });
+    if (!priced.ok) {
+      return res.status(400).json({ error: priced.error });
+    }
+
+    /* Admin override: an explicit, authenticated admin decision recorded on
+       the order (adminOverride + updatedBy). It waives the CUSTOMER
+       eligibility gates only — minimum, usage / per-customer limits, time
+       window and product/category restrictions. A coupon that does not exist
+       or is not active can never be applied, override or not, and the amount
+       still uses the existing coupon math (including caps). Checkout
+       validation is untouched: this flag exists solely on this admin route.
+       Override grants consume NO usage — they are administrative grants, not
+       customer redemptions, so usage stats stay customer-only. */
+    const override = req.body?.override === true;
+    let check = null;
+    let overrideAmount = 0;
+    if (override) {
+      const doc = await getCouponByCode(db, code);
+      if (!doc) {
+        return res.status(400).json({ error: 'This coupon code is not valid.', code: 'COUPON_INVALID' });
+      }
+      if (doc.status !== 'active') {
+        return res.status(400).json({ error: 'This coupon is no longer active.', code: 'COUPON_INVALID' });
+      }
+      const eligible = Math.round(eligibleSubtotal(doc, priced.lines) * 100) / 100;
+      overrideAmount = computeDiscountAmount(doc, eligible);
+      if (overrideAmount <= 0) {
+        return res.status(400).json({ error: 'This coupon gives no discount on the current order.', code: 'COUPON_INVALID' });
+      }
+      check = { coupon: doc, discountAmount: overrideAmount, eligibleSubtotal: eligible };
+    } else {
+      check = await validateCouponForCart(db, {
+        code,
+        pricedItems: priced.lines,
+        customerKey: orderCustomerKey(current),
+      });
+      if (!check.ok) {
+        return res.status(400).json({ error: check.error, code: 'COUPON_INVALID' });
+      }
+    }
+
+    const subtotal = recalculateOrderTotals({ lines: priced.lines, coupon: null }).subtotal;
+    const snapshot = {
+      code: check.coupon.normalizedCode || code,
+      couponId: check.coupon.id,
+      discountType: check.coupon.discountType,
+      discountValue: check.coupon.discountValue,
+      discountAmount: check.discountAmount,
+      ...(override ? { adminOverride: true } : {}),
+    };
+    const total = Math.max(0, Math.round((subtotal - check.discountAmount) * 100) / 100);
+
+    const {
+      COUPONS_COLLECTION: COUPON_COLL,
+      REDEMPTIONS_COLLECTION: REDEEM_COLL,
+      CUSTOMER_COUNTERS_COLLECTION: CUST_COLL,
+    } = require('./coupons');
+    const couponRef = db.collection(COUPON_COLL).doc(check.coupon.id);
+    const customerKey = orderCustomerKey(current);
+    const burnKey = `${orderId}_${check.coupon.id}`;
+
+    try {
+      await db.runTransaction(async (tx) => {
+        // Reads first (transaction rule), writes after. The override path
+        // touches no shared counters, so it skips the burn reads entirely.
+        const [orderSnap, couponSnap, custSnap, redeemSnap] = await Promise.all([
+          tx.get(orderRef),
+          !override ? tx.get(couponRef) : Promise.resolve(null),
+          (!override && check.coupon.perCustomerLimit != null && customerKey)
+            ? tx.get(db.collection(CUST_COLL).doc(burnKey))
+            : Promise.resolve(null),
+          (!override)
+            ? tx.get(db.collection(REDEEM_COLL).doc(burnKey))
+            : Promise.resolve(null),
+        ]);
+        if (!orderSnap.exists) {
+          throw orderFailure(404, 'ORDER_MISSING', 'Order not found');
+        }
+        let custUsed = 0;
+        if (!override) {
+          if (!couponSnap.exists) {
+            throw orderFailure(400, 'COUPON_INVALID', 'This coupon is no longer available.');
+          }
+          const live = couponSnap.data() || {};
+          if (live.status !== 'active') {
+            throw orderFailure(400, 'COUPON_INACTIVE', 'This coupon is no longer active.');
+          }
+          if (live.usageLimit != null && Number(live.usageCount || 0) >= Number(live.usageLimit)) {
+            throw orderFailure(400, 'COUPON_LIMIT', 'This coupon has reached its usage limit.');
+          }
+          if (check.coupon.perCustomerLimit != null && customerKey && custSnap) {
+            custUsed = custSnap.exists ? Number(custSnap.data().count) || 0 : 0;
+            if (custUsed >= Number(check.coupon.perCustomerLimit)) {
+              throw orderFailure(400, 'COUPON_CUSTOMER_LIMIT', 'This coupon has already been used the maximum number of times.');
+            }
+          }
+        }
+        // Writes begin — no more tx.get past this point.
+        if (!override && redeemSnap && !redeemSnap.exists) {
+          // First burn for this order+coupon: consume usage exactly once.
+          // A redemption already on record means the usage was consumed
+          // earlier (e.g. removed then re-applied) — the order update below
+          // still lands, but usage is never double-counted.
+          if (check.coupon.perCustomerLimit != null && customerKey) {
+            tx.set(db.collection(CUST_COLL).doc(burnKey), {
+              couponId: check.coupon.id,
+              customerKey,
+              count: custUsed + 1,
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+          }
+          tx.update(couponRef, {
+            usageCount: FieldValue.increment(1),
+            totalDiscountGiven: FieldValue.increment(check.discountAmount),
+            totalRevenue: FieldValue.increment(total),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          tx.create(db.collection(REDEEM_COLL).doc(burnKey), {
+            couponId: check.coupon.id,
+            code: check.coupon.normalizedCode,
+            orderId,
+            customerKey: customerKey || null,
+            discountAmount: check.discountAmount,
+            createdAt: FieldValue.serverTimestamp(),
+          });
+        }
+        tx.update(orderRef, {
+          coupon: snapshot,
+          couponCode: snapshot.code,
+          discount: check.discountAmount,
+          discountSource: 'COUPON',
+          adminOverride: override,
+          ...(check.coupon.discountType === 'percentage'
+            ? { discountPercent: check.coupon.discountValue }
+            : { discountPercent: FieldValue.delete() }),
+          total,
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: req.caller?.uid || null,
+        });
+      });
+    } catch (txError) {
+      if (txError && txError.orderStatus) {
+        return res.status(txError.orderStatus).json({ error: txError.message, code: txError.orderCode });
+      }
+      throw txError;
+    }
+
+    const freshSnap = await orderRef.get();
+    const fresh = freshSnap.exists ? freshSnap.data() || {} : {};
+    const updatedOrder = orderMoneySummary(snap.id, { ...fresh, items: fresh.items || current.items });
+
+    let emailed = false;
+    let emailSkipped = null;
+    try {
+      const { sendDetailsUpdatedEmail } = require('./emailAutomation');
+      const result = await sendDetailsUpdatedEmail(db, orderId);
+      emailed = Boolean(result && result.ok);
+      if (!emailed) emailSkipped = result.skipped || result.error || 'failed';
+    } catch (emailError) {
+      console.warn(`[orders/coupon] update-email hook threw for ${orderId}:`, emailError.message);
+      emailSkipped = 'failed';
+    }
+
+    console.log(`[orders/coupon] ${orderId} applied ${snapshot.code} discount=${snapshot.discountAmount} total=${total}${override ? ' OVERRIDE' : ''} emailed=${emailed}`);
+    return res.json({ success: true, order: updatedOrder, emailed, emailSkipped });
+  } catch (error) {
+    console.error('[orders/coupon] apply failed:', error);
+    return res.status(500).json({ error: 'Could not apply the discount. Please try again.' });
+  }
+}
+
+/**
+ * POST /api/admin/orders/:orderId/discount-percent { percent } — admin sets a
+ * custom percentage discount.
+ *
+ * Explicit admin grant (admin-only route): the frontend sends ONLY the
+ * percent. The server validates the range, recomputes discount and total from
+ * the CURRENT persisted lines with adminPercentDiscount, and persists
+ * discountSource ADMIN_PERCENTAGE + adminOverride. It REPLACES any existing
+ * discount (coupon or counter percent) — the order model supports exactly one
+ * final discount. 0% is rejected: removing has its own explicit endpoint.
+ */
+async function applyAdminPercentDiscount(req, res) {
+  const db = getFirestore();
+  try {
+    const orderId = String(req.params?.orderId || '').trim();
+    if (!orderId || orderId.length > 128) {
+      return res.status(400).json({ error: 'Missing order id' });
+    }
+    const orderRef = db.collection('orders').doc(orderId);
+    const snap = await orderRef.get();
+    if (!snap.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const current = snap.data() || {};
+
+    const priced = await pricedLinesForOrder(db, current, { strict: false });
+    if (!priced.ok) {
+      return res.status(400).json({ error: priced.error });
+    }
+    const subtotal = recalculateOrderTotals({ lines: priced.lines, coupon: null }).subtotal;
+    const math = adminPercentDiscount(subtotal, req.body?.percent);
+    if (!math.ok) {
+      return res.status(400).json({ error: math.error });
+    }
+
+    if (
+      current.discountSource === 'ADMIN_PERCENTAGE' &&
+      Number(current.discountPercent) === math.percent &&
+      Number(current.discount) === math.discount &&
+      Number(current.total) === math.total &&
+      !current.coupon?.code && !current.couponCode
+    ) {
+      return res.json({ success: true, unchanged: true, order: orderMoneySummary(snap.id, current) });
+    }
+
+    await orderRef.update({
+      coupon: null,
+      couponCode: null,
+      discount: math.discount,
+      discountSource: 'ADMIN_PERCENTAGE',
+      discountPercent: math.percent,
+      adminOverride: true,
+      total: math.total,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: req.caller?.uid || null,
+    });
+
+    const freshSnap = await orderRef.get();
+    const fresh = freshSnap.exists ? freshSnap.data() || {} : {};
+    const updatedOrder = orderMoneySummary(snap.id, {
+      subtotal,
+      discount: math.discount,
+      total: math.total,
+      ...fresh,
+      items: fresh.items || current.items,
+    });
+
+    let emailed = false;
+    let emailSkipped = null;
+    try {
+      const { sendDetailsUpdatedEmail } = require('./emailAutomation');
+      const result = await sendDetailsUpdatedEmail(db, orderId);
+      emailed = Boolean(result && result.ok);
+      if (!emailed) emailSkipped = result.skipped || result.error || 'failed';
+    } catch (emailError) {
+      console.warn(`[orders/discount-percent] update-email hook threw for ${orderId}:`, emailError.message);
+      emailSkipped = 'failed';
+    }
+
+    console.log(`[orders/discount-percent] ${orderId} custom ${math.percent}% discount=${math.discount} total=${math.total} emailed=${emailed}`);
+    return res.json({ success: true, order: updatedOrder, emailed, emailSkipped });
+  } catch (error) {
+    console.error('[orders/discount-percent] apply failed:', error);
+    return res.status(500).json({ error: 'Could not apply the discount. Please try again.' });
+  }
+}
+
+/**
+ * DELETE /api/admin/orders/:orderId/coupon — admin removes the coupon.
+ *
+ * Clears coupon/couponCode and the discount provenance (source NONE, override
+ * false). Counter percentage bills re-apply their stored percent instead; a
+ * custom admin percent is deleted with the discount so it cannot silently
+ * reappear. Total recomputed from CURRENT persisted lines, persisted, then
+ * the updated order is emailed. Redemptions are append-only by design:
+ * removing never releases the consumed usage, so a later re-apply of a
+ * limited coupon can fail closed.
+ */
+async function removeOrderCoupon(req, res) {
+  const db = getFirestore();
+  try {
+    const orderId = String(req.params?.orderId || '').trim();
+    if (!orderId || orderId.length > 128) {
+      return res.status(400).json({ error: 'Missing order id' });
+    }
+    const orderRef = db.collection('orders').doc(orderId);
+    const snap = await orderRef.get();
+    if (!snap.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const current = snap.data() || {};
+    if (!current.coupon?.code && !current.couponCode) {
+      return res.json({ success: true, unchanged: true, order: orderMoneySummary(snap.id, current) });
+    }
+
+    const priced = await pricedLinesForOrder(db, current, { strict: false });
+    if (!priced.ok) {
+      return res.status(400).json({ error: priced.error });
+    }
+    const subtotal = recalculateOrderTotals({ lines: priced.lines, coupon: null }).subtotal;
+    // A stored percent is only an INPUT for counter bills (discountSource
+    // absent there). Coupon/custom percents are display snapshots — removing
+    // the discount must delete them so they cannot silently reapply.
+    const isStoreOrder = Boolean(current.paymentMode) || current.source === 'pos' || current.channel === 'offline';
+    const hasAdminMeta = current.discountSource === 'COUPON' || current.discountSource === 'ADMIN_PERCENTAGE';
+    let discount = 0;
+    let clearPercent = true;
+    const storedPct = Number(current.discountPercent);
+    if (!hasAdminMeta && Number.isFinite(storedPct) && storedPct > 0) {
+      discount = Math.round(subtotal * (Math.min(100, storedPct) / 100) * 100) / 100;
+      clearPercent = !isStoreOrder;
+    }
+    const total = Math.max(0, Math.round((subtotal - discount) * 100) / 100);
+
+    await orderRef.update({
+      coupon: null,
+      couponCode: null,
+      discount,
+      discountSource: 'NONE',
+      adminOverride: false,
+      ...(clearPercent ? { discountPercent: FieldValue.delete() } : {}),
+      total,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: req.caller?.uid || null,
+    });
+
+    const freshSnap = await orderRef.get();
+    const fresh = freshSnap.exists ? freshSnap.data() || {} : {};
+    const updatedOrder = orderMoneySummary(snap.id, { ...fresh, items: fresh.items || current.items });
+
+    let emailed = false;
+    let emailSkipped = null;
+    try {
+      const { sendDetailsUpdatedEmail } = require('./emailAutomation');
+      const result = await sendDetailsUpdatedEmail(db, orderId);
+      emailed = Boolean(result && result.ok);
+      if (!emailed) emailSkipped = result.skipped || result.error || 'failed';
+    } catch (emailError) {
+      console.warn(`[orders/coupon] update-email hook threw for ${orderId}:`, emailError.message);
+      emailSkipped = 'failed';
+    }
+
+    console.log(`[orders/coupon] ${orderId} removed coupon total=${total} emailed=${emailed}`);
+    return res.json({ success: true, order: updatedOrder, emailed, emailSkipped });
+  } catch (error) {
+    console.error('[orders/coupon] remove failed:', error);
+    return res.status(500).json({ error: 'Could not remove the discount. Please try again.' });
+  }
+}
+
 module.exports = {
   createOrder,
   createPosOrder,
@@ -1422,6 +2437,13 @@ module.exports = {
   setOnlineCounterTo,
   commitSequencedOrder,
   priceCart,
+  recalculateOrderTotals,
+  adminPercentDiscount,
+  updateOrderItems,
+  listEligibleCoupons,
+  applyOrderCoupon,
+  applyAdminPercentDiscount,
+  removeOrderCoupon,
   NOTIFY_TOKEN_TTL_MS,
   MAX_ITEMS,
   MAX_ORDER_CREATE_ATTEMPTS,

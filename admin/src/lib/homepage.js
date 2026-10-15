@@ -1,6 +1,7 @@
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { cachedGetDoc, invalidateCache } from './firestoreCache';
+import { DEFAULT_HERO_ARTWORK_ANIMATION, normalizeHeroArtworkAnimation } from './heroArtwork';
 
 /**
  * Homepage configuration — the single shared source of truth for the homepage
@@ -128,6 +129,8 @@ export const DEFAULT_HOMEPAGE = {
   heroBanners: DEFAULT_HERO_BANNERS,
   promoCards: DEFAULT_PROMO_CARDS,
   heroCopy: DEFAULT_HERO_COPY,
+  /* Hero artwork motion (Canvas → Hero → Artwork Animation). */
+  heroArtworkAnimation: DEFAULT_HERO_ARTWORK_ANIMATION,
   secondaryBanners: [],
   productBanners: [],
   featuredCategories: [],
@@ -229,6 +232,7 @@ export async function readHomepageConfig() {
       ...DEFAULT_HOMEPAGE,
       ...data,
       heroCopy: { ...DEFAULT_HERO_COPY, ...(data.heroCopy || {}) },
+      heroArtworkAnimation: normalizeHeroArtworkAnimation(data.heroArtworkAnimation),
       heroBanners: Array.isArray(data.heroBanners) ? data.heroBanners : DEFAULT_HOMEPAGE.heroBanners,
       promoCards: Array.isArray(data.promoCards) ? data.promoCards : DEFAULT_HOMEPAGE.promoCards,
       secondaryBanners: Array.isArray(data.secondaryBanners) ? data.secondaryBanners : [],

@@ -1,6 +1,12 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+/* Mobile-only home redesign (≤767px). Imported last so its breakpoint rules
+   win on phones; desktop/tablet are untouched (see file header). */
+import './styles/mobile-home.css'
+/* Homepage night atmosphere: warm section progression + faint festive
+   textures. Styling only — no layout, spacing, typography or logic impact. */
+import './styles/home-atmosphere.css'
 // NOTE: admin-portrait.css is intentionally NOT imported here. It styles only
 // the admin orders/users grids + portrait layer, so it lives in the lazy
 // admin chunks (see AdminDashboard/Orders/UserManagement/ProductForm) instead

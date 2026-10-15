@@ -52,6 +52,18 @@
   --surface-raised: #251E1A;
   --surface-sunken: #17120F;
   --surface-inverse: #FDF9F0;
+  /* ---- Homepage night atmosphere (scoped via .home-sec-* / .route-home) ----
+     Warm festive progression so home sections read as distinct bands of one
+     dark Diwali evening instead of a single black block. Gold stays an
+     accent; reds/oranges stay deep and muted. Nothing here alters layout. */
+  --home-hero: #0D0806;
+  --home-features: #100806;
+  --home-categories: #160A07;
+  --home-featured: #100806;
+  --home-best: #1A0B09;
+  --home-deals: #230B08;
+  --home-trust: #120907;
+  --home-news: #171010;
   --hairline: rgba(237, 231, 223, 0.10);
   --hairline-strong: rgba(237, 231, 223, 0.18);
 
@@ -575,6 +587,16 @@ img {
     overflow: hidden;
   }
 
+  /* Order history card — quiet hover accent so cards read as clickable
+     without shouting. Motion is a single border-colour transition. */
+  .order-card {
+    transition: border-color 180ms var(--ease-out-soft), box-shadow 180ms var(--ease-out-soft);
+  }
+
+  .order-card:hover {
+    border-color: rgba(210, 166, 79, 0.38);
+  }
+
   .panel-editorial::before {
     content: '';
     position: absolute;
@@ -1063,6 +1085,10 @@ img {
   }
 
   .rail::-webkit-scrollbar { display: none; }
+
+  /* Navbar search suggestions: internal scroll only, no visible scrollbar. */
+  .search-suggest-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .search-suggest-scroll::-webkit-scrollbar { display: none; }
 
   .rail.is-dragging { cursor: grabbing; user-select: none; }
 
@@ -2200,8 +2226,8 @@ img {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  margin-top: 1rem;
-  padding-top: 0.75rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
   border-top: 1px solid var(--hairline);
 }
 
@@ -2610,7 +2636,7 @@ img {
   .shell.products-page > header,
   .shell.products-page > .catalogue-toolbar,
   .shell.products-page > .catalogue-admin,
-  .shell.products-page > .mt-6 {
+  .shell.products-page > .mt-4 {
     padding-inline: 20px;
   }
   .products-page-header {
@@ -2911,10 +2937,9 @@ img {
   }
 }
 
-/* Hide mobile inline reorder on desktop */
-@media (min-width: 768px) {
-  .mobile-admin-reorder { display: none !important; }
-}
+/* The reorder toggle lives inside the toolbar row on every viewport, so the
+   standalone row below only ever carries the active-mode hint (rendered
+   solely while reordering) and never reserves vertical space otherwise. */
 
 /* =========================================================================
    HOMEPAGE SEO GUIDE ("Firecrackers in Hyderabad") — full-width dark

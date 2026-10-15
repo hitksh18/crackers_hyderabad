@@ -24,9 +24,11 @@ const Coupons = lazy(() => import('./pages/Coupons'));
 const AddProduct = lazy(() => import('./pages/AddProduct'));
 const EditProduct = lazy(() => import('./pages/EditProduct'));
 const Categories = lazy(() => import('./pages/Categories'));
+const Brands = lazy(() => import('./pages/Brands'));
 const Users = lazy(() => import('./pages/Users'));
 const PriceList = lazy(() => import('./pages/PriceList'));
 const Canvas = lazy(() => import('./pages/Canvas'));
+const HeroProducts = lazy(() => import('./pages/HeroProducts'));
 // Settings → Orders → Order ID. Admin-only: the format decides what every new
 // order is called, and the API re-checks it against the live sequence counter.
 const OrderIdSettings = lazy(() => import('./pages/OrderIdSettings'));
@@ -196,6 +198,22 @@ function AdminShell() {
               }
             />
             <Route
+              path="/brands"
+              element={
+                <ProtectedRoute adminOnly>
+                  <Brands />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/brands/:brandId"
+              element={
+                <ProtectedRoute adminOnly>
+                  <Brands />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/users"
               element={
                 <ProtectedRoute adminOnly>
@@ -234,6 +252,14 @@ function AdminShell() {
               element={
                 <ProtectedRoute adminOnly>
                   <OrderIdSettings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/hero-products"
+              element={
+                <ProtectedRoute adminOnly>
+                  <HeroProducts />
                 </ProtectedRoute>
               }
             />

@@ -82,7 +82,7 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
   const categoryLabel = product.category
     || (Array.isArray(product.categories) ? product.categories[0] : null)
     || null;
-  const brandName = product.brand?.name || null;
+  const brandName = typeof product.brand === 'string' ? (product.brand.trim() || null) : (product.brand?.name || null);
 
   const cartAction = (
     <AnimatePresence mode="wait" initial={false}>

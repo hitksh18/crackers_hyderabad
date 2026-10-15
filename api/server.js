@@ -49,6 +49,11 @@ const {
   readHighestUsedSequence,
   setOnlineCounterTo,
   priceCart,
+  updateOrderItems,
+  listEligibleCoupons,
+  applyOrderCoupon,
+  applyAdminPercentDiscount,
+  removeOrderCoupon,
 } = require('./lib/orders');
 const {
   normalizeCode: normalizeCouponCode,
@@ -2691,6 +2696,40 @@ app.post('/api/orders/status', adminLimiter, requireFirebase, async (req, res) =
   }
 });
 
+/**
+ * Admin order item editing: POST /api/admin/orders/:orderId/items
+ * Body: { items: [{ id, quantity }], adminNote? }
+ *
+ * Admin-only. The single authoritative write path for changing an order's
+ * items after placement: the server reprices from the products records,
+ * recalculates subtotal/discount/total from the current lines, persists them
+ * together, then sends the updated-order customer email. The admin UI renders
+ * the returned order — never a locally computed total. Order ids are untouched.
+ */
+app.post('/api/admin/orders/:orderId/items', adminLimiter, requireFirebase, requireAdmin, async (req, res) => {
+  return updateOrderItems(req, res);
+});
+
+/**
+ * Admin order discount management. The frontend sends ONLY a coupon code (or
+ * nothing, for preview/removal) — every amount is calculated server-side
+ * from the current persisted lines. Order ids are untouched.
+ */
+app.get('/api/admin/orders/:orderId/eligible-coupons', adminLimiter, requireFirebase, requireAdmin, async (req, res) => {
+  return listEligibleCoupons(req, res);
+});
+
+app.post('/api/admin/orders/:orderId/coupon', adminLimiter, requireFirebase, requireAdmin, async (req, res) => {
+  return applyOrderCoupon(req, res);
+});
+
+app.delete('/api/admin/orders/:orderId/coupon', adminLimiter, requireFirebase, requireAdmin, async (req, res) => {
+  return removeOrderCoupon(req, res);
+});
+
+app.post('/api/admin/orders/:orderId/discount-percent', adminLimiter, requireFirebase, requireAdmin, async (req, res) => {
+  return applyAdminPercentDiscount(req, res);
+});
 /**
  * Public order tracking.
  *

@@ -6,7 +6,7 @@ import { Search, Truck } from 'lucide-react';
  */
 const TrackOrderBlock = ({ orderId, onOrderIdChange, onSubmit }) => (
   <div
-    className="panel-editorial glass-card flex h-full flex-col p-6 md:p-8"
+    className="panel-editorial track-card glass-card flex h-full flex-col p-6 md:p-8"
   >
     <span
       className="flex h-12 w-12 items-center justify-center"

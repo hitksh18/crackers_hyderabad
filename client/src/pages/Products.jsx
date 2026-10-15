@@ -16,7 +16,9 @@ import Seo from '../components/Seo';
 import toast from '../utils/toast';
 import { PRODUCT_CATEGORIES, isProductInCategory, resolveCategory, categoryDisplayName } from '../config/categories';
 import { readCategoryShowcaseConfig, applyShowcaseOrder } from '../lib/categoryShowcase';
-import { buildBrandLookup, withResolvedBrands } from '../lib/resolveBrand';
+import { buildBrandLookup, withResolvedBrands, brandSlugOf, productMatchesBrand, resolveBrandParam } from '../lib/resolveBrand';
+import { normalizeQuery, searchProducts } from '../lib/productSearch';
+import { normalizeImageUrl } from '../lib/normalizeImageUrl';
 import { readCustomerProductsScroll, clearCustomerProductsScroll } from '../lib/productsScroll';
 import { trackSearch } from '../lib/ga4';
 
@@ -230,11 +232,31 @@ const Products = () => {
       // mobile overlay both navigate on submit). Deduped inside the helper
       // so StrictMode remounts send it once.
       trackSearch(qParam);
+    } else {
+      // No ?q= means no search — clear any stale term so the full catalogue
+      // returns (e.g. navigating from /products?q=x back to /products).
+      setSearchTerm('');
     }
   }, [searchParams]);
 
   /* One brands lookup per page load — every card below resolves from it. */
   const brandLookup = useMemo(() => buildBrandLookup(brands), [brands]);
+
+  /* Managed brand filter, derived straight from the shareable ?brand=<slug>
+     param (slug, id or name all resolve) — no mirrored state to drift. Only
+     active brands resolve; inactive ones stay out of customer navigation. */
+  const brandParam = searchParams.get('brand');
+  const activeBrand = brandParam ? resolveBrandParam(brands, brandParam) : null;
+  const unknownBrand = brandParam && brands.length > 0 && !activeBrand ? brandParam : null;
+
+  /* Brand dropdown options: active brands that actually have products in the
+     catalogue, alphabetical. Inactive and empty brands stay hidden. */
+  const brandOptions = useMemo(() => {
+    const list = Array.isArray(brands) ? brands.filter((b) => b && b.active !== false) : [];
+    return list
+      .filter((b) => products.some((p) => productMatchesBrand(p, b, brandLookup)))
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' }));
+  }, [brands, products, brandLookup]);
 
   /* Back-from-details scroll restoration: only POP navigations (browser Back
      or history-back) may restore; PUSH (navbar links, fresh clicks) clears
@@ -278,27 +300,36 @@ const Products = () => {
      always receives a consistent { id, name, logo } shape. Nothing here
      mutates `products`. */
   const filteredProducts = useMemo(() => {
+    /* An unresolvable ?brand= is a dead link, not the full catalogue. */
+    if (unknownBrand) return [];
     let list = products;
+
+    if (activeBrand) {
+      list = list.filter(p => productMatchesBrand(p, activeBrand, brandLookup));
+    }
 
     if (selectedCategory !== 'All') {
       list = list.filter(p => isProductInCategory(p, selectedCategory));
     }
 
     if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      list = list.filter(p => {
-        const nameMatch = (p.name || '').toLowerCase().includes(searchLower);
-        const descMatch = String(p.description || '').toLowerCase().includes(searchLower);
-        const categoryMatch = Array.isArray(p.categories)
-          ? p.categories.some(cat => String(cat).toLowerCase().includes(searchLower))
-          : String(p.category || '').toLowerCase().includes(searchLower);
-
-        return nameMatch || descMatch || categoryMatch;
-      });
+      /* Same engine as the navbar suggestions (normalization, substrings,
+         numbers, brand/category fields) — membership only, the toolbar sort
+         below still decides the order. Local + synchronous, so the grid can
+         never flash an empty state between keystrokes; single characters are
+         first-class queries in the engine. */
+      if (!normalizeQuery(searchTerm)) {
+        list = [];
+      } else {
+        const matchedIds = new Set(
+          searchProducts(list, searchTerm, list.length, brandLookup).map((p) => p.id)
+        );
+        list = list.filter((p) => matchedIds.has(p.id));
+      }
     }
 
     return withResolvedBrands(sortList(list, sortBy), brandLookup);
-  }, [products, brandLookup, searchTerm, selectedCategory, sortBy]);
+  }, [products, brandLookup, searchTerm, selectedCategory, activeBrand, unknownBrand, sortBy]);
 
   const sortByOrder = (list) =>
     [...list].sort((a, b) =>
@@ -372,18 +403,24 @@ const Products = () => {
     setSearchParams({});
   };
 
-  const hasActiveFilters = Boolean(searchTerm) || selectedCategory !== 'All';
+  const hasActiveFilters = Boolean(searchTerm) || selectedCategory !== 'All' || Boolean(brandParam);
 
   const totalCount = filteredProducts.length;
 
   let emptyTitle = 'No products listed yet';
   let emptyDescription = 'The catalogue is empty right now. Please check back shortly.';
-  if (searchTerm) {
+  if (unknownBrand) {
+    emptyTitle = 'Brand not found';
+    emptyDescription = `Nothing is listed under “${unknownBrand}” right now. Reset the filters to browse the full catalogue.`;
+  } else if (searchTerm) {
     emptyTitle = 'No products match that search';
-    emptyDescription =
-      selectedCategory === 'All'
-        ? `Nothing matched “${searchTerm}”. Try a shorter word, or reset the filters to browse the whole range.`
-        : `Nothing matched “${searchTerm}” in ${categoryDisplayName(selectedCategory)}. Try a shorter word, or reset the filters to browse the whole range.`;
+    const scope = activeBrand ? ` from ${activeBrand.name}` : (selectedCategory === 'All' ? '' : ` in ${categoryDisplayName(selectedCategory)}`);
+    emptyDescription = `Nothing matched “${searchTerm}”${scope}. Try a shorter word, or reset the filters to browse the whole range.`;
+  } else if (activeBrand) {
+    emptyTitle = `Nothing from ${activeBrand.name} right now`;
+    emptyDescription = selectedCategory === 'All'
+      ? 'This brand has no products listed at the moment. Reset the filters to browse the full catalogue.'
+      : `This brand has no ${categoryDisplayName(selectedCategory)} listed at the moment. Reset the filters to browse the full catalogue.`;
   } else if (selectedCategory !== 'All') {
     const label = categoryDisplayName(selectedCategory);
     emptyTitle = `Nothing in ${label} right now`;
@@ -395,37 +432,82 @@ const Products = () => {
     // range. (There is no "All" pill in the row; this is the way back.)
     if (name === selectedCategory) name = 'All';
     setSelectedCategory(name);
+    const brandPart = brandParam ? { brand: brandParam } : {};
+    const qPart = searchTerm ? { q: searchTerm } : {};
     if (name === 'All') {
-      setSearchParams(searchTerm ? { q: searchTerm } : {});
+      setSearchParams({ ...brandPart, ...qPart });
     } else {
-      setSearchParams({ category: name, ...(searchTerm ? { q: searchTerm } : {}) });
+      setSearchParams({ category: name, ...brandPart, ...qPart });
     }
+  };
+
+  /* Brand dropdown — writes the shareable slug so the URL stays the filter.
+     Category and search ride along; every filter combines. */
+  const selectBrand = (brandId) => {
+    const categoryPart = selectedCategory !== 'All' ? { category: selectedCategory } : {};
+    const qPart = searchTerm ? { q: searchTerm } : {};
+    if (!brandId || brandId === 'All') {
+      setSearchParams({ ...categoryPart, ...qPart });
+      return;
+    }
+    const doc = brands.find((b) => String(b.id) === String(brandId));
+    setSearchParams({ ...categoryPart, brand: brandSlugOf(doc) || doc?.name || brandId, ...qPart });
   };
 
   /* Category SEO: unique title/description/H1 per real category, generic
      catalogue signals otherwise. Canonical strategy unchanged
-     (/products?category=<value>). */
+     (/products?category=<value>), extended with ?brand=<slug> — the brand
+     collection view reuses this same page, never a duplicate listing. */
   const activeCategoryEntry = selectedCategory !== 'All' ? resolveCategory(selectedCategory) : null;
   const activeCategoryName = activeCategoryEntry ? activeCategoryEntry.name : null;
   const activeCategoryDescriptor = activeCategoryEntry
     ? (CATEGORY_DESCRIPTORS[activeCategoryEntry.value] || CATEGORY_DESCRIPTORS[activeCategoryEntry.name] || 'fireworks picked for celebrations')
     : null;
-  const categoryCanonical = activeCategoryEntry
-    ? `/products?category=${encodeURIComponent(activeCategoryEntry.value)}`
-    : '/products';
-  const categoryBreadcrumbLd = activeCategoryEntry
+  const activeBrandSlug = activeBrand ? (brandSlugOf(activeBrand) || activeBrand.name) : null;
+  const catalogueCanonical = (() => {
+    const params = new URLSearchParams();
+    if (activeCategoryEntry) params.set('category', activeCategoryEntry.value);
+    if (activeBrandSlug) params.set('brand', activeBrandSlug);
+    const qs = params.toString();
+    return qs ? `/products?${qs}` : '/products';
+  })();
+  const catalogueTitle = activeBrand
+    ? (activeCategoryName
+        ? `${activeBrand.name} ${activeCategoryName} in Hyderabad | Crackers Hyderabad`
+        : `${activeBrand.name} Fireworks in Hyderabad | Crackers Hyderabad`)
+    : (activeCategoryName
+      ? `${activeCategoryName} in Hyderabad | Crackers Hyderabad`
+      : 'Buy Crackers Online in Hyderabad | Wholesale Fireworks – Crackers Hyderabad');
+  const catalogueDescription = activeBrand
+    ? (activeBrand.description
+      ? `${activeBrand.name}: ${activeBrand.description}`.slice(0, 160)
+      : `Shop ${activeBrand.name.toLowerCase()} fireworks online at Crackers Hyderabad with delivery across Hyderabad.${activeCategoryDescriptor ? ` ${activeCategoryDescriptor.charAt(0).toUpperCase() + activeCategoryDescriptor.slice(1)}.` : ''}`)
+    : (activeCategoryName
+      ? `Shop ${activeCategoryName.toLowerCase()} online at Crackers Hyderabad with delivery across Hyderabad. ${activeCategoryDescriptor.charAt(0).toUpperCase() + activeCategoryDescriptor.slice(1)}.`
+      : 'Shop premium fireworks and wholesale crackers in Hyderabad. Gift boxes, sparkles, rockets, flower pots and festival collections with doorstep delivery.');
+  const catalogueBreadcrumbLd = (activeCategoryEntry || activeBrand)
     ? {
         '@context': 'https://schema.org',
         '@type': 'BreadcrumbList',
         itemListElement: [
           { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://crackershyderabad.com/' },
           { '@type': 'ListItem', position: 2, name: 'Products', item: 'https://crackershyderabad.com/products' },
-          {
-            '@type': 'ListItem',
-            position: 3,
-            name: activeCategoryName,
-            item: `https://crackershyderabad.com${categoryCanonical}`,
-          },
+          ...(activeCategoryEntry && !activeBrand
+            ? [{
+                '@type': 'ListItem',
+                position: 3,
+                name: activeCategoryName,
+                item: `https://crackershyderabad.com${catalogueCanonical}`,
+              }]
+            : []),
+          ...(activeBrand
+            ? [{
+                '@type': 'ListItem',
+                position: activeCategoryEntry ? 4 : 3,
+                name: activeBrand.name,
+                item: `https://crackershyderabad.com${catalogueCanonical}`,
+              }]
+            : []),
         ],
       }
     : null;
@@ -433,35 +515,61 @@ const Products = () => {
   return (
     <div className="min-h-screen">
       <Seo
-        title={activeCategoryName
-          ? `${activeCategoryName} in Hyderabad | Crackers Hyderabad`
-          : 'Buy Crackers Online in Hyderabad | Wholesale Fireworks – Crackers Hyderabad'}
-        description={activeCategoryName
-          ? `Shop ${activeCategoryName.toLowerCase()} online at Crackers Hyderabad with delivery across Hyderabad. ${activeCategoryDescriptor.charAt(0).toUpperCase() + activeCategoryDescriptor.slice(1)}.`
-          : 'Shop premium fireworks and wholesale crackers in Hyderabad. Gift boxes, sparkles, rockets, flower pots and festival collections with doorstep delivery.'}
-        canonical={categoryCanonical}
-        jsonLd={categoryBreadcrumbLd}
+        title={catalogueTitle}
+        description={catalogueDescription}
+        canonical={catalogueCanonical}
+        jsonLd={catalogueBreadcrumbLd}
       />
       <div className="shell products-page" style={{ paddingTop: '1.5rem', paddingBottom: '1.5rem' }}>
         {/* ============ COMPACT HEADER ============ */}
         <header className="text-center products-page-header">
-          <span className="section-eyebrow justify-center">Catalogue</span>
+          <span className="section-eyebrow justify-center">{activeBrand ? 'Brand' : 'Catalogue'}</span>
           <h1 className="section-title mt-1.5 text-balance">
-            {activeCategoryName ? `${activeCategoryName} in Hyderabad` : 'Our Products'}
+            {activeBrand
+              ? (activeCategoryName ? `${activeBrand.name} ${activeCategoryName}` : `${activeBrand.name} in Hyderabad`)
+              : (activeCategoryName ? `${activeCategoryName} in Hyderabad` : 'Our Products')}
           </h1>
-          {activeCategoryEntry && (
+          {(activeCategoryEntry || activeBrand) && (
             <nav aria-label="Breadcrumb" className="mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
               <Link to="/">Home</Link>
               <span aria-hidden="true"> / </span>
               <Link to="/products">Products</Link>
-              <span aria-hidden="true"> / </span>
-              <span aria-current="page">{activeCategoryName}</span>
+              {activeCategoryName && (
+                <>
+                  <span aria-hidden="true"> / </span>
+                  {activeBrand ? <Link to={`/products?category=${encodeURIComponent(activeCategoryEntry.value)}`}>{activeCategoryName}</Link> : <span aria-current="page">{activeCategoryName}</span>}
+                </>
+              )}
+              {activeBrand && (
+                <>
+                  <span aria-hidden="true"> / </span>
+                  <span aria-current="page">{activeBrand.name}</span>
+                </>
+              )}
             </nav>
           )}
-          {activeCategoryDescriptor && (
-            <p className="mx-auto mt-1.5 max-w-xl text-sm" style={{ color: 'var(--text-muted)' }}>
-              Explore {activeCategoryDescriptor} from Crackers Hyderabad.
-            </p>
+          {activeBrand ? (
+            <div className="mx-auto mt-2 flex max-w-xl flex-col items-center gap-1.5">
+              {activeBrand.logo && (
+                <img
+                  src={normalizeImageUrl(activeBrand.logo)}
+                  alt={`${activeBrand.name} logo`}
+                  loading="lazy"
+                  className="h-12 w-12 rounded-xl border object-contain p-1"
+                  style={{ background: 'var(--surface-card)', borderColor: 'var(--hairline)' }}
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              )}
+              <p className="max-w-xl text-sm" style={{ color: 'var(--text-muted)' }}>
+                {activeBrand.description || `Premium fireworks from ${activeBrand.name}.`}
+              </p>
+            </div>
+          ) : (
+            activeCategoryDescriptor && (
+              <p className="mx-auto mt-1.5 max-w-xl text-sm" style={{ color: 'var(--text-muted)' }}>
+                Explore {activeCategoryDescriptor} from Crackers Hyderabad.
+              </p>
+            )
           )}
         </header>
 
@@ -540,6 +648,24 @@ const Products = () => {
               </button>
             )}
 
+            <label className="sort-label" htmlFor="catalogue-brand">
+              Brand
+            </label>
+            <select
+              id="catalogue-brand"
+              value={activeBrand ? String(activeBrand.id) : 'All'}
+              onChange={(e) => selectBrand(e.target.value)}
+              className="sort-select"
+              aria-label="Filter products by brand"
+            >
+              <option value="All">All Brands</option>
+              {brandOptions.map((b) => (
+                <option key={b.id} value={String(b.id)}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+
             <label className="sort-label" htmlFor="catalogue-sort">
               Sort by
             </label>
@@ -579,49 +705,36 @@ const Products = () => {
           </div>
         </div>
 
-        {isAdmin && (
+        {isAdmin && reorderMode && (
           <div className="catalogue-admin">
-            <button
-              type="button"
-              onClick={() => {
-                setReorderMode(!reorderMode);
-                setDragId(null);
-                setDragOverId(null);
+            {/* Hint only — the reorder toggle itself lives in the toolbar row
+                above on all viewports. Rendered solely while reordering so
+                this row never reserves vertical space otherwise. */}
+            <p
+              className="admin-reorder-hint"
+              style={{
+                background: 'rgba(210, 166, 79, 0.14)',
+                border: '1px solid rgba(210, 166, 79, 0.4)',
+                color: 'var(--gold-600)',
               }}
-              aria-pressed={reorderMode}
-              className={reorderMode ? 'admin-reorder active' : 'admin-reorder'}
             >
-              {reorderMode ? (
-                <>
-                  <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
-                  Done Reordering
-                </>
-              ) : (
-                <>
-                  <GripVertical className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
-                  Reorder Products
-                </>
-              )}
-            </button>
-
-            {reorderMode && (
-              <p
-                className="admin-reorder-hint"
-                style={{
-                  background: 'rgba(210, 166, 79, 0.14)',
-                  border: '1px solid rgba(210, 166, 79, 0.4)',
-                  color: 'var(--gold-600)',
-                  visibility: reorderMode ? 'visible' : 'hidden',
-                }}
-              >
-                Drag product cards to rearrange — customers see this exact order
-              </p>
-            )}
+              Drag product cards to rearrange — customers see this exact order
+            </p>
           </div>
         )}
 
         {/* ============ GRID ============ */}
-        <div className="mt-6">
+        {/* In-flow search results heading — the query's matches render as
+            normal product cards in the grid below. No floating overlay. */}
+        {!loading && searchTerm.trim().length > 0 && (
+          <div className="mt-4">
+            <p className="section-eyebrow">Search results</p>
+            <h2 className="subsection-title mt-1">
+              {totalCount} {totalCount === 1 ? 'match' : 'matches'} for &ldquo;{searchTerm.trim()}&rdquo;
+            </h2>
+          </div>
+        )}
+        <div className="mt-4">
           {loading ? (
             <ProductGridSkeleton count={12} />
           ) : filteredProducts.length === 0 ? (

@@ -3,7 +3,7 @@ import { Skeleton } from '../ui/Skeleton';
 import FireworksHero from './FireworksHero';
 
 /* Navbar is dark glass on homepage; hero must feel like its continuation — not a card on a light page */
-const HERO_SHELL_BG = '#070505';
+const HERO_SHELL_BG = '#090605';
 
 const HERO_TRUST_ITEMS = [
   { icon: BadgeCheck, title: '100% Genuine', sub: 'Products' },
@@ -17,7 +17,7 @@ const HERO_TRUST_ITEMS = [
 const HeroTrustStrip = () => (
   <div
     className="relative"
-    style={{ background: '#0B0908', borderTop: '1px solid rgba(178,140,70,0.22)' }}
+    style={{ background: '#0C0907', borderTop: '1px solid rgba(178,140,70,0.22)' }}
   >
     <div className="mx-auto grid max-w-[1400px] grid-cols-2 px-5 sm:px-8 md:grid-cols-4 md:px-10 lg:px-12 xl:px-14">
       {HERO_TRUST_ITEMS.map((item, i) => {
@@ -67,8 +67,10 @@ const HeroShellSkeleton = () => (
  * Accepts the same props (banners, cards, durationSec, loading, mode, copy) so
  * Canvas/Home.jsx require no changes. Banner/carousel props are accepted
  * for API compat; the scene is static and needs no campaign data.
+ * heroProducts/showcaseLoading hydrate the right-column showcase only — the
+ * hero text never waits for them.
  */
-const StorefrontHero = ({ banners, cards, durationSec, loading, mode = 'auto', copy }) => {
+const StorefrontHero = ({ banners, cards, durationSec, loading, mode = 'auto', copy, heroProducts, showcaseLoading, heroArtworkAnimation }) => {
   void banners;
   void cards;
   void durationSec;
@@ -87,7 +89,7 @@ const StorefrontHero = ({ banners, cards, durationSec, loading, mode = 'auto', c
       <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8" style={{ background: 'linear-gradient(180deg, rgba(7,5,5,0.45) 0%, transparent 100%)' }} />
       {/* Hero is visually part of navbar — no hard gap, no bright separator */}
       <div className={mode === 'auto' ? 'relative w-full max-w-full' : 'relative mx-auto w-full max-w-[420px]'}>
-        <FireworksHero copy={copy} />
+        <FireworksHero copy={copy} products={heroProducts} showcaseLoading={showcaseLoading} artworkAnimation={heroArtworkAnimation} />
       </div>
       {/* Slim trust strip — the four hero assurances live here now, not in the hero */}
       <HeroTrustStrip />

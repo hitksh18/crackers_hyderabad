@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { normalizeImageUrl } from '../../lib/normalizeImageUrl';
 
 const FIELD = 'linear-gradient(158deg, var(--maroon-900) 0%, var(--maroon-800) 45%, #2A1512 75%, #1A1714 100%)';
 
@@ -29,26 +30,29 @@ export default function SecondaryBannerGrid({ banners }) {
       <div className="shell-wide">
         <div className={`grid gap-3 sm:gap-4 ${cols}`}>
           {list.map((b) => {
+            const src = normalizeImageUrl(b.imageDesktop || b.image);
+            const mobileSrc = normalizeImageUrl(b.imageMobile);
             const frame = (
               <span
                 className="block h-full w-full overflow-hidden"
-                style={{ borderRadius: 'var(--r-xl)', background: FIELD, boxShadow: 'var(--shadow-md)' }}
+                style={{ borderRadius: 'var(--r-xl)', background: FIELD, boxShadow: 'var(--shadow-md)', aspectRatio: '16 / 9' }}
               >
-                {b.imageMobile && (
-                  <img
-                    src={b.imageMobile}
-                    alt=""
-                    aria-hidden="true"
-                    loading="lazy"
-                    className={`aspect-video w-full sm:hidden ${fitClass(b)}`}
-                  />
-                )}
-                <img
-                  src={b.imageDesktop || b.image}
-                  alt={b.alt || ''}
-                  loading="lazy"
-                  className={`aspect-video w-full ${b.imageMobile ? 'hidden sm:block' : ''} ${fitClass(b)}`}
-                />
+                {/* <picture> downloads ONE file: mobile below sm, desktop at sm+.
+                    The old two-<img> + hidden pattern fetched both. */}
+                <picture>
+                  {mobileSrc && <source media="(max-width: 639px)" srcSet={mobileSrc} />}
+                  {src && (
+                    <img
+                      src={src}
+                      alt={b.alt || ''}
+                      loading="lazy"
+                      decoding="async"
+                      width={640}
+                      height={360}
+                      className={`aspect-video w-full ${fitClass(b)}`}
+                    />
+                  )}
+                </picture>
               </span>
             );
             return b.ctaLink ? (

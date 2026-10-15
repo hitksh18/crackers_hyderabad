@@ -1,7 +1,7 @@
 import HomeProductRail from './HomeProductRail';
 
 const FeaturedSection = ({ products, heading, loading, showAllLink }) => (
-  <section className="section-pad" style={{ background: 'var(--surface-card)' }}>
+  <section className="section-pad home-sec-featured">
     <div className="shell-wide">
       <HomeProductRail
         eyebrow={heading?.eyebrow || 'Handpicked'}

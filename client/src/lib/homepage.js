@@ -1,5 +1,15 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import {
+  DEFAULT_HERO_PRODUCTS,
+  DEFAULT_HERO_PRODUCT_GROUPS,
+  normalizeHeroProducts,
+  normalizeHeroProductGroups,
+} from './heroProducts';
+import {
+  DEFAULT_HERO_ARTWORK_ANIMATION,
+  normalizeHeroArtworkAnimation,
+} from './heroArtwork';
 
 /**
  * Homepage configuration — the single shared source of truth for the homepage
@@ -123,10 +133,20 @@ export const DEFAULT_HERO_COPY = {
   ctaLink: '/products',
 };
 
+/* Hero product configuration is OWNED by Admin → Hero Products but lives in
+   this same document; re-exported here so the homepage reads one config. */
+export { DEFAULT_HERO_PRODUCTS, DEFAULT_HERO_PRODUCT_GROUPS };
+
 export const DEFAULT_HOMEPAGE = {
   heroBanners: DEFAULT_HERO_BANNERS,
   promoCards: DEFAULT_PROMO_CARDS,
   heroCopy: DEFAULT_HERO_COPY,
+  /* Hero product source (Admin → Hero Products). Defaults keep the previous
+     storefront behaviour: a stable random pick of eligible products. */
+  heroProducts: DEFAULT_HERO_PRODUCTS,
+  heroProductGroups: DEFAULT_HERO_PRODUCT_GROUPS,
+  /* Hero artwork motion (Canvas → Hero → Artwork Animation). */
+  heroArtworkAnimation: DEFAULT_HERO_ARTWORK_ANIMATION,
   secondaryBanners: [],
   productBanners: [],
   featuredCategories: [],
@@ -235,6 +255,9 @@ export async function readHomepageConfig() {
         ...DEFAULT_HOMEPAGE,
         ...data,
         heroCopy: { ...DEFAULT_HERO_COPY, ...(data.heroCopy || {}) },
+        heroProducts: normalizeHeroProducts(data.heroProducts),
+        heroProductGroups: normalizeHeroProductGroups(data.heroProductGroups),
+        heroArtworkAnimation: normalizeHeroArtworkAnimation(data.heroArtworkAnimation),
         heroBanners: Array.isArray(data.heroBanners) ? data.heroBanners : DEFAULT_HOMEPAGE.heroBanners,
         promoCards: Array.isArray(data.promoCards) ? data.promoCards : DEFAULT_HOMEPAGE.promoCards,
         secondaryBanners: Array.isArray(data.secondaryBanners) ? data.secondaryBanners : [],

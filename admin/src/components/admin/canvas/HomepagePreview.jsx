@@ -1,4 +1,6 @@
 import { Component, useState } from 'react';
+import ScrollReveal from '../../ui/ScrollReveal';
+import { normalizeImageUrl } from '../../../lib/normalizeImageUrl';
 import StorefrontHero from '../../home/StorefrontHero';
 import CategoryShowcase from '../../home/CategoryShowcase';
 import FeaturedSection from '../../home/FeaturedSection';
@@ -129,6 +131,9 @@ export default function HomepagePreview({
   heroBanners = [],
   promoCards = [],
   heroCopy,
+  heroArtworkAnimation,
+  heroProducts = [],
+  showcaseLoading = false,
   texts = {},
   featuredBase = [],
   bestBase = [],
@@ -179,6 +184,9 @@ export default function HomepagePreview({
             durationSec={draft.homepage?.carouselDurationSec ?? 5}
             loading={false}
             copy={heroCopy || draft.homepage?.heroCopy}
+            heroProducts={heroProducts}
+            showcaseLoading={showcaseLoading}
+            heroArtworkAnimation={heroArtworkAnimation || draft.homepage?.heroArtworkAnimation}
           />,
         );
       case 'promoCards':
@@ -211,7 +219,7 @@ export default function HomepagePreview({
         return shell(
           'bestSellers',
           section.label || 'Best sellers',
-          <section className="section-pad" style={{ background: 'var(--surface-page)' }}>
+          <section className="section-pad home-sec-best">
             <div className="shell-wide">
               <HomeProductRail
                 eyebrow={texts.bestSellers?.eyebrow}
@@ -267,12 +275,14 @@ export default function HomepagePreview({
             section.label || 'Banner image',
             <section className="section-pad-sm" style={{ background: 'var(--surface-card)' }}>
               <div className="shell-wide">
-                <img
-                  src={bannerSettings.bannerImageUrl}
-                  alt={bannerSettings.bannerImageAlt || 'Crackers Hyderabad Banner'}
-                  loading="lazy"
-                  className="max-h-[400px] w-full object-cover sm:max-h-[500px]"
-                />
+                <ScrollReveal distance={20} className="overflow-hidden" style={{ borderRadius: 'var(--r-xl)', boxShadow: 'var(--shadow-lg)' }}>
+                  <img
+                    src={normalizeImageUrl(bannerSettings.bannerImageUrl)}
+                    alt={bannerSettings.bannerImageAlt || 'Crackers Hyderabad Banner'}
+                    loading="lazy"
+                    className="max-h-[400px] w-full object-cover sm:max-h-[500px]"
+                  />
+                </ScrollReveal>
               </div>
             </section>,
           )
@@ -287,7 +297,7 @@ export default function HomepagePreview({
         return shell(
           'newsletter',
           section.label || 'Newsletter',
-          <section className="section-pad" style={{ background: 'var(--surface-sunken)' }}>
+          <section className="section-pad home-sec-news">
             <div className="shell-wide">
               <PreviewNewsletterPair copy={texts.newsletter} notify={notify} />
             </div>
@@ -335,8 +345,12 @@ export default function HomepagePreview({
 
   const visible = orderedSections.filter((s) => s.enabled !== false);
 
+  /* route-home scopes the storefront's home-only stylesheets
+     (home-atmosphere section bands, mobile-home rules) to this preview so
+     the draft renders exactly as the customer homepage — without leaking
+     into the rest of the admin console. */
   return (
-    <div className="cv-live-page">
+    <div className="cv-live-page route-home">
       {notice}
       {isolatedPreview}
       {visible.map(renderSection)}

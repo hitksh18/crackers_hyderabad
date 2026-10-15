@@ -8,7 +8,7 @@ import { CornerFiligree } from '../ui/Ornaments';
  */
 const NewsletterBlock = ({ email, onEmailChange, onSubmit, copy }) => (
   <div
-    className="relative flex h-full flex-col overflow-hidden p-5 sm:p-6 md:p-8"
+    className="newsletter-card relative flex h-full flex-col overflow-hidden p-5 sm:p-6 md:p-8"
     style={{
       background: 'var(--grad-maroon)',
       borderRadius: 'var(--r-2xl)',

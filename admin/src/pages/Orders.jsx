@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import '../admin-portrait.css';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, getDoc, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDoc, doc, deleteDoc } from 'firebase/firestore';
 import { invalidateCache, cachedGetDocs, ordersCacheTtl } from '../lib/firestoreCache';
 import { db } from '../firebase';
 import { Link } from 'react-router-dom';
@@ -11,6 +11,7 @@ import { sendOrderSMS } from '../utils/sms';
 import { authFetch, readApiError } from '../utils/apiClient';
 import CustomModal from '../components/CustomModal';
 import { useModal } from '../hooks/useModal';
+import { useOrderDiscount } from '../hooks/useOrderDiscount';
 import { useAuth } from '../context/AuthContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
@@ -66,12 +67,17 @@ const Orders = () => {
   const [editingOrder, setEditingOrder] = useState(null);
   const [editedItems, setEditedItems] = useState([]);
   const [editedNote, setEditedNote] = useState('');
+  /* While a save is in flight the editor locks: repeated clicks can neither
+     duplicate lines nor fire parallel writes against the same order. */
+  const [savingOrder, setSavingOrder] = useState(false);
+  /* Discount state for the editor, evaluated against the CURRENT persisted
+     order — never edited-but-unsaved lines. */
+  const orderDiscount = useOrderDiscount(editingOrder?.id || null);
   const [orderEditMinimum, setOrderEditMinimum] = useState(500);
   const [products, setProducts] = useState([]);
   const [showProductSearch, setShowProductSearch] = useState(false);
   const [productSearchQuery, setProductSearchQuery] = useState('');
-  const [downloadingInvoice, setDownloadingInvoice] = useState(null);
-  /* The order id currently sending over WhatsApp (per-row spinner + disabled
+  const [downloadingInvoice, setDownloadingInvoice] = useState(null);  /* The order id currently sending over WhatsApp (per-row spinner + disabled
      state); null when idle. Separate from downloadingInvoice so one action
      never freezes the other. */
   const [sendingWhatsApp, setSendingWhatsApp] = useState(null);
@@ -174,50 +180,149 @@ const Orders = () => {
   };
 
   const saveOrderChanges = async () => {
-    if (!editingOrder) return;
+    if (!editingOrder || savingOrder) return;
 
     if (editedItems.length === 0) {
       toast.error('Order must have at least one item');
       return;
     }
 
-    const newTotal = editedItems.reduce((sum, item) => {
+    // Fast client-side floor check only — the server re-enforces the live
+    // minimum against the recalculated subtotal before persisting.
+    const previewTotal = editedItems.reduce((sum, item) => {
       const price = item.discountPrice || item.price || 0;
       return sum + (price * item.quantity);
     }, 0);
 
-    if (newTotal < orderEditMinimum) {
-      toast.error(`Order total must be at least Rs ${orderEditMinimum}. Current total: Rs ${newTotal}`);
+    if (previewTotal < orderEditMinimum) {
+      toast.error(`Order total must be at least Rs ${orderEditMinimum}. Current total: Rs ${previewTotal}`);
       return;
     }
 
+    setSavingOrder(true);
     try {
-      await updateDoc(doc(db, 'orders', editingOrder.id), {
-        items: editedItems,
-        total: newTotal,
-        adminNote: editedNote.trim() || null,
-        adminNoteUpdatedAt: serverTimestamp()
-      });
-
-      setOrders(orders.map(order =>
-        order.id === editingOrder.id
-          ? { ...order, items: editedItems, total: newTotal, adminNote: editedNote.trim() || null }
-          : order
-      ));
-
-      toast.success('Order updated successfully');
-      /* Staff-triggered details notification: the send itself (plus dedup and
-         the automation toggle) is server-side; a skipped send resolves
-         quietly so editing never errors on mail. */
-      authFetch('/api/admin/email-automation/notify-details', {
+      /* The server is the single authority for money: it reprices from the
+         products records, recalculates subtotal/discount/total from the
+         CURRENT lines, persists them together, and emails the customer the
+         updated order. This screen renders the returned order — never a
+         locally computed total. */
+      const response = await authFetch(`/api/admin/orders/${editingOrder.id}/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: editingOrder.id }),
-      }).catch(() => {});
-      cancelEditingOrder();
+        body: JSON.stringify({
+          items: editedItems.map((item) => ({ id: item.id, quantity: item.quantity })),
+          adminNote: editedNote,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(await readApiError(response, 'Failed to update order'));
+      }
+      const data = await response.json().catch(() => ({}));
+
+      if (data.unchanged) {
+        toast.success('No changes to save');
+      } else {
+        mergeUpdatedOrder(data.order);
+        toastEmailOutcome(data, 'updated');
+        if (data.couponRemoved) {
+          toast.error(`Coupon ${data.couponRemoved.code} no longer applies: ${data.couponRemoved.reason}`, { duration: 8000 });
+        }
+        // The editor stays open with the authoritative order, so the admin
+        // can review the recalculated discount or apply an eligible one next.
+        orderDiscount.refresh();
+      }
     } catch (error) {
       console.error('Error updating order:', error);
-      toast.error('Failed to update order');
+      toast.error(error.message || 'Failed to update order');
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+
+  /* Merge a server-returned order into list + editor state so every surface
+     keeps rendering the authoritative values. */
+  const mergeUpdatedOrder = (updated) => {
+    setOrders((prev) => prev.map((order) => (
+      order.id === updated.id ? { ...order, ...updated } : order
+    )));
+    if (Array.isArray(updated.items)) setEditedItems(updated.items);
+    invalidateCache('coll:orders');
+  };
+
+  const toastEmailOutcome = (data, verb) => {
+    if (data.emailed) {
+      toast.success(`Order ${verb} successfully. Customer emailed the updated order.`);
+    } else {
+      toast.success(`Order ${verb} successfully.`);
+      toast.error(
+        data.emailSkipped === 'no-recipient'
+          ? 'Order saved, but the customer has no usable email address.'
+          : 'Order saved, but the updated-order email could not be sent.',
+        { duration: 8000 }
+      );
+    }
+  };
+
+  const handleApplyCoupon = async (code, { override = false } = {}) => {
+    if (!code || orderDiscount.busy) return;
+    try {
+      const result = await orderDiscount.applyCoupon(code, { override });
+      if (!result) return;
+      if (result.unchanged) {
+        toast.success('That discount is already applied.');
+        return;
+      }
+      mergeUpdatedOrder(result.order);
+      toast.success(
+        `Discount ${result.order.couponCode} applied${result.order.adminOverride ? ' (admin override)' : ''}: −₹${Number(result.order.discount || 0).toLocaleString('en-IN')}. New total ₹${Number(result.order.total || 0).toLocaleString('en-IN')}.` +
+        (result.emailed ? ' Customer emailed.' : '')
+      );
+      if (!result.emailed) {
+        toast.error('Discount saved, but the updated-order email could not be sent.', { duration: 8000 });
+      }
+    } catch (error) {
+      console.error('Error applying discount:', error);
+      toast.error(error.message || 'Failed to apply the discount');
+    }
+  };
+
+  const handleApplyCustomPercent = async (percent) => {
+    if (orderDiscount.busy) return;
+    try {
+      const result = await orderDiscount.applyCustomPercent(percent);
+      if (!result) return;
+      if (result.unchanged) {
+        toast.success('That discount is already applied.');
+        return;
+      }
+      mergeUpdatedOrder(result.order);
+      toast.success(
+        `Custom ${result.order.discountPercent}% discount applied: −₹${Number(result.order.discount || 0).toLocaleString('en-IN')}. New total ₹${Number(result.order.total || 0).toLocaleString('en-IN')}.` +
+        (result.emailed ? ' Customer emailed.' : '')
+      );
+      if (!result.emailed) {
+        toast.error('Discount saved, but the updated-order email could not be sent.', { duration: 8000 });
+      }
+    } catch (error) {
+      console.error('Error applying custom discount:', error);
+      toast.error(error.message || 'Failed to apply the discount');
+    }
+  };
+
+  const handleRemoveCoupon = async () => {
+    if (orderDiscount.busy) return;
+    try {
+      const result = await orderDiscount.removeCoupon();
+      if (!result) return;
+      if (result.unchanged) {
+        toast.success('No discount to remove.');
+        return;
+      }
+      mergeUpdatedOrder(result.order);
+      toastEmailOutcome(result, 'updated');
+    } catch (error) {
+      console.error('Error removing discount:', error);
+      toast.error(error.message || 'Failed to remove the discount');
     }
   };
 
@@ -863,7 +968,7 @@ const Orders = () => {
         <AnimatePresence>
           {editingOrder && (
             <OrderEditModal
-              order={editingOrder}
+              order={orders.find((o) => o.id === editingOrder.id) || editingOrder}
               orderCode={orderCodeOf(editingOrder)}
               items={editedItems}
               note={editedNote}
@@ -878,6 +983,14 @@ const Orders = () => {
               onRemoveItem={removeItemFromOrder}
               onCancel={cancelEditingOrder}
               onSave={saveOrderChanges}
+              busy={savingOrder}
+              discountData={orderDiscount.data}
+              discountLoading={orderDiscount.loading}
+              discountError={orderDiscount.error}
+              onApplyCoupon={handleApplyCoupon}
+              onApplyCustom={handleApplyCustomPercent}
+              onRemoveCoupon={handleRemoveCoupon}
+              couponBusy={orderDiscount.busy}
             />
           )}
         </AnimatePresence>
