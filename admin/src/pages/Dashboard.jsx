@@ -10,15 +10,10 @@ import {
   TrendingUp,
   Search,
   BarChart3,
-  Users,
   ArrowRight,
   X,
   Image as ImageIcon,
-  Settings,
-  Boxes,
-  Award,
   Star,
-  TicketPercent,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from '../utils/toast';
@@ -31,18 +26,15 @@ import { displayNameForCategory } from '../lib/categoryIcons';
 import { getDisplayOrderId, orderIdMatches } from '../lib/orderId';
 import AdminTopBar from '../components/admin/AdminTopBar';
 
-/* The eight most-used destinations. Fixed — quick actions are shortcuts, not
-   a second navigation system; everything else lives in the sidebar. */
+/* The five most-used destinations. Fixed — quick actions are shortcuts, not
+   a second navigation system; everything else (Users, Categories, Brands,
+   Site Settings, Coupons) stays reachable from the sidebar. */
 const QUICK_ACTIONS = [
   { id: 'analytics', to: '/analytics', label: 'Analytics', desc: 'View sales and performance', icon: BarChart3 },
   { id: 'add-product', to: '/products/add', label: 'Add Product', desc: 'Create a new product', icon: Plus },
-  { id: 'users', to: '/users', label: 'Users', desc: 'Manage customers and users', icon: Users },
-  { id: 'homepage', to: '/canvas', label: 'Canvas', desc: 'Edit homepage', icon: ImageIcon },
-  { id: 'categories', to: '/categories', label: 'Categories', desc: 'Manage product categories', icon: Boxes },
-  { id: 'brands', to: '/brands', label: 'Brands', desc: 'Manage product brands', icon: Award },
-  { id: 'site-settings', to: '/site-settings', label: 'Site Settings', desc: 'Configure site/order settings', icon: Settings },
   { id: 'products', to: '/products', label: 'Manage Products', desc: 'View and manage products', icon: Package },
-  { id: 'coupons', to: '/coupons', label: 'Create Coupon', desc: 'Create and manage discount coupons', icon: TicketPercent },
+  { id: 'orders', to: '/orders', label: 'Orders', desc: 'Manage customer orders', icon: ShoppingCart },
+  { id: 'homepage', to: '/canvas', label: 'Canvas', desc: 'Edit homepage', icon: ImageIcon },
 ];
 
 const AdminDashboard = () => {
@@ -262,11 +254,11 @@ const AdminDashboard = () => {
         </div>
         )}
 
-        {/* Quick Actions — the eight most-used destinations, fixed */}
+        {/* Quick Actions — the five most-used destinations, fixed */}
         <section className="shrink-0 rounded-2xl border p-3 transition-colors duration-200 lg:p-4" style={{ borderColor: 'var(--hairline)', background: 'var(--surface-card)', boxShadow: 'var(--shadow-sm)' }}>
           <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-display)' }}>Quick Actions</h2>
 
-          <div className="dash-qa-grid mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="dash-qa-grid mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {QUICK_ACTIONS.map((action) => {
               const Icon = action.icon;
               return (

@@ -3501,7 +3501,7 @@ img {
    ========================================================================= */
 .wa-float {
   right: 16px;
-  bottom: max(16px, env(safe-area-inset-bottom));
+  bottom: calc(16px + env(safe-area-inset-bottom));
   border-radius: 16px;
   background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
   box-shadow: 0 8px 25px rgba(37, 211, 102, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.25);
@@ -3509,8 +3509,8 @@ img {
 }
 @media (min-width: 640px) {
   .wa-float {
-    right: 20px;
-    bottom: max(20px, env(safe-area-inset-bottom));
+    right: 24px;
+    bottom: 24px;
   }
 }
 @media (max-width: 639px) {

@@ -8,8 +8,9 @@ import TopBanner from './components/TopBanner';
 import CustomToast from './components/CustomToast';
 import ProtectedRoute from './components/ProtectedRoute';
 // Below-the-fold / deferred chrome: the copyright strip never renders on the
-// home page and the WhatsApp float renders null until its Firestore settings
-// arrive, so both load after the first paint without changing any behaviour.
+// home page and the WhatsApp float renders on every storefront route (except
+// /login) as soon as its Firestore number arrives, so both load after the
+// first paint without changing any behaviour.
 const SimpleCopyright = lazy(() => import('./components/SimpleCopyright'));
 const WhatsAppButton = lazy(() => import('./components/WhatsAppButton'));
 import { ThemeProvider } from './contexts/ThemeContext';

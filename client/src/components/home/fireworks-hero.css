@@ -45,7 +45,7 @@
   inset: -24px;
   z-index: 0;
   background:
-    radial-gradient(115% 100% at 50% 46%, transparent 60%, rgba(3, 2, 2, 0.42) 100%),
+    radial-gradient(115% 100% at 50% 46%, transparent 58%, rgba(3, 2, 2, 0.52) 100%),
     radial-gradient(2px 2px at 5% 12%, rgba(215, 190, 130, 0.18), transparent 70%),
     radial-gradient(2px 2px at 12% 34%, rgba(205, 130, 70, 0.12), transparent 70%),
     radial-gradient(2px 2px at 95% 10%, rgba(215, 190, 130, 0.16), transparent 70%),
@@ -57,10 +57,10 @@
     radial-gradient(2px 2px at 9% 55%, rgba(215, 190, 130, 0.1), transparent 70%),
     radial-gradient(4px 4px at 76% 8%, rgba(215, 190, 130, 0.1), transparent 70%),
     radial-gradient(3px 3px at 60% 92%, rgba(205, 130, 70, 0.1), transparent 70%),
-    radial-gradient(50% 44% at 28% 48%, rgba(140, 84, 44, 0.3) 0%, transparent 58%),
+    radial-gradient(50% 44% at 28% 48%, rgba(140, 84, 44, 0.22) 0%, transparent 58%),
     radial-gradient(40% 38% at 5% 64%, rgba(74, 21, 16, 0.22) 0%, transparent 65%),
-    radial-gradient(48% 46% at 72% 48%, rgba(154, 96, 48, 0.26) 0%, transparent 55%),
-    radial-gradient(40% 32% at 52% 42%, rgba(199, 154, 77, 0.14) 0%, transparent 65%),
+    radial-gradient(48% 46% at 72% 48%, rgba(154, 96, 48, 0.19) 0%, transparent 55%),
+    radial-gradient(40% 32% at 52% 42%, rgba(199, 154, 77, 0.1) 0%, transparent 65%),
     radial-gradient(70% 30% at 50% 102%, rgba(74, 21, 16, 0.36) 0%, transparent 70%),
     /* Warm biscuit/caramel base — dark enough for cream/gold contrast,
        clearly lighter than the old near-black, darkest at the edges. */
@@ -80,8 +80,8 @@
   aspect-ratio: 16 / 9;
   transform: translate(-50%, -50%);
   background:
-    radial-gradient(closest-side, rgba(255, 190, 110, 0.07) 0%, transparent 60%),
-    radial-gradient(closest-side, rgba(0, 0, 0, 0.55) 0%, transparent 72%);
+    radial-gradient(closest-side, rgba(255, 190, 110, 0.05) 0%, transparent 60%),
+    radial-gradient(closest-side, rgba(0, 0, 0, 0.62) 0%, transparent 72%);
 }
 
 /* ---------------- 2. Mouse spotlight ---------------- */
@@ -92,7 +92,7 @@
   pointer-events: none;
   background: radial-gradient(
     circle at var(--mouse-x) var(--mouse-y),
-    rgba(255, 190, 80, 0.06),
+    rgba(255, 190, 80, 0.04),
     transparent 28%
   );
 }
@@ -148,7 +148,7 @@
   content: '';
   width: 1.75rem;
   height: 1px;
-  background: rgba(178, 140, 70, 0.65);
+  background: rgba(178, 140, 70, 0.85);
   flex: none;
 }
 
@@ -158,7 +158,7 @@
   font-weight: 600;
   letter-spacing: 0.28em;
   text-indent: 0.1em;
-  color: #c9a961;
+  color: #d5b06a;
 }
 
 .fx-title {
@@ -167,7 +167,7 @@
   font-size: clamp(56px, 6vw, 96px);
   line-height: 1.04;
   letter-spacing: 0.005em;
-  text-shadow: 0 2px 28px rgba(0, 0, 0, 0.6), 0 0 40px rgba(190, 140, 54, 0.16);
+  text-shadow: 0 2px 22px rgba(0, 0, 0, 0.62), 0 0 26px rgba(190, 140, 54, 0.08);
 }
 
 .fx-title-crackers {
@@ -201,7 +201,7 @@
   font-weight: 600;
   letter-spacing: 0.24em;
   text-indent: 0.1em;
-  color: rgba(240, 230, 210, 0.72);
+  color: rgba(240, 230, 210, 0.86);
 }
 
 
@@ -582,7 +582,7 @@
   pointer-events: none;
   background: radial-gradient(
     circle,
-    rgba(170, 115, 45, 0.1),
+    rgba(170, 115, 45, 0.06),
     transparent 65%
   );
 }
@@ -598,7 +598,10 @@
   object-fit: contain;
   object-position: center;
   opacity: 0;
-  filter: drop-shadow(0 16px 26px rgba(0, 0, 0, 0.5));
+  /* Richer, crisper product rendering (display-only filter — the file and
+     dimensions are untouched): a touch more saturation/contrast plus an
+     unchanged soft ground shadow. */
+  filter: saturate(1.08) contrast(1.05) drop-shadow(0 16px 26px rgba(0, 0, 0, 0.5));
 }
 
 .hs-product-image.is-loaded {

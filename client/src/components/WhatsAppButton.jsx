@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FaWhatsapp } from 'react-icons/fa';
 import { doc, getDoc } from 'firebase/firestore';
@@ -10,20 +9,25 @@ import { SPRING, DURATION } from '../lib/motion';
 import { normalizeWhatsappLinkNumber } from '../lib/whatsappContact';
 
 /**
- * Floating WhatsApp contact button — HOME PAGE ONLY.
+ * Global floating WhatsApp contact button — every storefront route.
+ *
+ * Rendered once at the application root (AppContent), outside every page
+ * section, so no hero, product grid, navbar, modal or footer can hide or
+ * clip it: positioning is pure `position: fixed` (see .wa-float) with a
+ * z-index above all overlays, and rendering never depends on scroll, hero
+ * animation, viewport size, or product loading state.
  *
  * The number is the Store Contact setting from the admin app
  * (Site Settings → Store Contact → WhatsApp number), stored in Firestore at
  * `footerSettings/main` under the `whatsapp` field — the single source of
  * truth. Every mount re-reads the document, so an admin change is picked up
- * on the next homepage visit with no code change and no cache.
+ * on the next visit with no code change and no cache.
  *
  * Safety: there is no hardcoded fallback number. Until the saved number
  * loads — or when it is missing/unusable — the button renders nothing, so
  * the shop can never link customers to a wrong number.
  */
 const WhatsAppButton = () => {
-  const { pathname } = useLocation();
   const { isAdmin, isSales } = useAuth();
   const reduced = useReducedMotion();
   const [whatsappNumber, setWhatsappNumber] = useState('');
@@ -51,7 +55,9 @@ const WhatsAppButton = () => {
     fetchWhatsAppSettings();
   }, [fetchWhatsAppSettings]);
 
-  if (pathname !== '/' || !settingsLoaded || !whatsappNumber || isAdmin || isSales) {
+  /* Route-independent: visible on every storefront page, never on staff
+     surfaces. The only data gate is the saved number itself (see above). */
+  if (!settingsLoaded || !whatsappNumber || isAdmin || isSales) {
     return null;
   }
 
@@ -64,10 +70,11 @@ const WhatsAppButton = () => {
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Chat with us on WhatsApp"
-      className="wa-float group fixed z-overlay flex h-14 w-14 items-center justify-center text-white"
+      className="wa-float group fixed flex h-14 w-14 items-center justify-center text-white"
+      style={{ zIndex: 70 }}
       initial={{ opacity: 0, scale: reduced ? 1 : 0.6 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={reduced ? { duration: DURATION.instant } : { delay: 0.5, ...SPRING.soft }}
+      transition={reduced ? { duration: DURATION.instant } : SPRING.soft}
       whileHover={reduced ? undefined : { scale: 1.06 }}
       whileTap={reduced ? undefined : { scale: 0.94 }}
     >

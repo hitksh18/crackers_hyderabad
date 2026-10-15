@@ -19,22 +19,22 @@ const HeroTrustStrip = () => (
     className="relative"
     style={{ background: '#0C0907', borderTop: '1px solid rgba(178,140,70,0.22)' }}
   >
-    <div className="mx-auto grid max-w-[1400px] grid-cols-2 px-5 sm:px-8 md:grid-cols-4 md:px-10 lg:px-12 xl:px-14">
+    <div className="hero-trust-grid mx-auto grid max-w-[1400px] grid-cols-2 px-5 sm:px-8 md:grid-cols-4 md:px-10 lg:px-12 xl:px-14">
       {HERO_TRUST_ITEMS.map((item, i) => {
         const Icon = item.icon;
         return (
           <div
             key={item.title}
-            className={`flex items-center gap-2.5 py-4 md:justify-center md:py-5 ${
+            className={`hero-trust-item flex items-center gap-2.5 py-4 md:justify-center md:py-5 ${
               i > 0 ? 'md:border-l md:border-[rgba(178,140,70,0.16)]' : ''
             } ${i % 2 === 1 ? 'justify-end md:justify-center' : ''}`}
           >
             <Icon className="h-[15px] w-[15px] shrink-0" style={{ color: '#B28C46' }} strokeWidth={1.9} aria-hidden="true" />
             <span className="leading-tight">
-              <span className="block text-xs font-semibold tracking-wide" style={{ color: '#F8F2E7', fontFamily: 'var(--font-body)' }}>
+              <span className="hero-trust-title block text-xs font-semibold tracking-wide" style={{ color: '#F8F2E7', fontFamily: 'var(--font-body)' }}>
                 {item.title}
               </span>
-              <span className="block text-[11px]" style={{ color: 'rgba(248,242,231,0.52)', fontFamily: 'var(--font-body)' }}>
+              <span className="hero-trust-sub block text-[11px]" style={{ color: 'rgba(248,242,231,0.52)', fontFamily: 'var(--font-body)' }}>
                 {item.sub}
               </span>
             </span>
