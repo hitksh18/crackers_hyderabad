@@ -22,7 +22,7 @@
   width: 100%;
   max-width: 100%;
   overflow: clip;
-  background: #050403;
+  background: #24150F;
   /* Compact cinematic frame: content plus the feature strip below it fit a
      standard desktop viewport without a large scroll. */
   height: clamp(540px, 78svh, 760px);
@@ -57,12 +57,14 @@
     radial-gradient(2px 2px at 9% 55%, rgba(215, 190, 130, 0.1), transparent 70%),
     radial-gradient(4px 4px at 76% 8%, rgba(215, 190, 130, 0.1), transparent 70%),
     radial-gradient(3px 3px at 60% 92%, rgba(205, 130, 70, 0.1), transparent 70%),
-    radial-gradient(46% 40% at 28% 48%, rgba(130, 55, 20, 0.16) 0%, transparent 55%),
+    radial-gradient(50% 44% at 28% 48%, rgba(140, 84, 44, 0.3) 0%, transparent 58%),
     radial-gradient(40% 38% at 5% 64%, rgba(74, 21, 16, 0.22) 0%, transparent 65%),
-    radial-gradient(44% 44% at 72% 48%, rgba(180, 120, 40, 0.1) 0%, transparent 50%),
-    radial-gradient(38% 30% at 52% 42%, rgba(199, 154, 77, 0.08) 0%, transparent 65%),
+    radial-gradient(48% 46% at 72% 48%, rgba(154, 96, 48, 0.26) 0%, transparent 55%),
+    radial-gradient(40% 32% at 52% 42%, rgba(199, 154, 77, 0.14) 0%, transparent 65%),
     radial-gradient(70% 30% at 50% 102%, rgba(74, 21, 16, 0.36) 0%, transparent 70%),
-    linear-gradient(180deg, #090706 0%, #120907 30%, #1B0C08 58%, #24100A 84%, #100806 100%);
+    /* Warm biscuit/caramel base — dark enough for cream/gold contrast,
+       clearly lighter than the old near-black, darkest at the edges. */
+    linear-gradient(180deg, #24150F 0%, #3A2418 32%, #42291B 58%, #3A2418 82%, #24150F 100%);
   transform: translate3d(calc(var(--px) * 2px), calc(var(--py) * 1.5px), 0);
   will-change: transform;
 }
@@ -386,12 +388,16 @@
   /* One-line luxury heading: inline spans, never wrapped. Fluid size tuned
      for the 45% column — nowrap can never overflow the page because the
      grid column is minmax(0, …) and the hero clips horizontally by design. */
+  /* One-line luxury heading — noticeably larger, still never wrapped.
+     Fluid size tuned so "Crackers Hyderabad" holds one line inside the
+     45% column at every desktop width (column minmax(0,…) + hero clip
+     guarantee no page overflow in the worst case). */
   .fx-brand .fx-title {
     max-width: 100%;
     white-space: nowrap;
-    letter-spacing: -0.01em;
-    font-size: clamp(44px, 3.8vw, 58px);
-    line-height: 1.04;
+    letter-spacing: -0.012em;
+    font-size: clamp(48px, 4.3vw, 66px);
+    line-height: 1.05;
   }
 
   .fx-brand .fx-title-crackers {
@@ -443,9 +449,10 @@
 
   /* One line while it fits: fluid vw sizing + tight tracking keep the full
      name on a single line down to small phones; only the narrowest screens
-     may wrap, and then only between the two words. */
+     may wrap, and then only between the two words. Sized up to match the
+     larger desktop heading. */
   .fx-brand .fx-title {
-    font-size: clamp(30px, 9.5vw, 44px);
+    font-size: clamp(34px, 10.5vw, 48px);
   }
 
   .fx-brand .fx-title-crackers,
@@ -500,6 +507,10 @@
   min-width: 0;
 }
 
+/* Premium carousel transition: fade + a subtle horizontal drift only.
+   No rotation, no scale, no bounce — the image and its text stay perfectly
+   still while a slide is displayed and only move as one unit during the
+   short crossfade (≈450ms). */
 .hs-slide {
   grid-area: 1 / 1;
   display: flex;
@@ -508,11 +519,11 @@
   min-height: 0;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(10px) scale(0.97);
+  transform: translateX(26px);
   transition:
-    opacity var(--hs-t, 800ms) ease-out,
-    transform var(--hs-t, 800ms) ease-out,
-    visibility 0s linear var(--hs-t, 800ms);
+    opacity var(--hs-t, 450ms) ease-out,
+    transform var(--hs-t, 450ms) ease-out,
+    visibility 0s linear var(--hs-t, 450ms);
 }
 
 .hs-slide.is-active {
@@ -520,8 +531,8 @@
   visibility: visible;
   transform: none;
   transition:
-    opacity var(--hs-t, 800ms) ease-out,
-    transform var(--hs-t, 800ms) ease-out,
+    opacity var(--hs-t, 450ms) ease-out,
+    transform var(--hs-t, 450ms) ease-out,
     visibility 0s;
 }
 
@@ -648,9 +659,10 @@
   text-align: center;
   text-wrap: balance;
   font-family: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
-  font-size: 20px;
+  font-size: clamp(21px, 1.2rem + 0.55vw, 26px);
   font-weight: 600;
-  line-height: 1.28;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
   color: #F3EBDD;
   overflow: hidden;
 }

@@ -1,17 +1,12 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { inr } from '../../lib/currency';
 import { productPath } from '../../lib/productLinks';
 import { normalizeImageUrl, logBrokenImageUrl } from '../../lib/normalizeImageUrl';
-import { normalizeHeroArtworkAnimation, artworkDurationSec } from '../../lib/heroArtwork';
 
-/* Compact hero price — same source fields as ProductCard, display only. */
-const heroPrice = (p) => p?.discountPrice || p?.onlinePrice || p?.price || 0;
-
-/* One product visible ~4s; luxury fade + rise + settle over ~800ms. */
+/* One product visible ~4s; short luxury fade + subtle horizontal drift. */
 const DWELL_MS = 4000;
-const TRANSITION_MS = 800;
+const TRANSITION_MS = 450;
 
 /* Image resolution — the SAME fields the working product cards use
    (imageURL primary, imageURL2 fallback, both via normalizeImageUrl, exactly
@@ -57,16 +52,12 @@ const productKey = (p) => p?.id || p?.slug || p?.name || '';
  *   entirely for reduced-motion users (arrow keys still work).
  * - Products link to the existing /product/:slug route via productPath().
  */
-const HeroProductShowcase = ({ products, loading = false, artworkAnimation }) => {
+const HeroProductShowcase = ({ products, loading = false }) => {
   const reduced = useReducedMotion();
-  /* Artwork motion comes from the saved Canvas config — class + duration.
-     Applied to the COMPLETE artwork group (.hs-stage, the single fixed grid
-     cell every slide shares) so the visible composition moves as one object.
-     Individual product images are never animated. */
-  const art = normalizeHeroArtworkAnimation(artworkAnimation);
-  const artOn = art.enabled && art.type !== 'none';
-  const artClass = artOn ? ` hs-art hs-art-${art.type}` : '';
-  const artStyle = artOn ? { animationDuration: `${artworkDurationSec(art.speed)}s` } : undefined;
+  /* The displayed product never carries a continuous animation — the image
+     and its text sit perfectly still while a slide is showing. Motion only
+     happens during the carousel transition itself (fade + subtle horizontal
+     drift, defined on .hs-slide), which reads as premium, not busy. */
   const pool = useMemo(
     () => (Array.isArray(products) ? products.filter(Boolean) : []),
     [products]
@@ -216,19 +207,11 @@ const HeroProductShowcase = ({ products, loading = false, artworkAnimation }) =>
               together. The group motion class lives on the stage — the whole
               visible composition orbits as one; slides keep only their
               enter/exit fade when the product changes. */}
-          <div className={`hs-stage${artClass}`} style={artStyle} aria-live={reduced ? 'polite' : 'off'} aria-atomic="true">
+          <div className="hs-stage" aria-live={reduced ? 'polite' : 'off'} aria-atomic="true">
               {order.map((p, i) => {
                 const isActive = i === pos;
                 const src = showcaseImageSrc(p);
                 const imgReady = loadedRef.current.has(productKey(p));
-              const price = heroPrice(p);
-              const hasDiscount =
-                p?.discountPrice && p.discountPrice < p?.onlinePrice;
-              const discountPercent = hasDiscount
-                ? Math.round(
-                    ((p.onlinePrice - p.discountPrice) / p.onlinePrice) * 100
-                  )
-                : 0;
               return (
                 <div
                   key={productKey(p)}
@@ -267,15 +250,6 @@ const HeroProductShowcase = ({ products, loading = false, artworkAnimation }) =>
                     </span>
                       <span className="hs-product-meta">
                         <span className="hs-product-name line-clamp-2">{p?.name}</span>
-                        <span className="hs-price tabular">
-                          <span className="hs-price-now">{inr(price)}</span>
-                          {hasDiscount && (
-                            <span className="hs-price-was">{inr(p.onlinePrice)}</span>
-                          )}
-                          {hasDiscount && (
-                            <span className="hs-save">{discountPercent}% OFF</span>
-                          )}
-                        </span>
                       </span>
                   </Link>
                 </div>
@@ -289,7 +263,7 @@ const HeroProductShowcase = ({ products, loading = false, artworkAnimation }) =>
           </div>
           {/* Screen-reader announcement of the visible product. */}
           <span className="sr-only" aria-live="polite">
-            {active ? `${active.name}, ${inr(heroPrice(active))}` : ''}
+            {active ? active.name : ''}
           </span>
         </>
       )}

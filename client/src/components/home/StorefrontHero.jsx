@@ -3,7 +3,7 @@ import { Skeleton } from '../ui/Skeleton';
 import FireworksHero from './FireworksHero';
 
 /* Navbar is dark glass on homepage; hero must feel like its continuation — not a card on a light page */
-const HERO_SHELL_BG = '#090605';
+const HERO_SHELL_BG = '#24150F';
 
 const HERO_TRUST_ITEMS = [
   { icon: BadgeCheck, title: '100% Genuine', sub: 'Products' },
