@@ -59,7 +59,7 @@ const StickyCartBar = ({
         type="button"
         onClick={onAddToCart}
         disabled={outOfStock}
-        className="btn-primary pd-atc pd-atc--bar"
+        className="btn-primary nav-login-btn pd-atc pd-atc--bar"
       >
         <ShoppingCart className="h-5 w-5 shrink-0" strokeWidth={2.4} aria-hidden="true" />
         <span className="truncate">{outOfStock ? 'Out of Stock' : 'Add to Cart'}</span>

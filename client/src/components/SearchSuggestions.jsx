@@ -95,7 +95,7 @@ const HighlightedName = ({ name, query }) => {
   ranges.forEach((r, i) => {
     if (r.start > cursor) parts.push(text.slice(cursor, r.start));
     parts.push(
-      <span key={i} className="font-semibold" style={{ color: '#E9C46A' }}>
+      <span key={i} className="font-semibold" style={{ color: '#9E7029' }}>
         {text.slice(r.start, r.end)}
       </span>
     );
@@ -111,7 +111,7 @@ const RowImage = ({ product }) => {
   return (
     <span
       className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[var(--r-md)]"
-      style={{ background: 'rgba(255, 255, 255, 0.06)' }}
+      style={{ background: '#F9F1E3', border: '1px solid #EFE3CE' }}
       aria-hidden="true"
     >
       {src ? (
@@ -303,27 +303,27 @@ const SearchSuggestions = ({
         <div className="px-2 py-2" aria-hidden="true">
           {[0, 1, 2].map((i) => (
             <div key={i} className="flex animate-pulse items-center gap-3 px-2 py-2.5">
-              <span className="h-12 w-12 shrink-0 rounded-[var(--r-md)]" style={{ background: 'rgba(255, 255, 255, 0.08)' }} />
+              <span className="h-12 w-12 shrink-0 rounded-[var(--r-md)]" style={{ background: '#F2E8D5' }} />
               <span className="min-w-0 flex-1">
-                <span className="mb-1.5 block h-3.5 w-3/4 rounded-full" style={{ background: 'rgba(255, 255, 255, 0.08)' }} />
-                <span className="block h-3 w-1/3 rounded-full" style={{ background: 'rgba(255, 255, 255, 0.06)' }} />
+                <span className="mb-1.5 block h-3.5 w-3/4 rounded-full" style={{ background: '#F2E8D5' }} />
+                <span className="block h-3 w-1/3 rounded-full" style={{ background: '#EFE3CE' }} />
               </span>
             </div>
           ))}
         </div>
       ) : showEmpty ? (
         <div className="flex flex-col items-center gap-1.5 px-6 py-7 text-center">
-          <SearchX className="h-6 w-6" style={{ color: 'rgba(247, 241, 231, 0.4)' }} aria-hidden="true" />
-          <p className="text-sm font-semibold" style={{ color: '#F7F1E7' }}>
+          <SearchX className="h-6 w-6" style={{ color: '#9A887A' }} aria-hidden="true" />
+          <p className="text-sm font-semibold" style={{ color: '#4A2F2A' }}>
             No products found for &ldquo;{query.trim()}&rdquo;
           </p>
-          <p className="text-xs" style={{ color: 'rgba(247, 241, 231, 0.6)' }}>
+          <p className="text-xs" style={{ color: '#75665C' }}>
             Try another search — a number (&ldquo;40&rdquo;), a brand, or fewer words.
           </p>
         </div>
       ) : (
         <>
-          <p className="label-caps px-4 pb-1 pt-3" style={{ color: '#D2A64F' }} aria-live="polite">
+          <p className="label-caps px-4 pb-1 pt-3" style={{ color: '#9E7029' }} aria-live="polite">
             {title ?? (
               <>Top {shown.results.length} of {shown.total} match{shown.total === 1 ? '' : 'es'} for &ldquo;{query.trim()}&rdquo;</>
             )}
@@ -346,23 +346,24 @@ const SearchSuggestions = ({
                     onClick={() => onPick?.(product)}
                     onMouseDown={(e) => e.preventDefault()}
                     onMouseEnter={() => setActiveIndex(i)}
-                    className={`flex min-h-[64px] w-full cursor-pointer items-center gap-3 rounded-[var(--r-md)] px-2 py-2 text-left transition-colors hover:bg-white/[0.07]${active ? ' bg-white/[0.07]' : ''}`}
+                    className={`flex min-h-[64px] w-full cursor-pointer items-center gap-3 rounded-[var(--r-md)] px-2 py-2 text-left transition-colors hover:bg-[#F9F1E3]${active ? ' bg-[#F9F1E3]' : ''}`}
+                    style={active ? { outline: '1px solid rgba(210,166,79,0.4)', outlineOffset: '-1px' } : undefined}
                   >
                     <RowImage product={product} />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium" style={{ color: '#F7F1E7' }}>
+                      <span className="block truncate text-sm font-medium" style={{ color: '#4A2F2A' }}>
                         <HighlightedName name={product.name} query={normalized} />
                       </span>
-                      <span className="mt-0.5 block truncate text-xs" style={{ color: 'rgba(247, 241, 231, 0.62)' }}>
+                      <span className="mt-0.5 block truncate text-xs" style={{ color: '#75665C' }}>
                         {[brand, category].filter(Boolean).join('  •  ') || 'Firecrackers'}
                       </span>
                       <span className="mt-0.5 flex items-center gap-1.5 text-xs">
-                        <span className="font-bold tabular" style={{ color: '#FFFFFF' }}>
+                        <span className="font-bold tabular" style={{ color: '#761713' }}>
                           {inr(price.display)}
                         </span>
                         {price.hasDiscount && (
                           <>
-                            <s style={{ color: 'rgba(247, 241, 231, 0.45)' }}>{inr(price.mrp)}</s>
+                            <s style={{ color: '#9A887A' }}>{inr(price.mrp)}</s>
                             <span
                               className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-[10px] font-bold"
                               style={{ background: 'rgba(22, 163, 74, 0.12)', color: '#15803d' }}
@@ -384,7 +385,7 @@ const SearchSuggestions = ({
                           e.stopPropagation();
                           if (!soldOut) addToCart(product);
                         }}
-                        className="btn-primary min-h-[36px] shrink-0 px-3 text-xs"
+                        className="btn-primary nav-login-btn min-h-[36px] shrink-0 px-3 text-xs"
                       >
                         {soldOut ? 'Out of stock' : 'Add to Cart'}
                       </button>
@@ -399,8 +400,8 @@ const SearchSuggestions = ({
               type="button"
               onClick={() => onViewAll?.()}
               onMouseDown={(e) => e.preventDefault()}
-              className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-[var(--r-md)] text-sm font-semibold transition-colors hover:bg-white/[0.06]"
-              style={{ color: '#D2A64F' }}
+              className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-[var(--r-md)] text-sm font-semibold transition-colors hover:bg-[#F9F1E3]"
+              style={{ color: '#761713' }}
             >
               <span>View all results for &ldquo;{query.trim()}&rdquo;</span>
               <ArrowRight className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
@@ -426,10 +427,10 @@ const SearchSuggestions = ({
       <div
         className="overflow-hidden border shadow-lg"
         style={{
-          background: '#1B1512',
-          borderColor: 'rgba(210, 166, 79, 0.35)',
+          background: '#FFFFFF',
+          borderColor: '#EFE3CE',
           borderRadius: 'var(--r-lg)',
-          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.55), 0 0 24px rgba(210, 166, 79, 0.10)',
+          boxShadow: '0 24px 60px rgba(58, 11, 12, 0.14), 0 0 24px rgba(210, 166, 79, 0.12)',
         }}
       >
         <div aria-hidden="true" className="h-[2px]" style={{ background: 'var(--grad-gold)' }} />

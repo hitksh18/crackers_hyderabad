@@ -7,6 +7,11 @@ import { revealVariants, inViewOnce } from '../../lib/motion';
  *
  * `align="left"` is the editorial default; centre it only when the section
  * below is itself symmetrical.
+ *
+ * `tone="dark"` renders the cream-on-maroon variant for headings that sit
+ * on deep festive surfaces (Festive Deals, Offers). Light sections use the
+ * default warm-brown tone. Defaults are unchanged, so existing usages are
+ * unaffected unless they opt in.
  */
 const SectionHeading = ({
   eyebrow,
@@ -16,9 +21,11 @@ const SectionHeading = ({
   as: Heading = 'h2',
   action = null,
   className = '',
+  tone = 'light',
 }) => {
   const reduced = useReducedMotion();
   const centred = align === 'center';
+  const dark = tone === 'dark';
   /* Same progressive-enhancement guard as ScrollReveal: without
      IntersectionObserver the heading renders visible, never stuck at
      opacity 0 waiting for an observer tick. */
@@ -34,7 +41,12 @@ const SectionHeading = ({
     >
       <div className={centred ? '' : 'max-w-2xl'}>
         {eyebrow && (
-          <span className={`section-eyebrow ${centred ? 'justify-center' : ''}`}>{eyebrow}</span>
+          <span
+            className={`section-eyebrow ${centred ? 'justify-center' : ''}`}
+            style={dark ? { color: '#D2A64F' } : undefined}
+          >
+            {eyebrow}
+          </span>
         )}
 
         <motion.div
@@ -43,11 +55,16 @@ const SectionHeading = ({
           viewport={inViewOnce}
           variants={revealVariants(reduced, 18)}
         >
-          <Heading className="section-title mt-3">{title}</Heading>
+          <Heading
+            className="section-title mt-3"
+            style={dark ? { color: '#F8EEDC' } : undefined}
+          >
+            {title}
+          </Heading>
           {subtitle && (
             <p
               className={`mt-2.5 text-base max-w-prose ${centred ? 'mx-auto' : ''}`}
-              style={{ color: 'var(--text-muted)' }}
+              style={{ color: dark ? '#F2DCC8' : 'var(--text-muted)' }}
             >
               {subtitle}
             </p>

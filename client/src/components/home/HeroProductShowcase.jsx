@@ -4,9 +4,9 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { productPath } from '../../lib/productLinks';
 import { normalizeImageUrl, logBrokenImageUrl } from '../../lib/normalizeImageUrl';
 
-/* One product visible ~4s; short luxury fade + subtle horizontal drift. */
+/* One product visible ~4s; premium fade + upward settle + 96%→100% scale (~800ms). */
 const DWELL_MS = 4000;
-const TRANSITION_MS = 450;
+const TRANSITION_MS = 800;
 
 /* Image resolution — the SAME fields the working product cards use
    (imageURL primary, imageURL2 fallback, both via normalizeImageUrl, exactly
@@ -52,12 +52,14 @@ const productKey = (p) => p?.id || p?.slug || p?.name || '';
  *   entirely for reduced-motion users (arrow keys still work).
  * - Products link to the existing /product/:slug route via productPath().
  */
-const HeroProductShowcase = ({ products, loading = false }) => {
+const HeroProductShowcase = ({ products, loading = false, artworkAnimation }) => {
   const reduced = useReducedMotion();
-  /* The displayed product never carries a continuous animation — the image
-     and its text sit perfectly still while a slide is showing. Motion only
-     happens during the carousel transition itself (fade + subtle horizontal
-     drift, defined on .hs-slide), which reads as premium, not busy. */
+  /* Product stays completely static: no rotation, no float, no sway, no
+     continuous motion. The saved heroArtworkAnimation config is intentionally
+     ignored here — only the decorative background artwork (.fx-orbit) rotates.
+     Slide changes keep their subtle fade + rise entrance (.hs-slide), then
+     remain still. */
+  void artworkAnimation;
   const pool = useMemo(
     () => (Array.isArray(products) ? products.filter(Boolean) : []),
     [products]
@@ -204,10 +206,14 @@ const HeroProductShowcase = ({ products, loading = false }) => {
           {/* Stacked slides in one fixed stage: only .is-active is visible, so
               exactly one product shows and the hero never changes size. Image
               and info live in the SAME slide, so they always change
-              together. The group motion class lives on the stage — the whole
-              visible composition orbits as one; slides keep only their
-              enter/exit fade when the product changes. */}
-          <div className="hs-stage" aria-live={reduced ? 'polite' : 'off'} aria-atomic="true">
+              together. The stage itself is STATIC — no continuous motion;
+              slides keep only their subtle fade + rise entrance on product
+              change, then remain still. */}
+          <div
+            className="hs-stage"
+            aria-live={reduced ? 'polite' : 'off'}
+            aria-atomic="true"
+          >
               {order.map((p, i) => {
                 const isActive = i === pos;
                 const src = showcaseImageSrc(p);

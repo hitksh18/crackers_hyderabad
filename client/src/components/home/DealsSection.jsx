@@ -28,6 +28,7 @@ const DealsSection = ({ deals, heading }) => {
           eyebrow={heading?.eyebrow || 'Festive Offers'}
           title={heading?.title || 'Festive Deals'}
           subtitle={heading?.subtitle || 'Limited-time offers for every celebration'}
+          tone="dark"
         />
 
         <ScrollReveal
@@ -85,13 +86,13 @@ const DealsSection = ({ deals, heading }) => {
                   <div className="relative mt-4 flex flex-1 flex-col">
                     <h3
                       className="card-title"
-                      style={{ fontFamily: 'var(--font-display)', color: 'var(--white-soft)' }}
+                      style={{ fontFamily: 'var(--font-display)', color: '#FFF7EA' }}
                     >
                       {deal.title}
                     </h3>
                     <p
                       className="mt-1.5 flex-1 text-xs leading-relaxed"
-                      style={{ fontFamily: 'var(--font-body)', color: 'rgba(237,231,223,0.86)' }}
+                      style={{ fontFamily: 'var(--font-body)', color: '#F2DCC8' }}
                     >
                       {deal.description}
                     </p>

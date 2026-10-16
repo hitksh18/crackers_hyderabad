@@ -23,7 +23,7 @@ const TrustSection = ({ heading }) => (
             <div className="card-premium glass-card group relative h-full overflow-hidden p-4 text-center sm:p-4">
               <span
                 className="tabular pointer-events-none absolute -top-2 right-3 select-none text-[2.25rem] font-extrabold leading-none transition-transform duration-300 ease-out-expo group-hover:scale-110"
-                style={{ fontFamily: 'var(--font-display)', color: 'var(--ember-600)', opacity: 0.1 }}
+                style={{ fontFamily: 'var(--font-display)', color: '#D2A64F', opacity: 0.16 }}
                 aria-hidden="true"
               >
                 {String(index + 1).padStart(2, '0')}
@@ -41,7 +41,7 @@ const TrustSection = ({ heading }) => (
                 <feature.icon className="h-5 w-5" strokeWidth={2.1} style={{ color: '#FFFFFF' }} />
               </span>
 
-              <h3 className="card-title mb-1.5" style={{ color: 'var(--text-strong)' }}>
+              <h3 className="card-title mb-1.5" style={{ color: '#60453D' }}>
                 {feature.title}
               </h3>
               <p

@@ -9,9 +9,9 @@ import { getDisplayOrderId } from '../lib/orderId';
 const MAROON = [118, 23, 19]; // --maroon-700 #761713
 const MAROON_SOFT = [148, 37, 31]; // --maroon-600 #94251F
 const GOLD = [210, 166, 79]; // --gold-400 #D2A64F
-const DARK = [26, 23, 20]; // --text-strong #1A1714
-const GRAY = [107, 100, 89]; // --text-muted #6B6459
-const LIGHT = [139, 131, 119]; // --text-subtle #8B8377
+const DARK = [26, 23, 20]; // print ink (warm near-black for paper legibility)
+const GRAY = [107, 100, 89]; // print secondary (warm gray for paper)
+const LIGHT = [139, 131, 119]; // print muted (placeholders/meta on paper)
 const BORDER = [226, 210, 183]; // --hairline-strong #E2D2B7
 const HEADER_BG = [249, 241, 227]; // --surface-sunken #F9F1E3
 const GREEN = [44, 122, 83]; // --leaf-600 #2C7A53

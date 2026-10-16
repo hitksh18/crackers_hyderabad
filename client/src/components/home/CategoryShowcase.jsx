@@ -7,11 +7,11 @@ import { categoryDefs } from './homeData';
 
 const ArrowPip = ({ className = '', style }) => (
   <span
-    className={`flex shrink-0 items-center justify-center rounded-[var(--r-pill)] transition-transform duration-300 ease-out-expo group-hover:translate-x-1 ${className}`}
-    style={style || { background: 'var(--grad-ember)', boxShadow: 'var(--shadow-ember)' }}
+    className={`cat-arrow flex shrink-0 items-center justify-center rounded-[var(--r-pill)] transition-transform duration-300 ease-out-expo group-hover:translate-x-1 ${className}`}
+    style={style || { background: '#A95742', boxShadow: '0 4px 12px rgba(169, 87, 66, 0.35)' }}
     aria-hidden="true"
   >
-    <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.4} style={{ color: '#FFFFFF' }} />
+    <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.4} style={{ color: '#FFF4E3' }} />
   </span>
 );
 
@@ -52,14 +52,14 @@ const CategoryShowcase = ({ sectionRef, countInCategory, categories = categoryDe
                   className="category-icon-wrap flex h-11 w-11 shrink-0 items-center justify-center sm:h-12 sm:w-12 lg:h-16 lg:w-16"
                   aria-hidden="true"
                 >
-                  <CategoryIcon category={cat.slug} glow />
+                  <CategoryIcon category={cat.slug} />
                 </span>
 
                 <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5 sm:items-center lg:items-start">
                   <div className="flex w-full min-w-0 items-center gap-2 sm:justify-center lg:justify-between">
                     <h3
                       className="category-title min-w-0 flex-1 text-left transition-colors duration-200 sm:text-center lg:text-left"
-                      style={{ color: 'var(--text-strong)' }}
+                      style={{ color: '#63352E' }}
                     >
                       {cat.name}
                     </h3>
@@ -73,7 +73,7 @@ const CategoryShowcase = ({ sectionRef, countInCategory, categories = categoryDe
                   </div>
 
                   <div className="flex w-full items-center justify-between gap-2 sm:justify-center lg:justify-start">
-                    <p className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                    <p className="text-xs font-semibold" style={{ color: '#806457' }}>
                       <span className="tabular">{count}</span> item{count !== 1 ? 's' : ''}
                     </p>
                     <span className="shrink-0 sm:hidden">

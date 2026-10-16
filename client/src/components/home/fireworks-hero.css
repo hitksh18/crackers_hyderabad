@@ -1,32 +1,54 @@
 /* =========================================================================
-   CINEMATIC FIREWORKS HERO — Crackers Hyderabad
+   PREMIUM WARM-LIGHT HERO — Crackers Hyderabad
    -------------------------------------------------------------------------
-   A real-time canvas night scene. No background images, no pre-rendered
-   fireworks, no DOM particles.    Layer order (bottom → top):
+   A warm biscuit/parchment boutique stage. The sky-shot show is confined
+   to the right-column product stage: bursts bloom behind the product and
+   never reach the calm left branding zone. Product photography stays
+   colorful and prominent on clean warm parchment.
+   Layer order (bottom → top):
 
-     .fx-bg          night-sky gradients
-     .fx-mouselight  mouse spotlight
-     .fx-canvas      the whole fireworks simulation (shells, bursts, sparks,
-                     smoke, haze) — drawn by FireworksHero.jsx
-     .fx-content     eyebrow / title / sub / CTAs
-     .fx-embers      rising residual sparks
-     .fx-grade       vignette + grain + top blend (readability)
+     .fx-bg          biscuit gradient + faint gold edge sparks  (z 0)
+     .fx-mouselight  mouse spotlight (faint gold)               (z 1)
+     .fx-content     eyebrow / title / sub / CTAs + showcase   (z 8)
+       .fx-brand     calm branding — no effects ever render here
+       .fx-showcase  product stage (positioning context, clipped)
+         .fx-canvas  sky-shot, multiply-blended for biscuit    (z 0)
+         .hs-showcase product image → caption                  (z 1+)
+     .fx-grade       biscuit-matched grade (readability)        (z 10)
 
-   The canvas sits under the content on purpose: the headline is framed by
-   the fireworks, never covered by them.
+   The canvas sits under the product on purpose: bursts frame the product
+   without ever covering text, and corner artwork stays a separate,
+   branding-only layer.
    ========================================================================= */
+
+/* ---- Hero semantic colors (hero-scoped; global brand tokens untouched) ---- */
+.fx-hero {
+  --hero-text-primary: #4A2F2A;
+  --hero-text-accent: #B86B4B;
+  --hero-eyebrow: #9E7029;
+  --hero-text-secondary: #60453D;
+  --hero-product-title: #594038;
+  --hero-decoration: #B88A42;
+  --hero-decoration-soft: #C7A263;
+  --hero-decoration-strong: #9E7029;
+  --hero-firework-gold: #D2A64F;
+  --hero-firework-ember: #C33A14;
+  --hero-cta-ink: #4A2F2A;
+}
 
 .fx-hero {
   position: relative;
   isolation: isolate;
   width: 100%;
   max-width: 100%;
+  overflow: hidden;
   overflow: clip;
-  background: #24150F;
-  /* Compact cinematic frame: content plus the feature strip below it fit a
-     standard desktop viewport without a large scroll. */
-  height: clamp(540px, 78svh, 760px);
-  min-height: 540px;
+  background: #F3E3C8;
+  /* Content-driven frame: the hero is exactly as tall as its brand +
+     showcase composition — never a fixed viewport-sized block that shoves
+     the trust strip and the sections below it down the page. */
+  height: auto;
+  min-height: 0;
   /* Parallax + spotlight state (set from JS, -1..1 and % respectively) */
   --px: 0;
   --py: 0;
@@ -34,43 +56,42 @@
   --mouse-y: 42%;
 }
 
-/* ---------------- 1. Night-sky background ----------------
-   A premium dark showroom stage: warm near-black base, two whisper-soft
-   radial glows (brand left, product right), a breath of burgundy at the
-   bottom, and a handful of single 1–2px distant sparks placed only at the
-   edges — never tiled, never beamed, never wallpapered. First layer on top.
-   Large areas stay within ~5–10% visual opacity; dots within 8–20%. */
+/* ---------------- 1. Warm biscuit background ----------------
+   A premium printed-invitation stage: biscuit base softly illuminated from
+   the center (parchment highlight), deepening gently to a warm edge tone.
+   A handful of single gold decorative sparks sit only at the edges at low
+   opacity — never tiled, never beamed, never wallpapered. */
 .fx-bg {
   position: absolute;
   inset: -24px;
   z-index: 0;
   background:
-    radial-gradient(115% 100% at 50% 46%, transparent 58%, rgba(3, 2, 2, 0.52) 100%),
-    radial-gradient(2px 2px at 5% 12%, rgba(215, 190, 130, 0.18), transparent 70%),
-    radial-gradient(2px 2px at 12% 34%, rgba(205, 130, 70, 0.12), transparent 70%),
-    radial-gradient(2px 2px at 95% 10%, rgba(215, 190, 130, 0.16), transparent 70%),
-    radial-gradient(3px 3px at 88% 30%, rgba(215, 190, 130, 0.12), transparent 70%),
-    radial-gradient(2px 2px at 2.5% 82%, rgba(205, 130, 70, 0.14), transparent 70%),
-    radial-gradient(2px 2px at 8% 62%, rgba(215, 190, 130, 0.1), transparent 70%),
-    radial-gradient(2px 2px at 97.5% 78%, rgba(215, 190, 130, 0.14), transparent 70%),
-    radial-gradient(3px 3px at 90% 42%, rgba(215, 190, 130, 0.11), transparent 70%),
-    radial-gradient(2px 2px at 9% 55%, rgba(215, 190, 130, 0.1), transparent 70%),
-    radial-gradient(4px 4px at 76% 8%, rgba(215, 190, 130, 0.1), transparent 70%),
-    radial-gradient(3px 3px at 60% 92%, rgba(205, 130, 70, 0.1), transparent 70%),
-    radial-gradient(50% 44% at 28% 48%, rgba(140, 84, 44, 0.22) 0%, transparent 58%),
-    radial-gradient(40% 38% at 5% 64%, rgba(74, 21, 16, 0.22) 0%, transparent 65%),
-    radial-gradient(48% 46% at 72% 48%, rgba(154, 96, 48, 0.19) 0%, transparent 55%),
-    radial-gradient(40% 32% at 52% 42%, rgba(199, 154, 77, 0.1) 0%, transparent 65%),
-    radial-gradient(70% 30% at 50% 102%, rgba(74, 21, 16, 0.36) 0%, transparent 70%),
-    /* Warm biscuit/caramel base — dark enough for cream/gold contrast,
-       clearly lighter than the old near-black, darkest at the edges. */
-    linear-gradient(180deg, #24150F 0%, #3A2418 32%, #42291B 58%, #3A2418 82%, #24150F 100%);
+    radial-gradient(2px 2px at 5% 12%, rgba(158, 112, 41, 0.16), transparent 70%),
+    radial-gradient(2px 2px at 12% 34%, rgba(158, 112, 41, 0.10), transparent 70%),
+    radial-gradient(2px 2px at 95% 10%, rgba(158, 112, 41, 0.15), transparent 70%),
+    radial-gradient(3px 3px at 88% 30%, rgba(158, 112, 41, 0.11), transparent 70%),
+    radial-gradient(2px 2px at 2.5% 82%, rgba(158, 112, 41, 0.10), transparent 70%),
+    radial-gradient(2px 2px at 8% 62%, rgba(158, 112, 41, 0.10), transparent 70%),
+    radial-gradient(2px 2px at 97.5% 78%, rgba(158, 112, 41, 0.12), transparent 70%),
+    radial-gradient(3px 3px at 90% 42%, rgba(158, 112, 41, 0.10), transparent 70%),
+    radial-gradient(2px 2px at 9% 55%, rgba(158, 112, 41, 0.09), transparent 70%),
+    radial-gradient(4px 4px at 76% 8%, rgba(158, 112, 41, 0.10), transparent 70%),
+    radial-gradient(3px 3px at 60% 92%, rgba(158, 112, 41, 0.09), transparent 70%),
+    radial-gradient(50% 44% at 28% 48%, rgba(248, 238, 220, 0.55) 0%, transparent 58%),
+    radial-gradient(48% 46% at 72% 48%, rgba(248, 238, 220, 0.5) 0%, transparent 55%),
+    /* Biscuit gradient — softly illuminated parchment center, warm edge. */
+    radial-gradient(
+      ellipse at center,
+      #F8EEDC 0%,
+      #F3E3C8 55%,
+      #E8D2AD 100%
+    );
   transform: translate3d(calc(var(--px) * 2px), calc(var(--py) * 1.5px), 0);
   will-change: transform;
 }
 
-/* Central readability glow behind the title, with a breath of warm light so
-   the ivory/gold lettering separates from the bursts without any text glow */
+/* Gentle center illumination behind the content — a whisper of parchment
+   light so the composition feels lit from within, never flat */
 .fx-bg::after {
   content: '';
   position: absolute;
@@ -80,8 +101,8 @@
   aspect-ratio: 16 / 9;
   transform: translate(-50%, -50%);
   background:
-    radial-gradient(closest-side, rgba(255, 190, 110, 0.05) 0%, transparent 60%),
-    radial-gradient(closest-side, rgba(0, 0, 0, 0.62) 0%, transparent 72%);
+    radial-gradient(closest-side, rgba(248, 238, 220, 0.85) 0%, transparent 62%),
+    radial-gradient(closest-side, rgba(255, 253, 248, 0.5) 0%, transparent 72%);
 }
 
 /* ---------------- 2. Mouse spotlight ---------------- */
@@ -92,20 +113,30 @@
   pointer-events: none;
   background: radial-gradient(
     circle at var(--mouse-x) var(--mouse-y),
-    rgba(255, 190, 80, 0.04),
+    rgba(210, 166, 79, 0.08),
     transparent 28%
   );
 }
 
-/* ---------------- 3. Fireworks canvas ---------------- */
+/* ---------------- 3. Product-stage sky-shot canvas ----------------
+   The show lives ONLY inside the right-column product stage: this canvas
+   is a child of .fx-showcase and covers exactly that box. Warm gold /
+   terracotta bursts bloom behind the product image and can never reach
+   the left branding zone. `multiply` renders the saturated burst bodies
+   as visible festive color on biscuit while transparency and near-white
+   flash cores stay clean. pointer-events stay off so content is never
+   blocked. Layering inside the stage: canvas (z 0) → showcase (z 1) →
+   product image → caption. */
 .fx-canvas {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 0;
   display: block;
   width: 100%;
   height: 100%;
   pointer-events: none;
+  opacity: 0.9;
+  mix-blend-mode: multiply;
 }
 
 /* ---------------- 4. Central content ----------------
@@ -148,17 +179,17 @@
   content: '';
   width: 1.75rem;
   height: 1px;
-  background: rgba(178, 140, 70, 0.85);
+  background: rgba(158, 112, 41, 0.65);
   flex: none;
 }
 
 .fx-eyebrow span {
   font-family: var(--font-body);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.28em;
   text-indent: 0.1em;
-  color: #d5b06a;
+  color: var(--hero-eyebrow, #9E7029);
 }
 
 .fx-title {
@@ -167,27 +198,24 @@
   font-size: clamp(56px, 6vw, 96px);
   line-height: 1.04;
   letter-spacing: 0.005em;
-  text-shadow: 0 2px 22px rgba(0, 0, 0, 0.62), 0 0 26px rgba(190, 140, 54, 0.08);
+  text-shadow: 0 1px 0 rgba(70, 35, 25, 0.08);
 }
 
+/* "Crackers" — warm dark brown, soft and premium on biscuit. Never black. */
 .fx-title-crackers {
   display: block;
   font-weight: 500;
   padding-bottom: 0.08em;
-  background: linear-gradient(180deg, #faf3e2 0%, #efe0c0 55%, #d9c193 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--hero-text-primary, #4A2F2A);
 }
 
+/* "Hyderabad" — rich warm terracotta, espresso-and-clay pairing with
+   Crackers. Solid and intentional on biscuit: never pink, pastel or red. */
 .fx-title-hyd {
   display: block;
   font-weight: 600;
   padding-bottom: 0.08em;
-  background: linear-gradient(115deg, #eed9a4 0%, #d29a41 42%, #a87c2c 68%, #dcb968 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--hero-text-accent, #B86B4B);
 }
 
 /* Desktop: single-line title where horizontal space allows. Small screens
@@ -201,7 +229,7 @@
   font-weight: 600;
   letter-spacing: 0.24em;
   text-indent: 0.1em;
-  color: rgba(240, 230, 210, 0.86);
+  color: var(--hero-text-secondary, #60453D);
 }
 
 
@@ -231,26 +259,26 @@
 }
 
 .fx-btn-primary {
-  background: linear-gradient(180deg, #ddbb72 0%, #be9550 100%);
-  color: #241a0c;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 8px 26px rgba(190, 149, 80, 0.28), 0 0 18px rgba(194, 74, 29, 0.12);
+  background: linear-gradient(122deg, #9E7029 0%, #D2A64F 48%, #E2C177 100%);
+  color: var(--hero-cta-ink, #4A2F2A);
+  border: 1px solid rgba(158, 112, 41, 0.45);
+  box-shadow: 0 8px 26px rgba(190, 149, 80, 0.30), 0 0 18px rgba(195, 58, 20, 0.10);
 }
 
 .fx-btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 32px rgba(190, 149, 80, 0.4), 0 0 26px rgba(194, 74, 29, 0.18);
+  box-shadow: 0 12px 32px rgba(190, 149, 80, 0.42), 0 0 26px rgba(195, 58, 20, 0.14);
 }
 
-/* ---------------- 6. Cinematic grade (top, always readable) -------- */
+/* ---------------- 6. Light grade (biscuit-matched, always readable) -------- */
 .fx-grade {
   position: absolute;
   inset: 0;
   z-index: 10;
   pointer-events: none;
   background:
-    linear-gradient(180deg, rgba(5, 3, 3, 0.5) 0%, transparent 18%, transparent 62%, rgba(5, 3, 3, 0.55) 100%),
-    radial-gradient(120% 100% at 50% 42%, transparent 58%, rgba(0, 0, 0, 0.38) 100%);
+    linear-gradient(180deg, rgba(243, 227, 200, 0.55) 0%, transparent 18%, transparent 62%, rgba(232, 210, 173, 0.55) 100%),
+    radial-gradient(120% 100% at 50% 42%, transparent 58%, rgba(210, 166, 79, 0.08) 100%);
 }
 
 /* ---------------- Reduced motion ----------------
@@ -303,7 +331,7 @@
 }
 
 /* =========================================================================
-   PREMIUM TWO-COLUMN HERO — brand left, product showcase right (dark only)
+   PREMIUM TWO-COLUMN HERO — brand left, product showcase right (light)
    -------------------------------------------------------------------------
    ONE clear source of truth: .fx-grid is a two-column grid on desktop and a
    vertical stack below 1024px. The brand (eyebrow, title, subtitle, button)
@@ -367,18 +395,68 @@
   justify-content: center;
 }
 
+/* Dedicated product visual container: the positioning context for the
+   sky-shot canvas. Bursts are clipped to this box and can never drift
+   into the branding zone. */
 .fx-showcase {
   grid-area: showcase;
+  position: relative;
   min-width: 0;
   min-height: 0;
   width: 100%;
+  overflow: clip;
+  border-radius: 24px;
+}
+
+/* First-screen composition (home only): ticker + navbar + hero + trust fill
+   exactly one viewport, so the EXPLORE section starts below the fold.
+   The HERO itself carries the viewport math: 100dvh minus the live ticker,
+   navbar and trust-strip heights published as vars (--top-banner-h, 0 when
+   absent; --nav-h; --trust-h measured by the strip itself). min-height
+   (never height) so taller content still grows instead of clipping, and
+   the +2px is sub-pixel rounding tolerance, not a spacer. The trust strip
+   follows the hero in normal flow with zero gap; everything scrolls away
+   naturally — no negative margins, no overflow tricks, no sticky. Order:
+   vh fallback → svh → dvh. */
+.route-home .fx-hero {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - var(--top-banner-h, 0px) - var(--nav-h, 72px) - var(--trust-h, 84px));
+  min-height: calc(100svh - var(--top-banner-h, 0px) - var(--nav-h, 72px) - var(--trust-h, 84px));
+  min-height: calc(100dvh - var(--top-banner-h, 0px) - var(--nav-h, 72px) - var(--trust-h, 84px) + 2px);
+}
+.route-home .fx-hero > .fx-content {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+/* Trust ribbon typography — tablet/desktop only. Larger, clearly readable
+   titles with vertically-centered icons; phones keep the compact treatment
+   owned by mobile-home.css. */
+@media (min-width: 768px) {
+  .hero-trust-item {
+    padding-top: 1.15rem;
+    padding-bottom: 1.15rem;
+  }
+  .hero-trust-title {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  .hero-trust-sub {
+    font-size: 0.8125rem;
+  }
+  .hero-trust-item > svg {
+    width: 19px;
+    height: 19px;
+  }
 }
 
 @media (min-width: 1024px) {
-  /* Content-driven height with a controlled floor — the hero ends where its
-     content ends, directly above the trust bar. */
+  /* Content-driven height — the hero ends where its content ends, directly
+     above the trust bar. No floor: a fixed min-height would push the trust
+     strip and every section below it down the page. */
   .fx-hero {
-    min-height: 560px;
+    min-height: 0;
   }
 
   .fx-content {
@@ -478,21 +556,23 @@
 }
 
 /* =========================================================================
-   HERO SHOWCASE FRAME — dark glass, gold border, inner glow (dark only)
+   HERO SHOWCASE FRAME — frameless editorial showcase on ivory
    ========================================================================= */
 
 /* Frameless editorial showcase — no frame, no arch, no card, no border, no
    ornaments. One large product floats over a whisper of warm light with a
-   soft ground shadow; name, price and a tiny annotation sit beneath it. */
+   soft ground shadow; name, price and a tiny annotation sit beneath it.
+   It paints above the stage's sky-shot canvas (z 1 over canvas z 0). */
 .hs-showcase {
   position: relative;
+  z-index: 1;
   width: min(100%, 600px);
   margin-inline: auto;
   outline: none;
 }
 
 .hs-showcase:focus-visible {
-  outline: 2px solid rgba(212, 175, 104, 0.6);
+  outline: 2px solid rgba(118, 23, 19, 0.55);
   outline-offset: 8px;
   border-radius: 12px;
 }
@@ -507,10 +587,11 @@
   min-width: 0;
 }
 
-/* Premium carousel transition: fade + a subtle horizontal drift only.
-   No rotation, no scale, no bounce — the image and its text stay perfectly
-   still while a slide is displayed and only move as one unit during the
-   short crossfade (≈450ms). */
+/* Premium carousel entrance: soft fade + upward settle + gentle scale.
+   Incoming: opacity 0, translateY(25px) scale(0.96) → opacity 1,
+   translateY(0) scale(1) over ~800ms cubic-bezier(0.22,1,0.36,1), then STATIC.
+   Outgoing: fades with a soft settle. No rotation, no flip, no 3D, no zoom,
+   no bounce, no shake — transform + opacity only for performance. */
 .hs-slide {
   grid-area: 1 / 1;
   display: flex;
@@ -519,20 +600,21 @@
   min-height: 0;
   opacity: 0;
   visibility: hidden;
-  transform: translateX(26px);
+  transform: translateY(25px) scale(0.96);
   transition:
-    opacity var(--hs-t, 450ms) ease-out,
-    transform var(--hs-t, 450ms) ease-out,
-    visibility 0s linear var(--hs-t, 450ms);
+    opacity var(--hs-t, 800ms) cubic-bezier(0.22, 1, 0.36, 1),
+    transform var(--hs-t, 800ms) cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear var(--hs-t, 800ms);
+  will-change: opacity, transform;
 }
 
 .hs-slide.is-active {
   opacity: 1;
   visibility: visible;
-  transform: none;
+  transform: translateY(0) scale(1);
   transition:
-    opacity var(--hs-t, 450ms) ease-out,
-    transform var(--hs-t, 450ms) ease-out,
+    opacity var(--hs-t, 800ms) cubic-bezier(0.22, 1, 0.36, 1),
+    transform var(--hs-t, 800ms) cubic-bezier(0.22, 1, 0.36, 1),
     visibility 0s;
 }
 
@@ -546,7 +628,7 @@
 }
 
 .hs-slide-link:focus-visible {
-  outline: 2px solid #d4af68;
+  outline: 2px solid #761713;
   outline-offset: 2px;
 }
 
@@ -569,21 +651,23 @@
   padding: 16px;
 }
 
-/* Almost invisible stage light — a whisper of warmth so the product feels
-   photographed. Never a defined circle, halo, border, panel or card. */
+/* Warm product glow — a subtle gold-to-terracotta halo so the product
+   never melts into the biscuit background. Soft only: the image itself
+   stays crisp, with no bright white halo. */
 .hs-glow {
   position: absolute;
   left: 50%;
   top: 46%;
-  width: min(78%, 340px);
+  width: min(86%, 400px);
   aspect-ratio: 1;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   pointer-events: none;
   background: radial-gradient(
     circle,
-    rgba(170, 115, 45, 0.06),
-    transparent 65%
+    rgba(210, 166, 79, 0.22) 0%,
+    rgba(201, 120, 79, 0.10) 35%,
+    transparent 70%
   );
 }
 
@@ -599,9 +683,9 @@
   object-position: center;
   opacity: 0;
   /* Richer, crisper product rendering (display-only filter — the file and
-     dimensions are untouched): a touch more saturation/contrast plus an
-     unchanged soft ground shadow. */
-  filter: saturate(1.08) contrast(1.05) drop-shadow(0 16px 26px rgba(0, 0, 0, 0.5));
+     dimensions are untouched): a touch more saturation/contrast plus a soft
+     warm ground shadow for the light stage. */
+  filter: saturate(1.08) contrast(1.05) drop-shadow(0 16px 26px rgba(58, 11, 12, 0.18));
 }
 
 .hs-product-image.is-loaded {
@@ -609,9 +693,12 @@
   transition: opacity 0.6s ease;
 }
 
-/* Soft grounding shadow beneath the product — no platform, no pedestal. */
+/* Soft grounding shadow beneath the product — subtle, realistic, static.
+   Layer: decorative wheels (z 2 hero-level) → shadow (z 0 in-stage) →
+   product image (z 1) → caption → heading/CTA. Never animated. */
 .hs-ground {
   position: absolute;
+  z-index: 0;
   left: 50%;
   bottom: 7%;
   width: 52%;
@@ -622,8 +709,8 @@
   background:
     radial-gradient(
       closest-side,
-      rgba(0, 0, 0, 0.5) 0%,
-      rgba(120, 70, 25, 0.12) 55%,
+      rgba(58, 11, 12, 0.22) 0%,
+      rgba(210, 166, 79, 0.14) 55%,
       transparent 100%
     );
   filter: blur(2px);
@@ -633,16 +720,16 @@
   font-family: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
   font-size: 44px;
   font-weight: 600;
-  color: #c9a961;
+  color: #9E7029;
 }
 
-/* Tiny editorial saving note — plain muted-gold text inside the price row.
+/* Tiny editorial saving note — plain ember text inside the price row.
    Never rendered without a discount; never overlaps the product. */
 .hs-save {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.1em;
-  color: #d9bc7a;
+  color: #C33A14;
   white-space: nowrap;
 }
 
@@ -666,7 +753,7 @@
   font-weight: 600;
   letter-spacing: 0.01em;
   line-height: 1.25;
-  color: #F3EBDD;
+  color: var(--hero-product-title, #594038);
   overflow: hidden;
 }
 
@@ -678,7 +765,7 @@
   max-width: 200px;
   margin: 14px auto 0;
   border-radius: 999px;
-  background: rgba(212, 175, 104, 0.16);
+  background: rgba(210, 166, 79, 0.3);
   overflow: hidden;
 }
 
@@ -687,7 +774,7 @@
   height: 100%;
   width: 0;
   border-radius: 999px;
-  background: rgba(201, 169, 97, 0.85);
+  background: rgba(158, 112, 41, 0.9);
   animation: hs-dwell linear forwards;
 }
 
@@ -714,21 +801,21 @@
 .hs-price-now {
   font-size: 14px;
   font-weight: 800;
-  color: #eed9a4;
+  color: #761713;
 }
 
 .hs-price-was {
   font-size: 12px;
-  color: rgba(248, 242, 231, 0.45);
+  color: #9A887A;
   text-decoration: line-through;
 }
 
 
 
-/* Skeleton slots — dark shimmer, stage keeps its size while hydrating. */
+/* Skeleton slots — warm neutral shimmer, stage keeps its size while hydrating. */
 .hs-skel-line {
   display: block;
-  background: linear-gradient(100deg, #1c130d 30%, #2b1d12 50%, #1c130d 70%);
+  background: linear-gradient(100deg, #F2E8D5 30%, #EFE3CE 50%, #F2E8D5 70%);
   background-size: 200% 100%;
   animation: hs-shimmer 1.4s linear infinite;
 }
@@ -738,7 +825,7 @@
   width: 56%;
   height: 68%;
   border-radius: 12px;
-  background: linear-gradient(100deg, #1c130d 30%, #2b1d12 50%, #1c130d 70%);
+  background: linear-gradient(100deg, #F2E8D5 30%, #EFE3CE 50%, #F2E8D5 70%);
   background-size: 200% 100%;
   animation: hs-shimmer 1.4s linear infinite;
 }
@@ -787,18 +874,22 @@
 /* Reduced motion: no transitions at all — products swap instantly.
    (Auto-advance is already disabled in JS via useReducedMotion.) */
 @media (prefers-reduced-motion: reduce) {
-  .hs-product-zone .hs-skel-product,
-  .hs-skel-line,
-  .hs-progress span {
-    animation: none;
-  }
-
+  .hero-decoration,
+  .hero-product,
   .hs-slide,
   .hs-slide.is-active,
   .hs-product-image,
-  .hs-product-image.is-loaded {
+  .hs-product-image.is-loaded,
+  .hs-product-zone .hs-skel-product,
+  .hs-skel-line,
+  .hs-progress span {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .hs-slide,
+  .hs-slide.is-active {
     transform: none;
-    transition: none;
   }
 
   .fx-grid,
@@ -809,77 +900,162 @@
 }
 
 /* =========================================================================
-   HERO ARTWORK MOTION (Canvas → Hero → Artwork Animation)
+   HERO PRODUCT — STATIC (no continuous motion)
    -------------------------------------------------------------------------
-   Applied to the COMPLETE artwork group (.hs-stage) only — never to
-   individual product images. The class and the duration come from the saved
-   configuration (heroArtworkAnimation) — nothing about the timing is
-   hardcoded here beyond the keyframes. Amplitude is intentionally small and
-   shrinks further on tablet/mobile so the artwork can never cause overflow;
-   reduced-motion keeps it completely static. Slide enter/exit fades stay on
-   .hs-slide (product-change transitions only) and never combine with this.
+   The product stage (.hs-stage) and product image (.hs-product-image) stay
+   completely still: no rotation, no spin, no float, no sway, no pulse.
+   Slide changes keep only their subtle fade + rise entrance on .hs-slide
+   (product-change transition), then remain static. Any legacy .hs-art class
+   is neutralized here as a safety net so a saved heroArtworkAnimation config
+   can never move the product. Only the decorative background artwork
+   (.fx-orbit) rotates.
    ========================================================================= */
 
-.hs-art {
-  animation-iteration-count: infinite;
-  animation-timing-function: ease-in-out;
+.hs-art,
+.hs-art-gentle-float,
+.hs-art-slow-sway,
+.hs-art-float-sway,
+.hs-art-orbit,
+.hs-art-pulse,
+.hs-art-hover,
+.hs-stage.hs-art,
+.hs-stage.hs-art-gentle-float,
+.hs-stage.hs-art-slow-sway,
+.hs-stage.hs-art-float-sway,
+.hs-stage.hs-art-orbit,
+.hs-stage.hs-art-pulse,
+.hs-stage.hs-art-hover {
+  animation: none !important;
+  transform: none !important;
+  will-change: auto;
+}
+
+/* Ground shadow stays static with the product — no breathing/sync motion. */
+.hs-stage.hs-art-gentle-float .hs-ground,
+.hs-stage.hs-art-float-sway .hs-ground,
+.hs-stage.hs-art-orbit .hs-ground,
+.hs-stage.hs-art-hover .hs-ground {
+  animation: none !important;
+  transform: translateX(-50%);
+  opacity: 1;
+}
+
+@keyframes hs-ground-sync {
+  from { transform: translateX(-50%); opacity: 1; }
+  to { transform: translateX(-50%); opacity: 1; }
+}
+
+/* Reduced motion: the product stays static (no timing changes, no motion). */
+@media (prefers-reduced-motion: reduce) {
+  .hero-decoration,
+  .hero-product,
+  .hs-art,
+  .fx-orbit,
+  .fx-twinkle {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* =========================================================================
+   CORNER ORBIT ORNAMENTS — premium invitation watermark wheels
+   -------------------------------------------------------------------------
+   One floral/firework-wheel motif per hero corner, each rotating slowly
+   around its OWN center (32–42s per revolution, linear, infinite).
+   Desynchronized durations + alternating directions prevent a mechanical
+   synchronized look. Painted BEHIND all hero content (z 2 < content z 8):
+   product, heading, buttons and caption always sit above. Low opacity keeps
+   it a printed watermark on cream, clearly visible but never foreground.
+   Clipped by the hero (overflow: clip); rotation alone never creates
+   scrollbars. Frozen under prefers-reduced-motion.
+   Layering: cream bg (z 0) → orbit art (z 2) → product → text/buttons.
+   ========================================================================= */
+
+.fx-hero {
+  overflow: hidden;
+  overflow: clip;
+}
+
+.fx-orbit {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  color: #B88A42;
+  opacity: 0.2;
   transform-origin: center center;
+  animation-name: fx-orbit-spin;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
   will-change: transform;
+  /* Rotate each wheel individually around its own center — never the hero,
+     never the background, never the product. No scale, no bounce, no pulse. */
 }
 
-@keyframes hs-art-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(calc(var(--hs-art-amp, 1) * -8px)); }
+.fx-orbit svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
-@keyframes hs-art-sway {
-  0%, 100% { transform: rotate(calc(var(--hs-art-amp, 1) * -3deg)); }
-  50% { transform: rotate(calc(var(--hs-art-amp, 1) * 3deg)); }
+.fx-orbit-tl { left: -34px; top: 5%; width: 110px; height: 110px; animation-duration: 32s; animation-direction: normal; }
+.fx-orbit-tr { right: -34px; top: 9%; width: 124px; height: 124px; animation-duration: 38s; animation-direction: reverse; }
+.fx-orbit-bl { left: -38px; bottom: 7%; width: 96px; height: 96px; animation-duration: 42s; animation-direction: normal; }
+.fx-orbit-br { right: -38px; bottom: 11%; width: 104px; height: 104px; animation-duration: 35s; animation-direction: reverse; }
+
+@keyframes fx-orbit-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
-@keyframes hs-art-float-sway {
-  0%, 100% { transform: translateY(0) rotate(calc(var(--hs-art-amp, 1) * -1.6deg)); }
-  50% { transform: translateY(calc(var(--hs-art-amp, 1) * -7px)) rotate(calc(var(--hs-art-amp, 1) * 1.6deg)); }
+/* =========================================================================
+   STAGE TWINKLES — 2–5 tiny golden sparks drifting around the product.
+   Each fades in, hangs, and dissolves on its own slow loop; staggered
+   delays keep them occasional, never simultaneous, never flashing.
+   Painted above the sky-shot canvas, below the product. Pointer-transparent.
+   ========================================================================= */
+
+.fx-twinkles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
 }
 
-@keyframes hs-art-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(calc(1 + var(--hs-art-amp, 1) * 0.015)); }
+.fx-twinkle {
+  position: absolute;
+  border-radius: 999px;
+  background: radial-gradient(circle, #E2C177 0%, rgba(210, 166, 79, 0.55) 45%, transparent 72%);
+  opacity: 0;
+  animation: fx-twinkle 4.2s ease-in-out infinite;
 }
 
-@keyframes hs-art-hover {
-  0%, 100% { transform: translateY(calc(var(--hs-art-amp, 1) * -4px)) rotate(calc(var(--hs-art-amp, 1) * -1.2deg)); }
-  50% { transform: translateY(calc(var(--hs-art-amp, 1) * 4px)) rotate(calc(var(--hs-art-amp, 1) * 1.2deg)); }
-}
+.fx-twinkle:nth-child(1) { left: 18%; top: 22%; width: 7px; height: 7px; animation-delay: 0s; animation-duration: 3.6s; }
+.fx-twinkle:nth-child(2) { left: 82%; top: 18%; width: 5px; height: 5px; animation-delay: 1.1s; animation-duration: 4.4s; }
+.fx-twinkle:nth-child(3) { left: 12%; top: 68%; width: 6px; height: 6px; animation-delay: 2.2s; animation-duration: 3.2s; }
+.fx-twinkle:nth-child(4) { left: 88%; top: 62%; width: 7px; height: 7px; animation-delay: 0.6s; animation-duration: 4.8s; }
+.fx-twinkle:nth-child(5) { left: 50%; top: 8%; width: 5px; height: 5px; animation-delay: 2.8s; animation-duration: 4s; }
 
-/* Circular orbit: rotation and translation travel together around the
-   center, so the group traces a small loop instead of rocking side to
-   side. First and last frames match for a seamless loop. */
-@keyframes hs-art-orbit {
-  0% { transform: translate(0, 0) rotate(calc(var(--hs-art-amp, 1) * -2deg)); }
-  25% { transform: translate(calc(var(--hs-art-amp, 1) * 3px), calc(var(--hs-art-amp, 1) * -3px)) rotate(calc(var(--hs-art-amp, 1) * -0.7deg)); }
-  50% { transform: translate(0, calc(var(--hs-art-amp, 1) * -5px)) rotate(calc(var(--hs-art-amp, 1) * 1deg)); }
-  75% { transform: translate(calc(var(--hs-art-amp, 1) * -3px), calc(var(--hs-art-amp, 1) * -3px)) rotate(calc(var(--hs-art-amp, 1) * 0.7deg)); }
-  100% { transform: translate(0, 0) rotate(calc(var(--hs-art-amp, 1) * -2deg)); }
-}
-
-.hs-art-gentle-float { animation-name: hs-art-float; }
-.hs-art-slow-sway { animation-name: hs-art-sway; }
-.hs-art-float-sway { animation-name: hs-art-float-sway; }
-.hs-art-orbit { animation-name: hs-art-orbit; }
-.hs-art-pulse { animation-name: hs-art-pulse; }
-.hs-art-hover { animation-name: hs-art-hover; }
-
-/* Movement amplitude shrinks on smaller viewports (timing is unaffected). */
-@media (max-width: 1023.5px) {
-  .hs-art { --hs-art-amp: 0.6; }
+@keyframes fx-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.6); }
+  35%, 60% { opacity: 0.75; transform: scale(1); }
+  80% { opacity: 0.25; }
 }
 
 @media (max-width: 767px) {
-  .hs-art { --hs-art-amp: 0.4; }
-}
-
-/* Reduced motion: the artwork stays static (no timing changes, no motion). */
-@media (prefers-reduced-motion: reduce) {
-  .hs-art { animation: none; }
+  .fx-hero {
+    overflow: hidden;
+    overflow: clip;
+    max-width: 100%;
+  }
+  .fx-orbit {
+    opacity: 0.16;
+  }
+  .fx-orbit-tl, .fx-orbit-tr, .fx-orbit-bl, .fx-orbit-br {
+    width: 72px;
+    height: 72px;
+  }
+  .fx-orbit-tl { left: -26px; }
+  .fx-orbit-tr { right: -26px; }
+  .fx-orbit-bl { left: -28px; }
+  .fx-orbit-br { right: -28px; }
 }

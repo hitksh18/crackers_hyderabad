@@ -110,16 +110,18 @@ export const TYPES = {
   crackle: { key: 'crackle', weight: 14, pal: 'ember', count: 1.2, speed: 1.05, retention: 0.6, tail: 0.02, len: 0.5, life: 0.7, gravity: 0.9, size: [1.1, 1.9], wobble: 0.08, inner: 0, droplet: 0, flick: true, gapAt: 0.25, dim: 0.85 },
 };
 
-/* Premium Diwali palette: warm white -> champagne -> gold -> amber, plus
-   deep red / crimson accents over a gold-dominant show. No blue, no green,
-   no purple, ever. */
+/* Premium Diwali palette for LIGHT surfaces: deep wine, burgundy, copper
+   and bronze bodies with amber-gold highlights. Every ramp leads with dark,
+   high-contrast tones so bursts read instantly on biscuit; pale tips are
+   kept small (ray heads, ignition cores) and never carry a burst. No blue,
+   no green, no purple, no neon, ever. */
 export const PALETTES = {
-  gold: ['#FFF1C2', '#F7D36A', '#E5AE3F', '#C88725'],
-  champagne: ['#FFF1C2', '#F7D36A', '#E5AE3F'],
-  ivory: ['#FFF1C2', '#F7D36A', '#C88725'],
-  crimson: ['#ff9a5a', '#D94A32', '#A83224', '#7c1f14'],
-  ember: ['#FFD98A', '#D94A32', '#A83224'],
-  duo: ['#FFF1C2', '#E5AE3F', '#a02712', '#C88725'],
+  gold: ['#7B5528', '#9A4D2F', '#B77A2F', '#C28A3A'],
+  champagne: ['#9A4D2F', '#C9784F', '#E2C177'],
+  ivory: ['#8F3E2F', '#B77A2F', '#C28A3A'],
+  crimson: ['#6B2525', '#7A2929', '#8F3E2F', '#C9784F'],
+  ember: ['#7B5528', '#9A4D2F', '#B77A2F', '#C28A3A'],
+  duo: ['#6B2525', '#9A4D2F', '#C28A3A', '#7B5528'],
 };
 
 /* Minimum lateral gap between a new flight line and a live one, in px. With

@@ -3,7 +3,9 @@ import { Tag, ChevronDown } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { inr } from '../lib/currency';
 
-const OFFERS_KEY = 'coupon_offers_expanded';
+/* How many offers render immediately — the rest sit behind a "View all
+   offers" toggle so the first ones are always visible without clicking. */
+const VISIBLE_OFFERS = 3;
 
 const unitPriceOf = (item) => item.discountPrice || item.onlinePrice || item.price || 0;
 
@@ -45,6 +47,9 @@ const discountLabel = (offer) => (
  * single applyCoupon() from CartContext — one validation path, one applied
  * state, server-authoritative amounts.
  *
+ * The top offers render as compact cards immediately (no dropdown gate);
+ * only the overflow sits behind "View all offers".
+ *
  * `fill`: stretch to the parent flex column so the coupon list (and only the
  * list) scrolls internally. Used inside the locked cart layout.
  */
@@ -56,13 +61,7 @@ const CouponOffers = ({ fill = false } = {}) => {
   } = useCart();
   const [offers, setOffers] = useState([]);
   const [offersLoading, setOffersLoading] = useState(true);
-  const [expanded, setExpanded] = useState(() => {
-    try {
-      return sessionStorage.getItem(OFFERS_KEY) === '1';
-    } catch {
-      return false;
-    }
-  });
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,17 +81,6 @@ const CouponOffers = ({ fill = false } = {}) => {
     };
   }, []);
 
-  const toggleExpanded = () => {
-    setExpanded((v) => {
-      try {
-        sessionStorage.setItem(OFFERS_KEY, v ? '0' : '1');
-      } catch {
-        // Storage unavailable — expansion simply resets on reload.
-      }
-      return !v;
-    });
-  };
-
   const ranked = useMemo(() => {
     const rows = offers.map((offer) => {
       const eligible = eligibleValueOf(offer, cart);
@@ -108,9 +96,72 @@ const CouponOffers = ({ fill = false } = {}) => {
     return rows;
   }, [offers, cart]);
 
-  const applyOffer = async (code) => {
-    const applied = await applyCoupon(code);
-    if (applied) setExpanded(false);
+  const visible = showAll ? ranked : ranked.slice(0, VISIBLE_OFFERS);
+
+  const renderOffer = ({ offer, eligible, minimum, meets, savings }) => {
+    const applied = coupon?.code === offer.code;
+    const progress = minimum > 0 ? Math.min(1, eligible / minimum) : 1;
+    return (
+      <li
+        key={offer.code}
+        className={`offer-card w-full shrink-0${applied ? ' is-applied' : ''}`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <p className="offer-code tabular text-sm">
+            {offer.code}
+          </p>
+          {applied ? (
+            <span className="tabular shrink-0 text-xs font-bold" style={{ color: 'var(--leaf-600)' }}>
+              Applied
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => applyCoupon(offer.code)}
+              disabled={couponApplying || !meets}
+              className="btn-primary h-8 shrink-0 px-3.5 text-xs font-bold disabled:opacity-50"
+            >
+              {couponApplying ? 'Applying…' : 'Apply'}
+            </button>
+          )}
+        </div>
+        <p className="mt-0.5 text-[13px] font-bold" style={{ color: 'var(--ember-600)' }}>
+          {discountLabel(offer)}
+        </p>
+        <p className="mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+          {minimum > 0 ? `Spend ${inr(minimum)} on eligible products` : 'No minimum order'}
+          {offer.expiresAt && ` · Ends ${new Date(offer.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
+        </p>
+        {minimum > 0 && (
+          <>
+            <p className="tabular mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+              {inr(eligible)} / {inr(minimum)}
+            </p>
+            <div
+              className="mt-1 h-1 overflow-hidden rounded-full"
+              style={{ background: 'var(--surface-raised)' }}
+              role="progressbar"
+              aria-valuenow={Math.round(progress * 100)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`${offer.code} eligibility`}
+            >
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{ width: `${Math.round(progress * 100)}%`, background: meets ? 'var(--leaf-600)' : 'var(--gold-500)' }}
+              />
+            </div>
+          </>
+        )}
+        <p className="mt-1.5 text-xs font-semibold" style={{ color: meets ? 'var(--leaf-600)' : 'var(--text-muted)' }}>
+          {applied
+            ? `Saving ${inr(coupon.discountAmount)} on this order`
+            : meets
+              ? `Ready to apply${savings > 0 ? ` — save ${inr(Math.round(savings * 100) / 100)}` : ''}`
+              : `Add ${inr(minimum - eligible)} more to use this coupon`}
+        </p>
+      </li>
+    );
   };
 
   return (
@@ -173,104 +224,40 @@ const CouponOffers = ({ fill = false } = {}) => {
         </div>
       )}
 
+      <p className="label-caps mb-1.5 mt-3 flex items-center gap-1.5">
+        Available Offers
+        {!offersLoading && offers.length > 0 && (
+          <span className="tabular rounded-full px-1.5 py-0.5 text-[11px]" style={{ background: 'var(--surface-sunken)', border: '1px solid var(--hairline)', color: 'var(--text-muted)' }}>
+            {offers.length}
+          </span>
+        )}
+      </p>
+
       {offersLoading ? (
         <p className="mt-2 text-xs" style={{ color: 'var(--text-subtle)' }}>Checking available offers…</p>
       ) : offers.length === 0 ? (
         <p className="mt-2 text-xs" style={{ color: 'var(--text-subtle)' }}>No offers available right now.</p>
       ) : (
         <>
-          <button
-            type="button"
-            onClick={toggleExpanded}
-            aria-expanded={expanded}
-            className="mt-2 inline-flex items-center gap-1 text-xs font-bold"
-            style={{ color: 'var(--text-strong)' }}
-          >
-            <ChevronDown
-              className="h-3.5 w-3.5 transition-transform duration-200"
-              aria-hidden="true"
-              style={{ transform: expanded ? 'rotate(180deg)' : 'none' }}
-            />
-            View available offers
-            <span className="tabular rounded-full px-1.5 py-0.5 text-[11px]" style={{ background: 'var(--surface-sunken)', border: '1px solid var(--hairline)', color: 'var(--text-muted)' }}>
-              {offers.length}
-            </span>
-          </button>
-
-          {expanded && (
-            /* Vertical stack with its own scroll — many coupons never push
-               checkout off-screen. Only this list scrolls. */
-            <ul className={`mt-2 flex flex-col gap-2 overflow-y-auto pr-0.5${fill ? ' min-h-0 flex-1' : ' max-h-[300px]'}`}>
-              {ranked.map(({ offer, eligible, minimum, meets, savings }) => {
-                const applied = coupon?.code === offer.code;
-                const progress = minimum > 0 ? Math.min(1, eligible / minimum) : 1;
-                return (
-                  <li
-                    key={offer.code}
-                    className="w-full shrink-0 rounded-[var(--r-md)] border p-3"
-                    style={{
-                      borderColor: applied ? 'var(--leaf-600)' : 'var(--hairline)',
-                      background: 'var(--surface-sunken)',
-                    }}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="tabular text-sm font-bold" style={{ color: 'var(--text-strong)' }}>
-                        {offer.code}
-                      </p>
-                      {applied ? (
-                        <span className="tabular shrink-0 text-xs font-bold" style={{ color: 'var(--leaf-600)' }}>
-                          Applied
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => applyOffer(offer.code)}
-                          disabled={couponApplying || !meets}
-                          className="btn-primary h-8 shrink-0 px-3.5 text-xs font-bold disabled:opacity-50"
-                        >
-                          {couponApplying ? 'Applying…' : 'Apply'}
-                        </button>
-                      )}
-                    </div>
-                    <p className="mt-0.5 text-[13px] font-bold" style={{ color: 'var(--ember-600)' }}>
-                      {discountLabel(offer)}
-                    </p>
-                    <p className="mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {minimum > 0 ? `Spend ${inr(minimum)} on eligible products` : 'No minimum order'}
-                      {offer.expiresAt && ` · Ends ${new Date(offer.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
-                    </p>
-                    {minimum > 0 && (
-                      <>
-                        <p className="tabular mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
-                          {inr(eligible)} / {inr(minimum)}
-                        </p>
-                        <div
-                          className="mt-1 h-1 overflow-hidden rounded-full"
-                          style={{ background: 'var(--surface-raised)' }}
-                          role="progressbar"
-                          aria-valuenow={Math.round(progress * 100)}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-label={`${offer.code} eligibility`}
-                        >
-                          <div
-                            className="h-full rounded-full transition-all duration-300"
-                            style={{ width: `${Math.round(progress * 100)}%`, background: meets ? 'var(--leaf-600)' : 'var(--gold-500)' }}
-                          />
-                        </div>
-                      </>
-                    )}
-                    <p className="mt-1.5 text-xs font-semibold" style={{ color: meets ? 'var(--leaf-600)' : 'var(--text-muted)' }}>
-                      {applied
-                        ? `Saving ${inr(coupon.discountAmount)} on this order`
-                        : meets
-                          ? `Ready to apply${savings > 0 ? ` — save ${inr(Math.round(savings * 100) / 100)}` : ''}`
-                          : `Add ${inr(minimum - eligible)} more to use this coupon`}
-                    </p>
-                  </li>
-                );
-              })}
-            </ul>
+          {/* The top offers render immediately — only the overflow hides
+             behind the toggle. The list (and only the list) scrolls. */}
+          <ul className={`flex flex-col gap-2 overflow-y-auto pr-0.5${fill ? ' min-h-0 flex-1' : ' max-h-[300px]'}`}>
+            {visible.map(renderOffer)}
+          </ul>
+          {ranked.length > VISIBLE_OFFERS && (
+            <button
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+              aria-expanded={showAll}
+              className="offers-toggle mt-2 inline-flex items-center gap-1 text-xs font-bold"
+            >
+              <ChevronDown
+                className="h-3.5 w-3.5 transition-transform duration-200"
+                aria-hidden="true"
+                style={{ transform: showAll ? 'rotate(180deg)' : 'none' }}
+              />
+              {showAll ? 'Show fewer offers' : `View all offers (${ranked.length})`}
+            </button>
           )}
         </>
       )}

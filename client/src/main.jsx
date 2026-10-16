@@ -7,6 +7,9 @@ import './styles/mobile-home.css'
 /* Homepage night atmosphere: warm section progression + faint festive
    textures. Styling only — no layout, spacing, typography or logic impact. */
 import './styles/home-atmosphere.css'
+/* Product detail premium showroom (pd-page scoped). Visual redesign only —
+   no logic impact; other routes untouched (see file header). */
+import './styles/product-detail-premium.css'
 // NOTE: admin-portrait.css is intentionally NOT imported here. It styles only
 // the admin orders/users grids + portrait layer, so it lives in the lazy
 // admin chunks (see AdminDashboard/Orders/UserManagement/ProductForm) instead

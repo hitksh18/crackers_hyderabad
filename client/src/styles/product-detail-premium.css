@@ -1,0 +1,244 @@
+/* =========================================================================
+   PRODUCT DETAIL — PREMIUM SHOWROOM REDESIGN (pd-page scoped)
+   -------------------------------------------------------------------------
+   Visual/UI/UX refinement only. No logic, API, data, cart, wishlist,
+   routing or auth changes: every selector below is paint/layout under
+   .pd-page. Palette: burgundy #5B1115 / wine #7A171B, gold #C89A3C /
+   champagne #E4C477, ground #F7F1E5, card #FFFDF8, image well #FBF8F1,
+   ink #321C1C / #705D52 / muted #9A8879. No horizontal overflow:
+   background art is paint-only, grids use minmax(0,1fr), images/buttons
+   capped at 100%.
+   ========================================================================= */
+
+/* ---- 1. Theme scope + 10. background --------------------------------------
+   Page ground with faint corner line-art (8-12%) and a soft top glow.
+   Tokens overridden ONLY inside .pd-page so other routes are untouched. */
+.pd-page {
+  --surface-card: #FFFDF8;
+  --surface-raised: #FFFDF8;
+  --surface-sunken: #F6EDDB;
+  --surface-warm: #FFFDF8;
+  --text-strong: #321C1C;
+  --text-body: #705D52;
+  --text-muted: #8A7568;
+  --hairline: #EBDDC2;
+  --hairline-strong: #DECDA9;
+  --maroon-700: #7A171B;
+  --maroon-900: #5B1115;
+  overflow-x: clip;
+  background-color: #F7F1E5;
+  background-image:
+    radial-gradient(52% 18rem at 50% 0%, rgba(228, 196, 119, 0.14), transparent 70%),
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='280' height='280' viewBox='0 0 280 280' fill='none' stroke='%23C89A3C' opacity='0.10'><circle cx='140' cy='140' r='120' stroke-width='1'/><circle cx='140' cy='140' r='104' stroke-width='0.6'/><circle cx='140' cy='140' r='88' stroke-width='4' stroke-dasharray='0.1 23' stroke-linecap='round'/><circle cx='140' cy='140' r='40' stroke-width='0.75'/></svg>") right -84px top 64px / 300px 300px no-repeat,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='280' height='280' viewBox='0 0 280 280' fill='none' stroke='%23C89A3C' opacity='0.09'><circle cx='140' cy='140' r='120' stroke-width='1'/><circle cx='140' cy='140' r='104' stroke-width='0.6'/><circle cx='140' cy='140' r='88' stroke-width='4' stroke-dasharray='0.1 23' stroke-linecap='round'/></svg>") left -66px bottom 120px / 260px 260px no-repeat,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120' fill='none' stroke='%23C89A3C' opacity='0.08'><path d='M60 10 L68 52 L110 60 L68 68 L60 110 L52 68 L10 60 L52 52 Z' stroke-width='1'/></svg>") right -30px top 46% / 140px 140px no-repeat;
+}
+.pd-page img { max-width: 100%; }
+
+/* ---- 2. Hero: balanced 50/50 showroom --------------------------------------
+   Desktop ~48-52% each with generous air; stacks below 1024px where the
+   sticky bar owns purchase (functionality preserved). */
+.pd-page .pd-hero { padding-top: clamp(1.25rem, 1rem + 1vw, 2rem); }
+@media (min-width: 1024px) {
+  .pd-page .pd-hero-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: clamp(2rem, 1rem + 2.5vw, 3.5rem);
+  }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .pd-page .pd-hero-grid { gap: 1.5rem; }
+}
+
+/* ---- Showroom card: champagne well, warm glow, grounded shadow ------------
+   No rotation, no float — one restrained entrance (opacity/translate/scale). */
+.pd-page .pd-media {
+  background:
+    radial-gradient(70% 46% at 50% 38%, rgba(228, 196, 119, 0.20) 0%, transparent 70%),
+    linear-gradient(165deg, #FFFDF8 0%, #FBF8F1 60%, #F6EDDB 100%);
+  border: 1px solid #E7D6B4;
+  border-radius: 22px;
+  box-shadow: 0 18px 44px rgba(91, 17, 21, 0.10), 0 4px 14px rgba(112, 93, 82, 0.08);
+}
+.pd-page .pd-media::before { border-color: rgba(200, 154, 60, 0.20); }
+.pd-page .pd-media::after { opacity: 0.35; }
+/* Warm radial glow behind the product + soft ellipse it sits on. */
+.pd-page .pd-media-inner::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  width: min(80%, 420px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(228, 196, 119, 0.28) 0%, rgba(228, 196, 119, 0.10) 45%, transparent 70%);
+}
+.pd-page .pd-media-inner::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 6%;
+  width: 54%;
+  height: 22px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgba(50, 28, 28, 0.20) 0%, rgba(200, 154, 60, 0.10) 55%, transparent 100%);
+  filter: blur(2px);
+}
+.pd-page .pd-media-inner > img,
+.pd-page .pd-media-inner > div { z-index: 1; }
+@keyframes pd-showcase-in {
+  from { opacity: 0; transform: translateY(15px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.pd-page .pd-media-inner > img { animation: pd-showcase-in 0.6s ease-out both; }
+
+/* Thumbnails: champagne chips, burgundy/gold active ring. */
+.pd-page .pd-media [role="group"] button {
+  border-radius: 11px;
+  border: 1px solid #E7D6B4;
+  background: #FFFDF8;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+.pd-page .pd-media [role="group"] button:hover { transform: translateY(-1px); }
+.pd-page .pd-media [role="group"] button[aria-pressed="true"] {
+  border-color: #7A171B;
+  box-shadow: 0 0 0 2px rgba(200, 154, 60, 0.55);
+}
+/* Zoom hint: tiny elegant champagne pill. */
+.pd-page .pd-media-zoom {
+  background: rgba(255, 253, 248, 0.92);
+  border-color: #E7D6B4;
+  color: #705D52;
+}
+
+/* ---- 3. Editorial info column: brand eyebrow first, serif title ------------
+   DOM order untouched (a11y/SEO); brand row leads visually via order. */
+.pd-page .pd-info { gap: 0; }
+.pd-page .pd-brandrow { order: -1; margin-top: 0; }
+.pd-page .pd-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: #321C1C;
+  margin-top: 0.625rem;
+}
+.pd-page .pd-brandname { color: #9E7029; }
+.pd-page .pd-price { margin-top: 0.875rem; }
+.pd-page .pd-price-now {
+  color: #7A171B;
+  font-size: clamp(2rem, 1.6rem + 1.6vw, 2.75rem);
+}
+.pd-page .pd-price-was { color: #9A8879; }
+.pd-page .pd-off {
+  background: rgba(200, 154, 60, 0.16);
+  border-color: rgba(200, 154, 60, 0.45);
+  color: #7A171B;
+}
+
+/* ---- 4. Stock: compact pale-green pill ------------------------------------ */
+.pd-page .pd-pill {
+  padding: 0.25rem 0.65rem;
+  font-size: 11px;
+}
+
+/* ---- 5. Quantity + burgundy CTA --------------------------------------------
+   Strongest element on the page; 11px radius, 2px hover lift. */
+.pd-page .pd-qty {
+  border: 1.5px solid #E0CFA8;
+  border-radius: 11px;
+  background: #FFFDF8;
+}
+.pd-page .pd-atc,
+.pd-page .pd-atc--bar {
+  background: linear-gradient(135deg, #5B1115 0%, #7A171B 100%);
+  border: 1px solid rgba(200, 154, 60, 0.4);
+  border-radius: 11px;
+  color: #FFFDF8;
+  box-shadow: 0 8px 22px rgba(91, 17, 21, 0.30);
+}
+.pd-page .pd-atc:hover:not(:disabled),
+.pd-page .pd-atc--bar:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(91, 17, 21, 0.36);
+}
+
+/* ---- 6. Highlight cards: warm white, quiet border, strong values ----------- */
+.pd-page .pd-hl {
+  background: #FFFDF8;
+  border: 1px solid #EBDDC2;
+  border-radius: 12px;
+  box-shadow: 0 3px 10px rgba(112, 93, 82, 0.06);
+}
+.pd-page .pd-hl-icon {
+  background: rgba(200, 154, 60, 0.14);
+  border-color: rgba(200, 154, 60, 0.35);
+  color: #7A171B;
+}
+.pd-page .pd-hl-value { color: #321C1C; }
+
+/* ---- 7. Trust strip: compact, light, quiet --------------------------------- */
+.pd-page .pd-trust {
+  background: linear-gradient(120deg, rgba(228, 196, 119, 0.12) 0%, rgba(255, 253, 248, 0.6) 60%, transparent 100%);
+  border-color: rgba(200, 154, 60, 0.30);
+}
+.pd-page .pd-trust-title { color: #321C1C; }
+.pd-page .pd-trust-sub { color: #705D52; }
+
+/* ---- 8. Favorite + share: minimal champagne circles -------------------------
+   Inline paint for the active/hover states wins over element styles. */
+.pd-page .pd-iconbtn {
+  background: #FFFDF8;
+  border: 1px solid #E7D6B4;
+}
+.pd-page .pd-iconbtn:hover {
+  transform: translateY(-1px);
+  border-color: #7A171B !important;
+  background: #F9EFDB !important;
+}
+.pd-page .pd-iconbtn:hover svg { color: #7A171B !important; }
+
+/* ---- 9. Safety: champagne information strip, never dominant ---------------- */
+.pd-page .pd-safety-card {
+  background: linear-gradient(120deg, #FFFDF8 0%, #FAF0DC 100%);
+  border: 1px solid #E7D6B4;
+  border-left: 3px solid #C89A3C;
+  box-shadow: 0 4px 14px rgba(112, 93, 82, 0.07);
+}
+.pd-page .pd-safety-title { color: #321C1C; }
+.pd-page .pd-safety-sub { color: #705D52; }
+.pd-page .pd-safety-item { color: #705D52; }
+.pd-page .pd-safety-item svg { color: #9E7029; }
+
+/* ---- Below-fold surfaces on the new ground --------------------------------- */
+.pd-page .pd-detail {
+  background: #FFFDF8;
+  border-color: #EBDDC2;
+}
+.pd-page .pd-detail-value { color: #321C1C; }
+.pd-page .pd-desc-title { color: #321C1C; }
+.pd-page .pd-desc-body { color: #4A3833; }
+
+/* ---- 11-12. Restrained motion + overflow guards ------------------------------
+   Entrance + hovers only; product never rotates/floats. */
+@media (prefers-reduced-motion: reduce) {
+  .pd-page .pd-media-inner > img { animation: none; }
+  .pd-page .pd-atc,
+  .pd-page .pd-atc--bar,
+  .pd-page .pd-iconbtn,
+  .pd-page .pd-media [role="group"] button { transition: none !important; transform: none !important; }
+}
+@media (max-width: 1023px) {
+  /* Stacked single column; sticky bar owns purchase (existing behavior). */
+  .pd-page .pd-hero-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.pd-page .pd-shell,
+.pd-page .pd-hero-grid,
+.pd-page .pd-media,
+.pd-page .pd-info,
+.pd-page .pd-buy,
+.pd-page .pd-hl-grid,
+.pd-page .pd-trust { max-width: 100%; }
+.pd-page .pd-atc { max-width: 100%; overflow-wrap: anywhere; }

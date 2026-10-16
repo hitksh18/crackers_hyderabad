@@ -109,7 +109,7 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
             {...tap}
             onClick={handleAddToCart}
             disabled={outOfStock}
-            className="btn-primary w-full px-3 text-[13px] sm:text-sm"
+            className="btn-primary nav-login-btn w-full px-3 text-[13px] sm:text-sm"
           >
             {outOfStock ? (
               <PackageX className="h-4 w-4 shrink-0" strokeWidth={2.4} />
@@ -230,9 +230,9 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
             <div
               className="ribbon tabular pointer-events-none"
               style={{
-                background: 'var(--grad-gold)',
-                color: 'var(--maroon-900)',
-                boxShadow: '0 4px 14px rgba(190, 140, 54, 0.45)',
+                background: 'var(--grad-maroon)',
+                color: '#FFFFFF',
+                boxShadow: '0 4px 12px rgba(58, 11, 12, 0.4)',
               }}
             >
               {discountPercent}% OFF
@@ -245,12 +245,12 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
             aria-pressed={wished}
             className={`wishlist-btn absolute left-3 top-3 z-raised flex h-9 w-9 items-center justify-center rounded-[var(--r-pill)] border shadow-sm ${
               wished
-                ? 'border-[color:rgba(255,253,248,0.7)]'
+                ? 'border-[color:rgba(158,112,41,0.6)]'
                 : 'border-[color:var(--hairline)] hover:border-[color:var(--ember-600)]'
             }`}
             style={
               wished
-                ? { background: 'linear-gradient(135deg, #CB2A2A 0%, #AA1F1F 100%)' }
+                ? { background: 'var(--grad-gold)' }
                 : { background: 'var(--surface-card)' }
             }
           >
@@ -260,7 +260,7 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
               style={{
                 width: 16,
                 height: 16,
-                color: wished ? 'var(--white-soft)' : 'var(--text-muted)',
+                color: wished ? 'var(--maroon-900)' : 'var(--text-muted)',
               }}
               strokeWidth={2.2}
             />
@@ -326,7 +326,7 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
             >
               <span
                 className="price text-xl font-bold leading-none md:text-2xl"
-                style={{ color: 'var(--ember-600)' }}
+                style={{ color: 'var(--maroon-700)' }}
               >
                 {inr(displayPrice)}
               </span>
@@ -402,9 +402,9 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
           <div
             className={`ribbon tabular pointer-events-none ${compact ? 'ribbon-sm' : ''}`}
             style={{
-              background: 'var(--grad-gold)',
-              color: 'var(--maroon-900)',
-              boxShadow: '0 4px 14px rgba(190, 140, 54, 0.45)',
+              background: 'var(--grad-maroon)',
+              color: '#FFFFFF',
+              boxShadow: '0 4px 12px rgba(58, 11, 12, 0.4)',
             }}
           >
             {discountPercent}% OFF
@@ -419,12 +419,12 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
             compact ? 'left-2 top-2 h-8 w-8' : 'left-3 top-3 h-11 w-11'
           } ${
             wished
-              ? 'border-[color:rgba(255,253,248,0.7)]'
+              ? 'border-[color:rgba(158,112,41,0.6)]'
               : 'border-[color:var(--hairline)] hover:border-[color:var(--ember-600)]'
           }`}
           style={
             wished
-              ? { background: 'linear-gradient(135deg, #CB2A2A 0%, #AA1F1F 100%)' }
+              ? { background: 'var(--grad-gold)' }
               : { background: 'var(--surface-card)' }
           }
         >
@@ -434,7 +434,7 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
             style={{
               width: compact ? 15 : 18,
               height: compact ? 15 : 18,
-              color: wished ? 'var(--white-soft)' : 'var(--text-muted)',
+              color: wished ? 'var(--maroon-900)' : 'var(--text-muted)',
             }}
             strokeWidth={2.2}
           />
@@ -543,7 +543,7 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
             className={`price font-bold leading-none ${
               compact ? 'text-base md:text-lg' : 'text-xl md:text-2xl'
             }`}
-            style={{ color: 'var(--ember-600)' }}
+            style={{ color: 'var(--maroon-700)' }}
           >
             {inr(displayPrice)}
           </span>
@@ -577,7 +577,7 @@ const ProductCard = ({ product, compact = false, viewMode = 'grid' }) => {
                   {...tap}
                   onClick={handleAddToCart}
                   disabled={outOfStock}
-                  className={`btn-primary w-full px-3 ${
+                  className={`btn-primary nav-login-btn w-full px-3 ${
                     compact ? 'min-h-9 text-[12px]' : 'text-[13px] sm:text-sm'
                   }`}
                 >

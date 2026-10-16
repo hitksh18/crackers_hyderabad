@@ -163,7 +163,7 @@ const Footer = ({ preview } = {}) => {
     <footer
       className="relative overflow-hidden"
       style={{
-        background: 'linear-gradient(178deg, var(--maroon-900) 0%, #2A0C0B 34%, #1A1714 100%)',
+        background: 'linear-gradient(178deg, #3A0B0C 0%, #571010 45%, #3A0B0C 100%)',
         color: 'var(--text-on-dark)'
       }}
     >

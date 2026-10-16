@@ -578,7 +578,7 @@ const Home = () => {
         return (
           <section key={section.id} className="section-pad home-sec-best">
             <div className="shell-wide">
-              <HomeProductRail eyebrow={homepageContent.bestSellers.eyebrow} title={homepageContent.bestSellers.title} subtitle={homepageContent.bestSellers.subtitle} products={bestShown} loading={loading} railLabel="best sellers" />
+              <HomeProductRail eyebrow={homepageContent.bestSellers.eyebrow} title={homepageContent.bestSellers.title} subtitle={homepageContent.bestSellers.subtitle} products={bestShown} loading={loading} railLabel="best sellers" align="center" />
             </div>
           </section>
         );
@@ -682,7 +682,7 @@ const Home = () => {
           <FeaturedSection products={featuredShown} heading={homepageContent.featured} loading={loading} />
           <section className="section-pad home-sec-best">
             <div className="shell-wide">
-              <HomeProductRail eyebrow={homepageContent.bestSellers.eyebrow} title={homepageContent.bestSellers.title} subtitle={homepageContent.bestSellers.subtitle} products={bestShown} loading={loading} railLabel="best sellers" />
+              <HomeProductRail eyebrow={homepageContent.bestSellers.eyebrow} title={homepageContent.bestSellers.title} subtitle={homepageContent.bestSellers.subtitle} products={bestShown} loading={loading} railLabel="best sellers" align="center" />
             </div>
           </section>
           <SectionErrorBoundary>

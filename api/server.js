@@ -71,7 +71,7 @@ const {
 // fallback) — order confirmations, password resets and manual resends.
 // The compact confirmation template + payment note live in
 // lib/emailTemplates + lib/email so every mail path renders identically.
-const { readEmailConfig, createSmtpTransporter, orderPaymentNote, maybeSendOrderConfirmationEmail, sendStatusUpdateEmail } = require('./lib/email');
+const { readEmailConfig, createSmtpTransporter, orderPaymentNote, maybeSendOrderConfirmationEmail, sendStatusUpdateEmail, sendContactMessage, isValidRecipient } = require('./lib/email');
 const { orderConfirmationHtml, orderConfirmationText } = require('./lib/emailTemplates');
 // Email Automation (rules, templates, branding, logs, manual sends). The
 // order-id style applies: one module owns validation + persistence + send.
@@ -2033,6 +2033,47 @@ app.post('/api/site/pageview', requireFirebase, siteLimiter, withDb((req, res) =
 
 app.post('/api/site/funnel', requireFirebase, siteLimiter, withDb((req, res) =>
   safeSite(() => site.recordFunnelStage(req.firestore, req.body), res)));
+
+/* Contact form (/contact) — public, guests welcome: the people writing in
+   have not signed in. One message mails the store inbox; the visitor is
+   only ever replyTo, never a recipient. Strictly validated and tightly
+   rate-limited (5/minute/IP) since an open mail relay is exactly what
+   spammers probe for. No requireFirebase: this touches no Firestore, and
+   a database outage should not take the contact form with it. */
+const contactLimiter = createRateLimiter({ windowMs: 60_000, max: 5, name: 'contact' });
+
+app.post('/api/contact', contactLimiter, async (req, res) => {
+  try {
+    const body = (req.body && typeof req.body === 'object') ? req.body : {};
+    const text = (v, max) => String(v ?? '').trim().slice(0, max);
+    const name = text(body.name, 100);
+    const email = text(body.email, 254);
+    const phone = text(body.phone, 32);
+    const subject = text(body.subject, 140);
+    const message = text(body.message, 2000);
+
+    if (!name || !isValidRecipient(email) || !subject || message.trim().length < 10) {
+      return res.status(400).json({ ok: false, error: 'Please complete every field with a valid email and a message of at least 10 characters.' });
+    }
+    if (phone && !/^[+\d][\d\s\-()]{5,30}$/.test(phone)) {
+      return res.status(400).json({ ok: false, error: 'That phone number does not look right.' });
+    }
+
+    const result = await sendContactMessage({ name, email, phone, subject, message });
+    if (result.ok) return res.json({ ok: true });
+    if (result.skipped === 'disabled' || result.skipped === 'unconfigured' || result.skipped === 'no-recipient') {
+      console.warn(`[contact] not delivered (${result.skipped})`);
+      return res.status(503).json({ ok: false, error: 'Messaging is temporarily unavailable. Please email us directly instead.' });
+    }
+    if (result.error === 'invalid-input') {
+      return res.status(400).json({ ok: false, error: 'Please complete every field with a valid email and a message of at least 10 characters.' });
+    }
+    return res.status(502).json({ ok: false, error: 'Unable to send your message right now. Please try again.' });
+  } catch (error) {
+    console.error('[contact] handler failed:', error.message);
+    return res.status(500).json({ ok: false, error: 'Unable to send your message right now. Please try again.' });
+  }
+});
 
 app.get('/api/admin/analytics/site', requireFirebase, requireAdmin, adminLimiter, withDb((req, res) =>
   safeSite(

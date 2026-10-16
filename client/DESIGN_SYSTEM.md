@@ -61,6 +61,7 @@ literal values. Tailwind scales in `tailwind.config.js` mirror them.
 ### Surfaces and text
 
 `--surface-page` `--surface-card` `--surface-raised` `--surface-sunken`
+`--surface-warm` (warm off-white for the cream Products/catalogue ground)
 `--hairline` `--hairline-strong`
 `--text-strong` `--text-body` `--text-muted` `--text-subtle`
 

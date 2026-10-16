@@ -61,6 +61,9 @@ function AppContent() {
   /* Focused authentication screen: no storefront chrome (banner, navbar,
      footer strip, WhatsApp float) on /login. */
   const isLoginPage = location.pathname === '/login';
+  /* The Contact page carries its own in-page WhatsApp button, so the global
+     float stays out of its way there (everywhere else is untouched). */
+  const isContactPage = location.pathname === '/contact';
   /* The scrolling announcement bar sits above the navbar on the storefront
      routes that show it. Product detail is one of them, so it gets the exact
      same TopBanner instance as the home page. */
@@ -197,7 +200,7 @@ function AppContent() {
           </Suspense>
         </div>
       )}
-      {!isLoginPage && (
+      {!isLoginPage && !isContactPage && (
         <Suspense fallback={null}>
           <WhatsAppButton />
         </Suspense>

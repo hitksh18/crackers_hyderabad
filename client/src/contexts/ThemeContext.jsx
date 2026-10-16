@@ -13,27 +13,28 @@ export const useTheme = () => {
 };
 
 /**
- * Storefront theme: DARK ONLY.
+ * Storefront theme: WARM-LIGHT ONLY.
  *
- * The Crackers Hyderabad shop is a dark premium fireworks experience. There
- * is no light theme, no system-theme following, and no theme switching: the
- * `dark` class is always applied, a stale `localStorage` light choice is
- * discarded, and the OS/browser appearance has zero effect. The provider API
- * is kept (mounted by App.jsx) so no consumer or future import breaks, but
- * every path resolves to dark.
+ * The Crackers Hyderabad shop is a premium warm-light festive boutique
+ * (ivory #FDF9F0 surfaces, maroon brand anchors, gold accents). There is no
+ * dark theme, no system-theme following, and no theme switching: the `dark`
+ * class is never applied, a stale stored choice is discarded, and the
+ * OS/browser appearance has zero effect. The provider API is kept (mounted
+ * by App.jsx) so no consumer or future import breaks, but every path
+ * resolves to light.
  * (Admin is a separate app with its own theme behaviour — untouched.)
  */
-const applyDarkTheme = () => {
+const applyLightTheme = () => {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
-  root.classList.add('dark');
-  root.style.colorScheme = 'dark';
+  root.classList.remove('dark');
+  root.style.colorScheme = 'light';
 
   // Keep the mobile browser chrome in step with the page.
   const meta = document.querySelector('meta[name="theme-color"]:not([media])');
-  if (meta) meta.setAttribute('content', '#14100E');
+  if (meta) meta.setAttribute('content', '#FDF9F0');
 
-  // Discard an old stored preference (e.g. theme=light from a previous
+  // Discard an old stored preference (e.g. theme=dark from a previous
   // build). Only this key is touched — cart, auth and app data are never
   // cleared here.
   try {
@@ -45,33 +46,33 @@ const applyDarkTheme = () => {
   }
 };
 
-applyDarkTheme();
+applyLightTheme();
 
 export const ThemeProvider = ({ children }) => {
-  const [isDark] = useState(true);
+  const [isDark] = useState(false);
 
   useEffect(() => {
-    applyDarkTheme();
+    applyLightTheme();
   }, []);
 
-  /* Kept for API compatibility — dark is the only theme, so these pin it. */
+  /* Kept for API compatibility — light is the only theme, so these pin it. */
   const setTheme = useCallback(() => {
-    applyDarkTheme();
+    applyLightTheme();
   }, []);
 
   const toggleTheme = useCallback(() => {
-    applyDarkTheme();
+    applyLightTheme();
   }, []);
 
-  /** Already dark — just re-applies it. */
+  /** Already light — just re-applies it. */
   const useSystemTheme = useCallback(() => {
-    applyDarkTheme();
+    applyLightTheme();
   }, []);
 
   const value = useMemo(
     () => ({
       isDark,
-      theme: 'dark',
+      theme: 'light',
       /** The storefront never tracks the OS theme. */
       followsSystem: false,
       toggleTheme,

@@ -87,8 +87,7 @@ const Navbar = () => {
   const [suggestOpen, setSuggestOpen] = useState(false);
   const searchInputRef = useRef(null);
   const [logoUrl, setLogoUrl] = useState(DEFAULT_LOGO);
-  /* Compact solid treatment once the page scrolls (see nav-scrolled CSS). */
-  const [scrolled, setScrolled] = useState(false);
+  /* Fixed header: no scroll-driven compaction — the bar keeps one look. */
   const profileMenuRef = useRef(null);
   const navRef = useRef(null);
   const cartCount = getCartCount();
@@ -104,36 +103,12 @@ const Navbar = () => {
     });
   }, []);
 
-  /* Compact the bar once the page scrolls. Passive + rAF-throttled; the
-     state only flips at the threshold so renders stay cheap, while the
-     top offset writes straight to the DOM (no re-render per pixel). */
-  useEffect(() => {
-    let raf = 0;
-    const onScroll = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        const y = window.scrollY;
-        setScrolled(y > 24);
-        /* Slide under the festive ticker at page top, pin to viewport top
-           once it scrolls off (TopBanner publishes --top-banner-h; 0 when
-           absent or disabled, so those pages are unaffected). */
-        const el = navRef.current;
-        if (!el) return;
-        const bannerH = Number.parseFloat(
-          getComputedStyle(document.documentElement).getPropertyValue('--top-banner-h')
-        ) || 0;
-        const offset = Math.max(0, Math.round(bannerH - y));
-        el.style.top = offset > 0 ? `${offset}px` : '';
-      });
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, []);
+  /* Fixed-header contract: the announcement bar is fixed at viewport top
+     and this navbar is fixed directly beneath it (top comes from
+     --top-banner-h in CSS), so NEITHER ever scrolls away, shrinks, hides,
+     or changes position. No scroll listener is needed — and none is wanted
+      (hide-on-scroll / shrink-on-scroll are explicitly out). Height is
+     still published for page offsets and the hero viewport math. */
 
   /* Publish the measured navbar height so sticky page content can clear it
      instead of guessing at a hardcoded offset. */
@@ -290,7 +265,7 @@ const Navbar = () => {
 
   const wordmark = (
     <>
-      Crackers <span style={{ color: 'var(--ember-600)' }}>Hyderabad</span>
+      Crackers <span style={{ color: 'var(--gold-400)' }}>Hyderabad</span>
     </>
   );
 
@@ -298,7 +273,7 @@ const Navbar = () => {
     <>
       <nav
         ref={navRef}
-        className={`glass-nav nav-fixed sticky top-0 z-nav${pathname === '/' ? ' home-nav' : ''}${scrolled ? ' nav-scrolled' : ''}`}
+        className={`glass-nav nav-fixed sticky top-0 z-nav${pathname === '/' ? ' home-nav' : ''}`}
       >
         <span
           aria-hidden="true"
@@ -328,7 +303,7 @@ const Navbar = () => {
                 whileHover={reduced ? undefined : { scale: 1.02 }}
                 transition={SPRING.snappy}
                 className="whitespace-nowrap text-xl font-bold tracking-tight"
-                style={{ fontFamily: 'var(--font-display)', color: 'var(--text-strong)' }}
+                style={{ fontFamily: 'var(--font-display)', color: '#FDF9F0' }}
               >
                 {wordmark}
               </motion.span>
@@ -582,7 +557,7 @@ const Navbar = () => {
                   </AnimatePresence>
                 </div>
               ) : (
-                <Link to="/login" className="btn-primary shrink-0 px-4 py-2 text-sm">
+                <Link to="/login" className="btn-maroon nav-login-btn shrink-0 px-4 py-2 text-sm">
                   <LogIn className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
                   <span>Login</span>
                 </Link>
@@ -595,8 +570,8 @@ const Navbar = () => {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(true)}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--r-pill)] border bg-[var(--surface-card)] shadow-xs lg:hidden"
-              style={{ borderColor: 'var(--hairline-strong)', color: 'var(--text-muted)' }}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--r-pill)] border shadow-xs lg:hidden"
+              style={{ borderColor: 'rgba(210,166,79,0.35)', background: 'rgba(253,249,240,0.08)', color: '#FDF9F0' }}
               aria-label="Open menu"
               aria-haspopup="dialog"
               aria-expanded={mobileMenuOpen}
@@ -621,7 +596,7 @@ const Navbar = () => {
               />
               <span
                 className="truncate text-[13px] font-bold tracking-tight leading-tight min-[360px]:text-sm sm:text-base"
-                style={{ fontFamily: 'var(--font-display)', color: 'var(--text-strong)' }}
+                style={{ fontFamily: 'var(--font-display)', color: '#FDF9F0' }}
               >
                 {wordmark}
               </span>
@@ -631,8 +606,8 @@ const Navbar = () => {
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--r-pill)] border bg-[var(--surface-card)] shadow-xs"
-              style={{ borderColor: 'var(--hairline-strong)', color: 'var(--text-muted)' }}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--r-pill)] border shadow-xs"
+              style={{ borderColor: 'rgba(210,166,79,0.35)', background: 'rgba(253,249,240,0.08)', color: '#FDF9F0' }}
               aria-label="Search products"
               aria-haspopup="dialog"
               aria-expanded={searchOpen}
@@ -642,13 +617,13 @@ const Navbar = () => {
 
             <Link
               to="/cart"
-              className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--r-pill)] border bg-[var(--surface-card)] shadow-xs"
+              className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--r-pill)] border shadow-xs"
               aria-label={`Cart, ${cartCount} items`}
               aria-current={isActive('/cart') ? 'page' : undefined}
               style={
                 isActive('/cart')
-                  ? { color: 'var(--ember-600)', borderColor: 'var(--ember-600)' }
-                  : { borderColor: 'var(--hairline-strong)', color: 'var(--text-muted)' }
+                  ? { color: 'var(--gold-400)', borderColor: 'var(--gold-400)', background: 'rgba(253,249,240,0.12)' }
+                  : { borderColor: 'rgba(210,166,79,0.35)', background: 'rgba(253,249,240,0.08)', color: '#FDF9F0' }
               }
             >
               <ShoppingCart className="h-5 w-5" strokeWidth={2.2} aria-hidden="true" />
@@ -663,9 +638,10 @@ const Navbar = () => {
         </div>
       </nav>
 
-      {/* Spacer reserving the fixed bar's height (published via --nav-h), so
-          pinning the bar never shifts page content. */}
-      <div aria-hidden="true" style={{ height: 'var(--nav-h, 72px)' }} />
+      {/* Spacer reserving the fixed header's height (live banner + nav vars,
+          so page content always starts below both bars instead of guessing
+          at hardcoded offsets. */}
+      <div aria-hidden="true" style={{ height: 'calc(var(--top-banner-h, 0px) + var(--nav-h, 72px))' }} />
 
       <AnimatePresence>
         {mobileMenuOpen && (

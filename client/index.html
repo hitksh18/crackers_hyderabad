@@ -11,9 +11,9 @@
     <meta name="keywords" content="crackers hyderabad, wholesale crackers, fireworks hyderabad, diwali crackers, sparklers, gift boxes, bulk crackers, festival fireworks" />
     <meta name="author" content="Crackers Hyderabad" />
     <!-- Kept media-free so the browser chrome never follows the OS into a
-         light scheme that contradicts the dark-only storefront. -->
-    <meta name="theme-color" content="#14100E" />
-    <meta name="color-scheme" content="dark" />
+         dark scheme that contradicts the warm-light storefront. -->
+    <meta name="theme-color" content="#FDF9F0" />
+    <meta name="color-scheme" content="light" />
     <meta name="robots" content="index, follow" />
     <!-- Static canonical for the homepage shell. The client SEO manager
          upserts the per-route canonical after hydration (homepage value comes
@@ -24,30 +24,31 @@
 
     <!-- Critical first-paint shell: paints before React, Firebase, fonts or
          product data arrive, and reserves the hero height so the first
-         contentful paint does not shift layout. The storefront is dark-only,
-         so the base is the dark surface — the page never flashes light. -->
+         contentful paint does not shift layout. The storefront is
+         warm-light, so the base is the ivory surface — the page never
+         flashes dark. -->
     <style>
-      html, body { margin: 0; padding: 0; background: #14100E; }
+      html, body { margin: 0; padding: 0; background: #FDF9F0; }
       #root { min-height: 100svh; }
-      .hero-stage { min-height: 540px; background: #070505; }
+      .hero-stage { min-height: 540px; background: #F3E3C8; }
     </style>
 
-    <!-- Dark-only guarantee, resolved before first paint. The `dark` class is
-         always applied synchronously here (and re-applied by ThemeContext):
-         the OS appearance and any stale stored light choice are ignored, so
-         there is no light-theme flash — not even for one frame.
+    <!-- Warm-light guarantee, resolved before first paint. The `dark` class is
+         never applied here (and removed by ThemeContext): the OS appearance
+         and any stale stored dark choice are ignored, so there is no
+         dark-theme flash — not even for one frame.
          Must stay in step with src/contexts/ThemeContext.jsx. -->
     <script>
       (function () {
         try {
           localStorage.removeItem('theme');
         } catch (e) {
-          /* Storage blocked — the dark default still applies. */
+          /* Storage blocked — the light default still applies. */
         }
-        document.documentElement.classList.add('dark');
-        document.documentElement.style.colorScheme = 'dark';
+        document.documentElement.classList.remove('dark');
+        document.documentElement.style.colorScheme = 'light';
         var meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.setAttribute('content', '#14100E');
+        if (meta) meta.setAttribute('content', '#FDF9F0');
       })();
     </script>
 

@@ -16,6 +16,7 @@ const PromoSection = ({ promotionalBanners }) => (
         eyebrow="Offers"
         title="Festive Deals"
         subtitle="Limited-time offers you cannot miss"
+        tone="dark"
       />
 
       {(promotionalBanners || []).filter((b) => b.enabled !== false).length > 0 && (

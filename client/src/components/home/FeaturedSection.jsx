@@ -11,6 +11,7 @@ const FeaturedSection = ({ products, heading, loading, showAllLink }) => (
         loading={loading}
         showAllLink={showAllLink || '/products'}
         railLabel="featured products"
+        align="center"
       />
     </div>
   </section>

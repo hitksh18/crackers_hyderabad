@@ -144,23 +144,23 @@ const sortList = (list, key) => {
 /* Layout/sizing lives in .catalogue-pill (index.css) so the one-line fit is
    tuned in one place; only interaction styling stays here. */
 const pillBase =
-  'catalogue-pill inline-flex items-center rounded-[var(--r-pill)] transition-transform duration-200 ease-out ' +
+  'catalogue-pill inline-flex items-center rounded-[18px] transition-transform duration-200 ease-out ' +
   'hover:-translate-y-0.5 focus-visible:-translate-y-0.5';
 
 const pillStyle = (active) =>
   active
     ? {
-        background: 'var(--grad-maroon)',
-        color: '#FFFFFF',
-        border: '1px solid rgba(210, 166, 79, 0.55)',
-        boxShadow: 'var(--shadow-sm)',
+        background: 'linear-gradient(135deg, #651817 0%, #481112 100%)',
+        color: '#F8EBD3',
+        border: '1px solid rgba(201, 154, 61, 0.65)',
+        boxShadow: '0 6px 18px rgba(101, 24, 23, 0.28)',
         fontWeight: 700,
       }
     : {
-        background: 'var(--surface-card)',
-        color: 'var(--text-body)',
-        border: '1px solid var(--hairline-strong)',
-        fontWeight: 600,
+        background: 'rgba(255, 250, 240, 0.72)',
+        color: '#5A4037',
+        border: '1px solid #DCC49B',
+        fontWeight: 500,
       };
 
 const gridClasses = {
@@ -520,11 +520,10 @@ const Products = () => {
         canonical={catalogueCanonical}
         jsonLd={catalogueBreadcrumbLd}
       />
-      <div className="shell products-page" style={{ paddingTop: '1.5rem', paddingBottom: '1.5rem' }}>
+      <div className="shell products-page" style={{ paddingTop: '1.25rem', paddingBottom: '1.5rem' }}>
         {/* ============ COMPACT HEADER ============ */}
         <header className="text-center products-page-header">
-          <span className="section-eyebrow justify-center">{activeBrand ? 'Brand' : 'Catalogue'}</span>
-          <h1 className="section-title mt-1.5 text-balance">
+          <h1 className="section-title mt-0 text-balance">
             {activeBrand
               ? (activeCategoryName ? `${activeBrand.name} ${activeCategoryName}` : `${activeBrand.name} in Hyderabad`)
               : (activeCategoryName ? `${activeCategoryName} in Hyderabad` : 'Our Products')}
@@ -548,33 +547,22 @@ const Products = () => {
               )}
             </nav>
           )}
-          {activeBrand ? (
+          {activeBrand && activeBrand.logo && (
             <div className="mx-auto mt-2 flex max-w-xl flex-col items-center gap-1.5">
-              {activeBrand.logo && (
-                <img
-                  src={normalizeImageUrl(activeBrand.logo)}
-                  alt={`${activeBrand.name} logo`}
-                  loading="lazy"
-                  className="h-12 w-12 rounded-xl border object-contain p-1"
-                  style={{ background: 'var(--surface-card)', borderColor: 'var(--hairline)' }}
-                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                />
-              )}
-              <p className="max-w-xl text-sm" style={{ color: 'var(--text-muted)' }}>
-                {activeBrand.description || `Premium fireworks from ${activeBrand.name}.`}
-              </p>
+              <img
+                src={normalizeImageUrl(activeBrand.logo)}
+                alt={`${activeBrand.name} logo`}
+                loading="lazy"
+                className="h-12 w-12 rounded-xl border object-contain p-1"
+                style={{ background: 'var(--surface-card)', borderColor: 'var(--hairline)' }}
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
             </div>
-          ) : (
-            activeCategoryDescriptor && (
-              <p className="mx-auto mt-1.5 max-w-xl text-sm" style={{ color: 'var(--text-muted)' }}>
-                Explore {activeCategoryDescriptor} from Crackers Hyderabad.
-              </p>
-            )
           )}
         </header>
 
         {/* ============ CATEGORY FILTER PILLS — spec-compliant scroll container ============ */}
-        <div className="category-scroll-container mt-3">
+        <div className="category-scroll-container mt-5">
           <nav
             aria-label="Filter products by category"
             className="catalogue-pills category-list"
@@ -609,6 +597,17 @@ const Products = () => {
                 ? 'No products'
                 : `Showing ${totalCount} ${totalCount === 1 ? 'product' : 'products'}`}
           </p>
+          {/* Search context lives inside the filter bar — never as a
+              separate heading section — so results flow straight into the
+              grid with no blank band. */}
+          {!loading && searchTerm.trim().length > 0 && (
+            <p className="catalogue-search-meta" aria-live="polite">
+              <span className="catalogue-search-meta-label">Search Results</span>
+              <span className="catalogue-search-meta-query">
+                {totalCount} {totalCount === 1 ? 'match' : 'matches'} for &ldquo;{searchTerm.trim()}&rdquo;
+              </span>
+            </p>
+          )}
 
           <div className="catalogue-toolbar-actions">
             {hasActiveFilters && (
@@ -724,17 +723,7 @@ const Products = () => {
         )}
 
         {/* ============ GRID ============ */}
-        {/* In-flow search results heading — the query's matches render as
-            normal product cards in the grid below. No floating overlay. */}
-        {!loading && searchTerm.trim().length > 0 && (
-          <div className="mt-4">
-            <p className="section-eyebrow">Search results</p>
-            <h2 className="subsection-title mt-1">
-              {totalCount} {totalCount === 1 ? 'match' : 'matches'} for &ldquo;{searchTerm.trim()}&rdquo;
-            </h2>
-          </div>
-        )}
-        <div className="mt-4">
+        <div className="mt-3">
           {loading ? (
             <ProductGridSkeleton count={12} />
           ) : filteredProducts.length === 0 ? (

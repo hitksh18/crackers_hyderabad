@@ -14,18 +14,21 @@ import {
 import './fireworks-hero.css';
 
 /* =========================================================================
-   FireworksHero — a pure night-sky Diwali show behind the hero content.
+   FireworksHero — a Diwali show confined to the PRODUCT SHOWCASE ZONE.
 
-   One canvas, one persistent loop, one director. Shells rise from the
-   bottom edge on near-vertical physics ascents, brake visibly, detonate
-   through a staged ignition (flash -> core -> two shell waves), and their
-   rays expand, slow, droop and fade with gravity and drag. Bursts light the
-   sky around them (halos), exhale tinted smoke, and shed embers; the
-   director keeps 1-3 shells composing across five lanes with companions
-   and rare structured finales, forever, with quiet breathing room.
+   One canvas, one persistent loop, one director — all scoped to the
+   right-column product stage (.fx-showcase), never the full hero. Shells
+   rise from the stage's bottom edge on near-vertical ascents, brake,
+   detonate through a staged ignition (flash -> core -> two shell waves),
+   and their rays expand, slow, droop and fade with gravity and drag.
+   Bursts light the stage around the product (halos), exhale tinted smoke,
+   and shed embers; the director keeps 1-2 shells composing across the
+   stage lanes with companions and rare structured finales, forever, with
+   quiet breathing room.
 
-   No skyline, no monuments, no images — canvas particles only. The brand
-   block is protected by the director's safe zone plus a CSS vignette.
+   The left branding zone (eyebrow, title, subtitle, CTA) stays completely
+   calm: no canvas, no sparks, no bursts reach it. No skyline, no monuments,
+   no images — canvas particles only, blended for the biscuit stage.
    ========================================================================= */
 
 /* Thin tapering trails. Pre-baked so the frame loop never builds strings. */
@@ -41,8 +44,10 @@ const rgba = (hex, a) => {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 };
 
-/* A single ray: transparent tip, colour body, white-hot head, soft across
-   its thickness. Drawn rotated and stretched per ray. */
+/* A single ray: transparent tip, coloured body, warm champagne head, soft
+   across its thickness. Drawn rotated and stretched per ray. Bodies carry
+   the deep wine/copper/bronze tones; heads stay a restrained champagne so
+   bursts read rich, never neon, on biscuit. */
 const streakSprite = (hex, soft) => {
   const W = 96;
   const H = 18;
@@ -56,7 +61,7 @@ const streakSprite = (hex, soft) => {
   grd.addColorStop(0.4, rgba(hex, 0.14));
   grd.addColorStop(0.78, rgba(hex, 0.72));
   grd.addColorStop(0.93, rgba(hex, 0.95));
-  grd.addColorStop(1, 'rgba(255,241,194,1)');
+  grd.addColorStop(1, 'rgba(245,215,137,1)');
   g.fillStyle = grd;
   g.fillRect(0, 0, W, H);
   const vg = g.createLinearGradient(0, 0, 0, H);
@@ -99,7 +104,11 @@ const FireworksHero = ({ copy, products, showcaseLoading, artworkAnimation } = {
     ...(copy || {}),
   };
   const reduced = useReducedMotion();
-  const rootRef = useRef(null);
+  /* Hero root owns mouse parallax only. The show itself is scoped to the
+     product stage (stageRef) — see the hero/product-stage layering note in
+     fireworks-hero.css. */
+  const heroRef = useRef(null);
+  const stageRef = useRef(null);
   const canvasRef = useRef(null);
   /* Pointer in -1..1. Read by the renderer only — physics never sees it. */
   const pointerRef = useRef({ x: 0, y: 0 });
@@ -121,16 +130,19 @@ const FireworksHero = ({ copy, products, showcaseLoading, artworkAnimation } = {
     []
   );
 
-  /* ======================= the simulation ============================= */
+  /* ======================= the simulation =============================
+     Sized and observed on the PRODUCT STAGE only: every coordinate the
+     director plans is inside the showcase box, so bursts can never drift
+     into the branding zone. */
   useEffect(() => {
-    const root = rootRef.current;
+    const stage = stageRef.current;
     const canvas = canvasRef.current;
-    if (!root || !canvas) return undefined;
+    if (!stage || !canvas) return undefined;
     const ctx = canvas.getContext('2d');
     if (!ctx) return undefined;
 
-    const MAX_MAJOR = isMobile ? 1 : isTablet ? 2 : 3;
-    const MAX_PARTS = isMobile ? 260 : isTablet ? 450 : 700;
+    const MAX_MAJOR = isMobile ? 1 : isTablet ? 1 : 2;
+    const MAX_PARTS = isMobile ? 180 : isTablet ? 300 : 480;
     const PART_SCALE = isMobile ? 0.45 : isTablet ? 0.7 : 1;
     const SMOKE_SCALE = isMobile ? 0.45 : isTablet ? 0.7 : 1;
 
@@ -146,8 +158,8 @@ const FireworksHero = ({ copy, products, showcaseLoading, artworkAnimation } = {
         streaksSoft[k].push(streakSprite(hex, true));
       });
     });
-    const headGlow = glowSprite('rgba(255,241,194,0.95)', 'rgba(229,174,63,0.5)', 64, 1);
-    const flashSpriteC = glowSprite('rgba(255,252,240,0.95)', 'rgba(247,211,106,0.5)', 128, 2);
+    const headGlow = glowSprite('rgba(255,214,140,0.95)', 'rgba(190,130,50,0.55)', 64, 1);
+    const flashSpriteC = glowSprite('rgba(255,220,150,0.95)', 'rgba(199,120,47,0.55)', 128, 2);
     const smokeSpriteC = glowSprite('rgba(190,172,148,0.5)', 'rgba(120,104,88,0.2)', 128, 6);
     const warmSmokeC = glowSprite('rgba(216,186,150,0.55)', 'rgba(150,120,95,0.22)', 128, 6);
     const redSmokeC = glowSprite('rgba(214,150,120,0.5)', 'rgba(140,70,50,0.2)', 128, 6);
@@ -184,7 +196,7 @@ const FireworksHero = ({ copy, products, showcaseLoading, artworkAnimation } = {
     const setBase = () => ctx.setTransform(st.dpr, 0, 0, st.dpr, 0, 0);
 
     const resize = () => {
-      const rect = root.getBoundingClientRect();
+      const rect = stage.getBoundingClientRect();
       const w = Math.max(1, rect.width);
       const h = Math.max(1, rect.height);
       const dpr = Math.min(isMobile ? 1.75 : 2, window.devicePixelRatio || 1);
@@ -308,8 +320,8 @@ const FireworksHero = ({ copy, products, showcaseLoading, artworkAnimation } = {
           gravity: gravity * (ember ? 0.4 : 1),
           tail: type.tail * (inner ? 0.7 : 1),
           lenMul: type.len * rand(0.6, 1.35),
-          size: rand(type.size[0], type.size[1]) * (D.scale * 0.6 + 0.55) * (type.dim || 1),
-          bright: rand(0.7, 1.05) * (Math.random() < 0.07 ? 1.15 : 1) * (ember ? 0.5 : 1) * (inner ? 1.15 : 1) * D.alpha,
+          size: rand(type.size[0], type.size[1]) * (D.scale * 0.6 + 0.55) * (type.dim || 1) * 1.25,
+          bright: rand(0.85, 1.1) * (Math.random() < 0.07 ? 1.15 : 1) * (ember ? 0.5 : 1) * (inner ? 1.15 : 1) * D.alpha,
           sprite: spriteSet[(Math.random() * spriteSet.length) | 0],
           flick: !!type.flick,
           ember,
@@ -392,7 +404,7 @@ const FireworksHero = ({ copy, products, showcaseLoading, artworkAnimation } = {
           t: 0,
           dur: big ? 1.2 : 0.8,
           red,
-          a: big ? 0.5 : 0.35,
+          a: big ? 0.6 : 0.42,
         });
       }
 
@@ -629,11 +641,12 @@ const FireworksHero = ({ copy, products, showcaseLoading, artworkAnimation } = {
         const n = r.hist.length / 2;
         if (n < 2) continue;
         ctx.lineCap = 'round';
-        /* The trail breathes a little — a burning fuse, not a vector line. */
-        ctx.globalAlpha = 0.85 + 0.15 * Math.sin(now / 47 + r.ph * 3);
+        /* The trail breathes a little — a burning copper fuse, dark enough
+           to read on biscuit, never a vector line. */
+        ctx.globalAlpha = 0.9 + 0.1 * Math.sin(now / 47 + r.ph * 3);
         for (let j = 1; j < n; j++) {
           const a = j - 1;
-          ctx.strokeStyle = `rgba(247,211,106,${TAIL_A[a]})`;
+          ctx.strokeStyle = `rgba(154,77,47,${TAIL_A[a]})`;
           ctx.lineWidth = TAIL_W[a] * DEPTHS[r.plan.depth].scale;
           ctx.beginPath();
           ctx.moveTo(r.hist[(j - 1) * 2] + ox, r.hist[(j - 1) * 2 + 1] + oy);
@@ -647,9 +660,9 @@ const FireworksHero = ({ copy, products, showcaseLoading, artworkAnimation } = {
         const hr = 7 * DEPTHS[r.plan.depth].scale * flick;
         ctx.drawImage(headGlow, hx - hr, hy - hr, hr * 2, hr * 2);
         ctx.globalAlpha = 0.95;
-        ctx.fillStyle = '#fffdf4';
+        ctx.fillStyle = '#6B2525';
         ctx.beginPath();
-        ctx.arc(hx, hy, 1.6 * DEPTHS[r.plan.depth].scale * flick, 0, TAU);
+        ctx.arc(hx, hy, 1.8 * DEPTHS[r.plan.depth].scale * flick, 0, TAU);
         ctx.fill();
       }
       ctx.globalAlpha = 1;
@@ -678,13 +691,13 @@ const FireworksHero = ({ copy, products, showcaseLoading, artworkAnimation } = {
       }
       setBase();
 
-      /* distant sparks, faint */
+      /* distant ember sparks around the product region */
       ctx.globalCompositeOperation = 'lighter';
       for (let i = 0; i < st.twinkles.length; i++) {
         const t = st.twinkles[i];
         const u = t.t / t.dur;
-        ctx.globalAlpha = Math.sin(Math.PI * u) * 0.25;
-        ctx.fillStyle = '#ffe9bb';
+        ctx.globalAlpha = Math.sin(Math.PI * u) * 0.5;
+        ctx.fillStyle = '#B77A2F';
         ctx.fillRect(t.x + px - 1, t.y + py - 1, 2, 2);
       }
 
@@ -797,16 +810,16 @@ const FireworksHero = ({ copy, products, showcaseLoading, artworkAnimation } = {
     /* ------------------------------ wiring ---------------------------- */
     resize();
 
-    /* Reduced motion: one beautiful static night sky, no loop. */
+    /* Reduced motion: one quiet static burst-field on the stage, no loop. */
     if (reduced) {
       const renderStatic = () => {
         setBase();
         ctx.clearRect(0, 0, st.w, st.h);
         ctx.globalCompositeOperation = 'lighter';
         drawHorizonWarmth();
-        ctx.fillStyle = '#ffe9bb';
+        ctx.fillStyle = '#B77A2F';
         for (let i = 0; i < 26; i++) {
-          ctx.globalAlpha = rand(0.06, 0.2);
+          ctx.globalAlpha = rand(0.15, 0.35);
           ctx.fillRect(Math.random() * st.w, rand(0.04, 0.6) * st.h, 2, 2);
         }
         ctx.globalAlpha = 1;
@@ -817,12 +830,12 @@ const FireworksHero = ({ copy, products, showcaseLoading, artworkAnimation } = {
         resize();
         renderStatic();
       });
-      ro.observe(root);
+      ro.observe(stage);
       return () => ro.disconnect();
     }
 
     const ro = new ResizeObserver(() => resize());
-    ro.observe(root);
+    ro.observe(stage);
 
     const setPaused = (p) => {
       st.paused = p;
@@ -851,7 +864,7 @@ const FireworksHero = ({ copy, products, showcaseLoading, artworkAnimation } = {
         },
         { threshold: 0.01 }
       );
-      io.observe(root);
+      io.observe(stage);
     }
 
     /* Opening shell, then the director owns the sky forever. */
@@ -873,8 +886,8 @@ const FireworksHero = ({ copy, products, showcaseLoading, artworkAnimation } = {
      Pointer input never touches the physics — it only offsets the drawn
      layers by a few pixels each. */
   useEffect(() => {
-    const root = rootRef.current;
-    if (!root || reduced || !canParallax) return undefined;
+    const hero = heroRef.current;
+    if (!hero || reduced || !canParallax) return undefined;
     let raf = 0;
     let tx = 0;
     let ty = 0;
@@ -893,36 +906,48 @@ const FireworksHero = ({ copy, products, showcaseLoading, artworkAnimation } = {
       }
     };
     const onMove = (e) => {
-      const r = root.getBoundingClientRect();
+      const r = hero.getBoundingClientRect();
       tx = ((e.clientX - r.left) / r.width) * 2 - 1;
       ty = ((e.clientY - r.top) / r.height) * 2 - 1;
-      root.style.setProperty('--mouse-x', `${(((e.clientX - r.left) / r.width) * 100).toFixed(1)}%`);
-      root.style.setProperty('--mouse-y', `${(((e.clientY - r.top) / r.height) * 100).toFixed(1)}%`);
+      hero.style.setProperty('--mouse-x', `${(((e.clientX - r.left) / r.width) * 100).toFixed(1)}%`);
+      hero.style.setProperty('--mouse-y', `${(((e.clientY - r.top) / r.height) * 100).toFixed(1)}%`);
       if (!raf) raf = requestAnimationFrame(apply);
     };
-    root.addEventListener('mousemove', onMove);
+    hero.addEventListener('mousemove', onMove);
     return () => {
-      root.removeEventListener('mousemove', onMove);
+      hero.removeEventListener('mousemove', onMove);
       cancelAnimationFrame(raf);
     };
   }, [reduced, canParallax]);
 
   return (
-    <div ref={rootRef} className="fx-hero" role="img" aria-label="Crackers Hyderabad fireworks celebration">
+    <div ref={heroRef} className="fx-hero" role="img" aria-label="Crackers Hyderabad fireworks celebration">
       <div aria-hidden="true" className="fx-bg" />
       <div aria-hidden="true" className="fx-mouselight" />
-      {/* The canvas runs on every viewport, phones included: the simulation
-          self-tunes via the isMobile/isTablet budgets (1 concurrent shell,
-          fewer particles, lower DPR), so mobile gets the same launch →
-          explosion → fade show at a fraction of the cost. pointer-events are
-          off (see CSS) so it can never block content interaction. */}
-      <canvas aria-hidden="true" ref={canvasRef} className="fx-canvas" />
+      {/* Corner orbit ornaments: one small ring per corner, each turning
+          around its own center over 45–60s. Pure decoration — clipped,
+          pointer-transparent, frozen under reduced motion (see CSS). */}
+      {['tl', 'tr', 'bl', 'br'].map((corner) => (
+        <span key={corner} aria-hidden="true" className={`fx-orbit fx-orbit-${corner}`}>
+          <svg viewBox="0 0 120 120" fill="none" stroke="currentColor">
+            <circle cx="60" cy="60" r="52" strokeWidth="1" />
+            <circle cx="60" cy="60" r="40" strokeWidth="0.75" />
+            <circle cx="60" cy="60" r="28" strokeWidth="3" strokeDasharray="0.1 12.2" strokeLinecap="round" />
+            <path d="M60 14 Q63 26 60 38 Q57 26 60 14 Z" strokeWidth="1" />
+            <path d="M60 14 Q63 26 60 38 Q57 26 60 14 Z" strokeWidth="1" transform="rotate(90 60 60)" />
+            <path d="M60 14 Q63 26 60 38 Q57 26 60 14 Z" strokeWidth="1" transform="rotate(180 60 60)" />
+            <path d="M60 14 Q63 26 60 38 Q57 26 60 14 Z" strokeWidth="1" transform="rotate(270 60 60)" />
+            <circle cx="60" cy="60" r="2.5" fill="currentColor" stroke="none" />
+          </svg>
+        </span>
+      ))}
 
       <div className="fx-content">
         <div className="fx-grid">
           {/* One cohesive brand group — eyebrow, title, subtitle and button
               flow together in normal document flow; the button is never
-              separated from the text by grid rows or absolute offsets. */}
+              separated from the text by grid rows or absolute offsets. This
+              zone stays calm: no canvas, sparks or bursts ever render here. */}
           <div className="fx-brand">
             <p className="fx-eyebrow fx-rise" style={{ '--d': '0.15s' }}>
               <span>{c.eyebrow}</span>
@@ -943,9 +968,25 @@ const FireworksHero = ({ copy, products, showcaseLoading, artworkAnimation } = {
               </Link>
             </div>
           </div>
-          {/* Right-column showcase: renders instantly with a stable
-              placeholder and hydrates products when the catalogue arrives. */}
-          <div className="fx-showcase">
+          {/* Right-column product stage: the product showcase plus its own
+              sky-shot canvas. The canvas is a child of this stage and covers
+              only this box — bursts bloom behind the product and can never
+              reach the branding zone. It runs on every viewport, phones
+              included: the simulation self-tunes via the isMobile/isTablet
+              budgets, so mobile gets the same launch → explosion → fade show
+              at a fraction of the cost. pointer-events are off (see CSS) so
+              it can never block content interaction. */}
+          <div className="fx-showcase" ref={stageRef}>
+            <canvas aria-hidden="true" ref={canvasRef} className="fx-canvas" />
+            {/* Occasional golden sparks around the product — a handful of
+                slow-fading dots, never a burst, never flashing. */}
+            <div aria-hidden="true" className="fx-twinkles">
+              <span className="fx-twinkle" />
+              <span className="fx-twinkle" />
+              <span className="fx-twinkle" />
+              <span className="fx-twinkle" />
+              <span className="fx-twinkle" />
+            </div>
             <HeroProductShowcase products={products} loading={showcaseLoading} artworkAnimation={artworkAnimation} />
           </div>
         </div>

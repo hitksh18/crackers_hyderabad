@@ -25,6 +25,7 @@ const HomeProductRail = ({
   loading,
   showAllLink,
   railLabel,
+  align = 'left',
 }) => {
   const railRef = useRef(null);
   const reduced = useReducedMotion();
@@ -79,7 +80,7 @@ const HomeProductRail = ({
         eyebrow={eyebrow}
         title={title}
         subtitle={subtitle}
-        align="left"
+        align={align}
         action={
           scrollable ? (
             <div className="hidden items-center gap-2 sm:flex">

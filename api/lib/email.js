@@ -629,9 +629,80 @@ async function maybeSendInternalNewOrderEmail(db, orderRef, order, { transporter
   }
 }
 
+/**
+ * Contact-form message from the storefront (/contact → POST /api/contact).
+ *
+ * Mails the store inbox (ADMIN_NOTIFICATION_EMAIL — never a customer
+ * address) with the visitor as replyTo so staff can answer directly.
+ * Same discipline as every other mail path: structured { ok } results,
+ * never throws, never leaks credentials or internals.
+ */
+async function sendContactMessage(
+  { name, email, phone, subject, message },
+  { transporter } = {}
+) {
+  const clean = (v, max) => String(v ?? '').trim().slice(0, max);
+  const fromName = clean(name, 100);
+  const fromEmail = clean(email, 254);
+  const fromPhone = clean(phone, 32);
+  const topic = clean(subject, 140) || 'Website enquiry';
+  const body = clean(message, 2000);
+
+  if (!fromName || !isValidRecipient(fromEmail) || body.length < 10) {
+    return { ok: false, error: 'invalid-input' };
+  }
+
+  const config = readEmailConfig();
+  if (!config.enabled) return { ok: false, skipped: 'disabled' };
+  if (!config.ok) {
+    console.warn(`[email] contact skipped: ${config.problems.join(', ')} (${config.describe})`);
+    return { ok: false, skipped: 'unconfigured', error: config.problems.join(', ') };
+  }
+  if (!isValidRecipient(config.adminNotificationEmail)) {
+    return { ok: false, skipped: 'no-recipient' };
+  }
+
+  const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const text =
+    `New website enquiry\n\n` +
+    `Name: ${fromName}\nEmail: ${fromEmail}\nPhone: ${fromPhone || '—'}\nSubject: ${topic}\n\n${body}\n`;
+  const html =
+    `<p><strong>New website enquiry</strong></p>` +
+    `<p>Name: ${esc(fromName)}<br>Email: ${esc(fromEmail)}<br>Phone: ${esc(fromPhone) || '—'}<br>Subject: ${esc(topic)}</p>` +
+    `<p>${esc(body).replace(/\n/g, '<br>')}</p>`;
+
+  let transport = transporter;
+  let owned = false;
+  if (!transport) {
+    transport = createSmtpTransporter(config);
+    owned = true;
+  }
+  try {
+    const info = await transport.sendMail({
+      from: config.from,
+      replyTo: { address: fromEmail, name: fromName.slice(0, 60) },
+      envelope: { from: config.fromAddress, to: config.adminNotificationEmail },
+      to: [{ address: config.adminNotificationEmail, name: '' }],
+      subject: `[Contact] ${topic}`.slice(0, 160),
+      text,
+      html,
+    });
+    console.log(`[email] contact message sent (messageId: ${info && info.messageId})`);
+    return { ok: true, messageId: (info && info.messageId) || null };
+  } catch (error) {
+    console.warn(`[email] contact message failed: ${safeMailError(error)}`);
+    return { ok: false, error: safeMailError(error) };
+  } finally {
+    if (owned && transport && typeof transport.close === 'function') {
+      try { transport.close(); } catch { /* pooled connection cleanup only */ }
+    }
+  }
+}
+
 module.exports = {
   readEmailConfig,
   createSmtpTransporter,
+  sendContactMessage,
   sendOrderConfirmationEmail,
   maybeSendOrderConfirmationEmail,
   sendStatusUpdateEmail,

@@ -262,7 +262,7 @@ const TopBannerBody = ({ enabled, messages }) => {
   }
 
   return (
-    <div ref={bannerRef}>
+    <div ref={bannerRef} className="top-banner-fixed">
       <BannerStrip
         messages={messages}
         copies={copies}

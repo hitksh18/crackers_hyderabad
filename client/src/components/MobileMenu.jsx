@@ -114,7 +114,7 @@ const MobileMenu = ({
       aria-label="Main menu"
       ref={panelRef}
     >
-      <div className="bg-festive absolute inset-0" aria-hidden="true" />
+      <div className="absolute inset-0" aria-hidden="true" style={{ background: '#FDF9F0' }} />
 
       <div className="relative flex h-full flex-col overflow-y-auto overscroll-contain">
         <div

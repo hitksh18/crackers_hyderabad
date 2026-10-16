@@ -40,50 +40,59 @@
   --crimson-600: #CB2A2A;
   --leaf-600: #2C7A53;
 
-  /* Period-over-period movement. Lightened to stay legible on the dark
+  /* Period-over-period movement. Deep tones stay legible on the warm-light
      storefront surface; the brand scales below are fixed hexes. */
-  --delta-up: #4FB483;
-  --delta-down: #F2716B;
-  --delta-flat: #A79E92;
+  --delta-up: #2C7A53;
+  --delta-down: #CB2A2A;
+  --delta-flat: #75665C;
 
-  /* ---- Surfaces (dark storefront base) ---- */
-  --surface-page: #14100E;
-  --surface-card: #1E1815;
-  --surface-raised: #251E1A;
-  --surface-sunken: #17120F;
-  --surface-inverse: #FDF9F0;
-  /* ---- Homepage night atmosphere (scoped via .home-sec-* / .route-home) ----
+  /* ---- Surfaces (warm-light premium storefront base) ----
+     70% warm light surfaces / 20% maroon / 10% gold accents.
+     Navbar, footer and promo sections keep their own dark surfaces. */
+  --surface-page: #FDF9F0;
+  --surface-card: #FFFFFF;
+  --surface-raised: #FFFDF8;
+  --surface-sunken: #F9F1E3;
+  --surface-inverse: #4A2F2A;
+  /* Warm off-white for surfaces sitting on the cream Products page ground
+     (cards, pills, controls). Clearly lighter than the cream without ever
+     reading as stark pure white. */
+  --surface-warm: #FFF9F0;
+  /* ---- Homepage light atmosphere (scoped via .home-sec-* / .route-home) ----
      Warm festive progression so home sections read as distinct bands of one
-     dark Diwali evening instead of a single black block. Gold stays an
-     accent; reds/oranges stay deep and muted. Nothing here alters layout. */
-  --home-hero: #0D0806;
-  --home-features: #100806;
-  --home-categories: #160A07;
-  --home-featured: #100806;
-  --home-best: #1A0B09;
-  --home-deals: #230B08;
-  --home-trust: #120907;
-  --home-news: #171010;
-  --hairline: rgba(237, 231, 223, 0.10);
-  --hairline-strong: rgba(237, 231, 223, 0.18);
+     premium ivory morning instead of a single dark block. Gold stays an
+     accent; maroon reserved for promo bands. Nothing here alters layout. */
+  --home-hero: #FDF9F0;
+  --home-features: #FFFDF8;
+  --home-categories: #F9F1E3;
+  --home-featured: #F6E4C4;
+  --home-best: #F0D5AC;
+  --home-deals: #3A0B0C;
+  --home-trust: #FFFDF8;
+  --home-news: #F9F1E3;
+  --hairline: #EFE3CE;
+  --hairline-strong: #E2D2B7;
 
-  /* ---- Glass surfaces (dark-tinted fills) ---- */
-  --glass-fill: linear-gradient(152deg, rgba(37, 30, 26, 0.8) 0%, rgba(30, 24, 21, 0.55) 100%);
-  --glass-fill-strong: linear-gradient(160deg, rgba(37, 30, 26, 0.94) 0%, rgba(28, 22, 19, 0.88) 100%);
-  --glass-fill-nav: linear-gradient(180deg, rgba(20, 16, 14, 0.92) 0%, rgba(30, 24, 21, 0.72) 100%);
-  --glass-fill-soft: linear-gradient(152deg, rgba(37, 30, 26, 0.66) 0%, rgba(30, 24, 21, 0.4) 100%);
+  /* ---- Glass surfaces (warm-light frosted fills) ---- */
+  --glass-fill: linear-gradient(152deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 253, 248, 0.78) 100%);
+  --glass-fill-strong: linear-gradient(160deg, rgba(255, 255, 255, 0.97) 0%, rgba(255, 253, 248, 0.94) 100%);
+  --glass-fill-nav: linear-gradient(180deg, rgba(58, 11, 12, 0.97) 0%, rgba(87, 16, 16, 0.94) 100%);
+  --glass-fill-soft: linear-gradient(152deg, rgba(255, 255, 255, 0.75) 0%, rgba(249, 241, 227, 0.6) 100%);
   --glass-blur: blur(20px) saturate(150%);
   --glass-blur-strong: blur(28px) saturate(165%);
   --glass-blur-soft: blur(14px) saturate(140%);
-  --glass-toplight: inset 0 1px 0 rgba(237, 231, 223, 0.12);
-  --glass-toplight-soft: inset 0 1px 0 rgba(237, 231, 223, 0.08);
+  --glass-toplight: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --glass-toplight-soft: inset 0 1px 0 rgba(255, 255, 255, 0.65);
 
-  /* ---- Text (cream/off-white on the dark storefront) ---- */
-  --text-strong: #F2ECE3;
-  --text-body: #D6CEC3;
-  --text-muted: #A79E92;
-  --text-subtle: #8B8377;
-  --text-on-dark: #EDE7DF;
+  /* ---- Text (warm espresso hierarchy on the light storefront) ----
+     --text-strong is the visual equivalent of black: warm dark brown used
+     for headings, product names and primary text. Never pure black. */
+  --text-strong: #4A2F2A;
+  --text-body: #60453D;
+  --text-muted: #75665C;
+  --text-subtle: #9A887A;
+  --text-ember: #A94A35;
+  --text-on-dark: #FDF9F0;
   --white-soft: #FFFFFF;
 
   /* ---- Gradients ---- */
@@ -127,47 +136,49 @@
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
   /* ---- Legacy variable names still referenced by components ---- */
-  --maroon: #EC7049;
-  --cream: rgba(237, 231, 223, 0.06);
-  --muted: #A79E92;
-  --avatar-bg: rgba(237, 231, 223, 0.09);
-  --avatar-icon: #D6CEC3;
-  --avatar-border: rgba(237, 231, 223, 0.16);
-  --card-bg: #1E1815;
+  --maroon: #761713;
+  --cream: #F9F1E3;
+  --muted: #75665C;
+  --avatar-bg: #F9F1E3;
+  --avatar-icon: #60453D;
+  --avatar-border: #E2D2B7;
+  --card-bg: #FFFFFF;
 }
 
-/* The storefront is dark-only: <html class="dark"> is always present (see
+/* The storefront is light-only: <html> no longer carries `dark` (see
    index.html + ThemeContext). This block mirrors the base palette above so
-   every `.dark`-scoped rule keeps resolving to the intended dark values. */
+   any legacy `.dark`-scoped rule keeps resolving to the intended light values. */
 .dark {
-  --surface-page: #14100E;
-  --surface-card: #1E1815;
-  --surface-raised: #251E1A;
-  --surface-sunken: #17120F;
-  --surface-inverse: #FDF9F0;
-  --hairline: rgba(237, 231, 223, 0.10);
-  --hairline-strong: rgba(237, 231, 223, 0.18);
-  --glass-fill: linear-gradient(152deg, rgba(37, 30, 26, 0.8) 0%, rgba(30, 24, 21, 0.55) 100%);
-  --glass-fill-strong: linear-gradient(160deg, rgba(37, 30, 26, 0.94) 0%, rgba(28, 22, 19, 0.88) 100%);
-  --glass-fill-nav: linear-gradient(180deg, rgba(20, 16, 14, 0.92) 0%, rgba(30, 24, 21, 0.72) 100%);
-  --glass-fill-soft: linear-gradient(152deg, rgba(37, 30, 26, 0.66) 0%, rgba(30, 24, 21, 0.4) 100%);
-  --glass-toplight: inset 0 1px 0 rgba(237, 231, 223, 0.12);
-  --glass-toplight-soft: inset 0 1px 0 rgba(237, 231, 223, 0.08);
-  --text-strong: #F2ECE3;
-  --text-body: #D6CEC3;
-  --text-muted: #A79E92;
-  --text-subtle: #8B8377;
+  --surface-page: #FDF9F0;
+  --surface-card: #FFFFFF;
+  --surface-raised: #FFFDF8;
+  --surface-sunken: #F9F1E3;
+  --surface-inverse: #4A2F2A;
+  --surface-warm: #FFF9F0;
+  --hairline: #EFE3CE;
+  --hairline-strong: #E2D2B7;
+  --glass-fill: linear-gradient(152deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 253, 248, 0.78) 100%);
+  --glass-fill-strong: linear-gradient(160deg, rgba(255, 255, 255, 0.97) 0%, rgba(255, 253, 248, 0.94) 100%);
+  --glass-fill-nav: linear-gradient(180deg, rgba(58, 11, 12, 0.97) 0%, rgba(87, 16, 16, 0.94) 100%);
+  --glass-fill-soft: linear-gradient(152deg, rgba(255, 255, 255, 0.75) 0%, rgba(249, 241, 227, 0.6) 100%);
+  --glass-toplight: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --glass-toplight-soft: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  --text-strong: #4A2F2A;
+  --text-body: #60453D;
+  --text-muted: #75665C;
+  --text-subtle: #9A887A;
+  --text-ember: #A94A35;
   --white-soft: #FFFFFF;
-  --maroon: #EC7049;
-  --cream: rgba(237, 231, 223, 0.06);
-  --muted: #A79E92;
-  --avatar-bg: rgba(237, 231, 223, 0.09);
-  --avatar-icon: #D6CEC3;
-  --avatar-border: rgba(237, 231, 223, 0.16);
-  --card-bg: #1E1815;
-  --delta-up: #4FB483;
-  --delta-down: #F2716B;
-  --delta-flat: #A79E92;
+  --maroon: #761713;
+  --cream: #F9F1E3;
+  --muted: #75665C;
+  --avatar-bg: #F9F1E3;
+  --avatar-icon: #60453D;
+  --avatar-border: #E2D2B7;
+  --card-bg: #FFFFFF;
+  --delta-up: #2C7A53;
+  --delta-down: #CB2A2A;
+  --delta-flat: #75665C;
 }
 
 /* =========================================================================
@@ -186,8 +197,8 @@ html {
   -webkit-text-size-adjust: 100%;
   max-width: 100%;
   overflow-x: clip;
-  /* Dark-only storefront — the OS appearance is never followed. */
-  color-scheme: dark;
+  /* Warm-light storefront — the OS appearance is never followed. */
+  color-scheme: light;
 }
 
 body {
@@ -196,7 +207,7 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: transparent;
+  background: var(--surface-page);
   color: var(--text-body);
   position: relative;
   max-width: 100%;
@@ -212,7 +223,7 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 700;
 }
 
-/* Atmosphere: warm ember light + faint paper grain. Fixed, non-interactive,
+/* Atmosphere: warm morning light + faint paper grain. Fixed, non-interactive,
    and cheap — two composited layers, no per-frame work. */
 body::before,
 body::after {
@@ -225,10 +236,10 @@ body::after {
 
 body::before {
   background:
-    radial-gradient(40% 44% at 10% 16%, rgba(195, 58, 20, 0.16) 0%, transparent 100%),
-    radial-gradient(34% 38% at 90% 8%, rgba(210, 166, 79, 0.09) 0%, transparent 100%),
-    radial-gradient(42% 46% at 82% 86%, rgba(58, 11, 12, 0.40) 0%, transparent 100%),
-    radial-gradient(30% 32% at 16% 90%, rgba(247, 174, 44, 0.07) 0%, transparent 100%);
+    radial-gradient(40% 44% at 10% 16%, rgba(210, 166, 79, 0.14) 0%, transparent 100%),
+    radial-gradient(34% 38% at 90% 8%, rgba(210, 166, 79, 0.10) 0%, transparent 100%),
+    radial-gradient(42% 46% at 82% 86%, rgba(249, 241, 227, 0.9) 0%, transparent 100%),
+    radial-gradient(30% 32% at 16% 90%, rgba(247, 174, 44, 0.08) 0%, transparent 100%);
   animation: ember-drift 32s ease-in-out infinite alternate;
 }
 
@@ -243,8 +254,8 @@ body::after {
 }
 
 .dark ::selection {
-  background: rgba(236, 112, 73, 0.38);
-  color: #FFFFFF;
+  background: rgba(210, 166, 79, 0.45);
+  color: var(--maroon-800);
 }
 
 @keyframes ember-drift {
@@ -253,14 +264,14 @@ body::after {
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: var(--surface-sunken); }
+::-webkit-scrollbar-track { background: #F9F1E3; }
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #C4A882, #A8865C);
+  background: linear-gradient(180deg, #D2A64F, #9E7029);
   border-radius: 8px;
-  border: 2px solid var(--surface-sunken);
+  border: 2px solid #F9F1E3;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #A8865C, #8A6A44);
+  background: linear-gradient(180deg, #9E7029, #7C5622);
 }
 
 /* Public homepage only (.route-home is toggled on <html> by Home.jsx while
@@ -306,14 +317,34 @@ body::after {
   height: 0;
 }
 
-/* Focus is never removed — only restyled. */
+/* Cart page only (.route-cart is toggled on <html> by Cart.jsx while the
+   cart is mounted, removed on unmount): warm champagne document ground.
+   Unlayered so it beats the base html rule, exactly like the route scopes
+   above — nothing else on the site shifts. */
+html.route-cart {
+  background-color: #F4E9D3;
+}
+
+/* Cart route shell guard: the subtree can never force document-level
+   horizontal scrolling (rails, pill rows and tables keep their own
+   internal scrollers). */
+html.route-cart,
+html.route-cart body,
+html.route-cart body #root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+/* Focus is never removed — only restyled. Subtle wine outline keeps the
+   indicator clearly visible on ivory without any gold appearance. */
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid var(--ember-600);
+  outline: 2px solid var(--maroon-700);
   outline-offset: 2px;
   border-radius: var(--r-sm);
 }
@@ -324,7 +355,7 @@ textarea:focus-visible,
 .dark select:focus-visible,
 .dark textarea:focus-visible,
 .dark [tabindex]:focus-visible {
-  outline-color: var(--saffron-400);
+  outline-color: var(--maroon-700);
 }
 
 img {
@@ -514,27 +545,40 @@ img {
     border-radius: var(--r-lg);
   }
 
-  /* Sticky navigation bar — slightly more opaque than a card so content
-     scrolling under it stays legible, with a hairline + soft shadow for the
-     "floating on glass" lift. */
+  /* Sticky navigation bar — deep maroon branded anchor against the light
+     page. Slightly opaque so content scrolling under it stays legible, with
+     a gold hairline + soft shadow for the premium lift. */
 .glass-nav {
     position: relative;
     background: var(--glass-fill-nav);
     -webkit-backdrop-filter: var(--glass-blur-strong);
     backdrop-filter: var(--glass-blur-strong);
-    border-bottom: 1px solid var(--hairline);
+    border-bottom: 1px solid rgba(210, 166, 79, 0.28);
     box-shadow: var(--glass-toplight-soft), var(--shadow-sm);
+    color: #FDF9F0;
   }
 
-  /* Fixed navbars (not sticky): html/body carry overflow-x: clip plus a
-     document scroller, a combination in which this Chrome build never pins
-     position:sticky — the bar scrolled away with the page. Fixed positioning
-     is immune to ancestor overflow. Applies only to actual <nav> bars that
-     opt in with .nav-fixed (summary footers reusing .glass-nav on divs are
-     untouched), keeping ONE navbar source. */
-  nav.glass-nav.nav-fixed {
+  /* Fixed announcement ticker: pinned to the viewport top above the
+     navbar (z 40: over page content and nav, under modals/toasts), so it
+     never scrolls away. The marquee animation inside is untouched. */
+  .top-banner-fixed {
     position: fixed;
     top: 0;
+    left: 0;
+    right: 0;
+    z-index: 40;
+  }
+
+  /* Sticky route headers that are NOT fixed (e.g. CheckoutNavbar) still
+     clear the fixed ticker instead of sliding under it. */
+  nav.glass-nav.sticky:not(.nav-fixed) {
+    top: var(--top-banner-h, 0px);
+  }
+  /* Fixed main navbar: pinned directly beneath the fixed ticker via the
+     same live var — immune to ancestor overflow, never scrolls away. */
+  nav.glass-nav.nav-fixed {
+    position: fixed;
+    top: var(--top-banner-h, 0px);
     left: 0;
     right: 0;
     z-index: 30;
@@ -544,14 +588,14 @@ img {
     transition: padding-top 0.25s ease, padding-bottom 0.25s ease;
   }
 
-  /* Scrolled: solid, blurred, bordered, slightly compact — never heavy. */
+  /* Scrolled: solid deep maroon, slightly compact — never heavy. */
   nav.glass-nav.nav-fixed.nav-scrolled {
-    background: var(--surface-card);
+    background: linear-gradient(180deg, #3A0B0C 0%, #571010 100%);
     box-shadow: var(--shadow-md);
-    border-bottom-color: var(--hairline-strong);
+    border-bottom-color: rgba(210, 166, 79, 0.35);
   }
   nav.glass-nav.nav-fixed.nav-scrolled.home-nav {
-    background: var(--surface-card);
+    background: linear-gradient(180deg, #3A0B0C 0%, #571010 100%);
     box-shadow: var(--shadow-md);
   }
   nav.glass-nav.nav-fixed.nav-scrolled .shell {
@@ -560,8 +604,8 @@ img {
   }
 
   .card-premium {
-    background: var(--surface-card);
-    border: 1px solid var(--hairline);
+    background: #FFFFFF;
+    border: 1px solid rgba(158, 112, 41, 0.20);
     border-radius: var(--r-lg);
     box-shadow: var(--shadow-sm);
     transition:
@@ -572,15 +616,14 @@ img {
   }
 
   .card-premium:hover {
-    box-shadow: var(--shadow-lg);
-    transform: translateY(-4px);
-    border-color: rgba(195, 58, 20, 0.32);
+    box-shadow: 0 10px 26px rgba(74, 47, 42, 0.12);
+    transform: translateY(-2px);
   }
 
   /* Editorial surface with a hairline gold rule at the top edge. */
   .panel-editorial {
     position: relative;
-    background: var(--surface-card);
+    background: #FFFFFF;
     border: 1px solid var(--hairline);
     border-radius: var(--r-xl);
     box-shadow: var(--shadow-sm);
@@ -615,14 +658,14 @@ img {
     gap: 0.5rem;
     min-height: 44px;
     padding: 0.75rem 1.5rem;
-    background: var(--grad-ember);
-    color: #FFFFFF;
-    border: none;
+    background: var(--grad-gold);
+    color: #4A2F2A;
+    border: 1px solid rgba(158, 112, 41, 0.35);
     border-radius: var(--r-md);
     font-family: var(--font-body);
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: 0.01em;
-    box-shadow: var(--shadow-ember);
+    box-shadow: var(--shadow-gold);
     transition:
       transform var(--dur-fast) var(--ease-out-soft),
       box-shadow var(--dur-fast) var(--ease-out-soft),
@@ -632,17 +675,17 @@ img {
 
   .btn-primary:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 16px 38px rgba(195, 58, 20, 0.36);
-    filter: brightness(1.06);
+    box-shadow: 0 14px 32px rgba(190, 140, 54, 0.36);
+    filter: brightness(1.04);
   }
 
   .btn-primary:active:not(:disabled) {
     transform: translateY(0);
-    box-shadow: 0 6px 16px rgba(195, 58, 20, 0.3);
+    box-shadow: 0 6px 16px rgba(190, 140, 54, 0.3);
   }
 
   .btn-primary:disabled {
-    background: linear-gradient(122deg, #A9A29A, #8B8377);
+    background: linear-gradient(122deg, #A9A29A, #9A887A);
     box-shadow: none;
     cursor: not-allowed;
     opacity: 0.85;
@@ -655,7 +698,7 @@ img {
     gap: 0.5rem;
     min-height: 44px;
     padding: 0.75rem 1.5rem;
-    background: var(--surface-card);
+    background: #FFFFFF;
     color: var(--maroon-700);
     border: 1.5px solid var(--hairline-strong);
     border-radius: var(--r-md);
@@ -672,9 +715,9 @@ img {
 
   .btn-outline:hover:not(:disabled) {
     transform: translateY(-2px);
-    border-color: var(--ember-600);
-    background: #FFF4EF;
-    box-shadow: 0 10px 24px rgba(195, 58, 20, 0.14);
+    border-color: var(--gold-500);
+    background: #FDF9F0;
+    box-shadow: 0 10px 24px rgba(190, 140, 54, 0.16);
   }
 
   .btn-gold {
@@ -684,7 +727,7 @@ img {
     gap: 0.5rem;
     min-height: 44px;
     background: var(--grad-gold);
-    color: var(--maroon-900);
+    color: #4A2F2A;
     border: 1px solid rgba(255, 255, 255, 0.45);
     border-radius: var(--r-md);
     font-family: var(--font-body);
@@ -733,7 +776,7 @@ img {
     gap: 0.4rem;
     min-height: 36px;
     padding: 0.4rem 0.8rem;
-    background: var(--surface-sunken);
+    background: #F9F1E3;
     color: var(--text-body);
     border: 1px solid var(--hairline);
     border-radius: var(--r-sm);
@@ -746,8 +789,8 @@ img {
   }
 
   .btn-quiet:hover:not(:disabled) {
-    background: #FFF4EF;
-    border-color: rgba(195, 58, 20, 0.35);
+    background: #FFFDF8;
+    border-color: rgba(210, 166, 79, 0.55);
     color: var(--maroon-700);
   }
 
@@ -779,7 +822,7 @@ img {
     width: 100%;
     min-height: 44px;
     padding: 0.72rem 1rem;
-    background: var(--surface-card);
+    background: #FFFFFF;
     border: 1.5px solid var(--hairline-strong);
     border-radius: var(--r-md);
     font-family: var(--font-body);
@@ -791,9 +834,11 @@ img {
 
   .input-premium::placeholder { color: var(--text-subtle); }
 
+  .input-premium:hover { border-color: var(--hairline-strong); }
+
   .input-premium:focus {
-    border-color: var(--ember-600);
-    box-shadow: 0 0 0 4px rgba(195, 58, 20, 0.14);
+    border-color: var(--maroon-700);
+    box-shadow: 0 0 0 4px rgba(118, 23, 19, 0.14);
     outline: none;
   }
 
@@ -832,6 +877,175 @@ img {
     z-index: 2;
     background: var(--surface-sunken);
     box-shadow: 0 1px 0 var(--hairline-strong);
+  }
+
+  /* ---- Cart page theme (route-cart) ----
+     Premium champagne workspace, scoped to <html class="route-cart"> (toggled
+     by Cart.jsx while mounted) so no other route shifts. Warm page ground
+     with faint festive corners, ivory cards, burgundy totals and CTAs.
+     (The document ground lives on html.route-cart in unlayered CSS next to
+     the other route scopes — unlayered beats the base html rule.) */
+  .route-cart .cart-fit {
+    background:
+      radial-gradient(2px 2px at 7% 10%, rgba(201, 149, 61, 0.20), transparent 70%),
+      radial-gradient(2px 2px at 94% 14%, rgba(169, 87, 66, 0.14), transparent 70%),
+      radial-gradient(2px 2px at 4% 88%, rgba(201, 149, 61, 0.14), transparent 70%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='280' viewBox='0 0 280 280' fill='none' stroke='%23C99A3D' stroke-opacity='0.08'%3E%3Ccircle cx='140' cy='140' r='120' stroke-width='1'/%3E%3Ccircle cx='140' cy='140' r='104' stroke-width='0.6'/%3E%3Ccircle cx='140' cy='140' r='88' stroke-width='4' stroke-dasharray='0.1 23' stroke-linecap='round'/%3E%3Ccircle cx='140' cy='140' r='40' stroke-width='0.75'/%3E%3C/svg%3E") right -80px top 70px / 260px 260px no-repeat,
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160' fill='none' stroke='%23B58A32' stroke-opacity='0.09'%3E%3Cpath d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1'/%3E%3Cpath d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1' transform='rotate(-24 80 112)'/%3E%3Cpath d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1' transform='rotate(24 80 112)'/%3E%3Cpath d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1' transform='rotate(-48 80 112)'/%3E%3Cpath d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1' transform='rotate(48 80 112)'/%3E%3Cpath d='M30 112 Q80 142 130 112' stroke-width='1'/%3E%3C/svg%3E") left -60px bottom 40px / 200px 200px no-repeat,
+      radial-gradient(60% 34% at 50% 0%, rgba(201, 149, 61, 0.10) 0%, transparent 70%),
+      #F4E9D3;
+  }
+
+  /* Use the desktop width properly: cap the workspace so 1366px and 1920px
+     stay balanced instead of stretching edge to edge. */
+  .route-cart .shell-checkout { max-width: 1480px; }
+
+  /* Back button: champagne pill, burgundy text, clearly visible. */
+  .route-cart .cart-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 42px;
+    padding: 0 1rem;
+    border-radius: 10px;
+    background: #FFF9EF;
+    border: 1px solid #E4D0AE;
+    color: #74191D;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(91, 17, 21, 0.06);
+    transition:
+      transform var(--dur-fast) var(--ease-out-soft),
+      border-color var(--dur-fast) var(--ease-out-soft),
+      background var(--dur-fast) var(--ease-out-soft);
+    cursor: pointer;
+  }
+
+  .route-cart .cart-back:hover {
+    transform: translateY(-1px);
+    border-color: #C5963D;
+    background: #F9F0DF;
+  }
+
+  /* Compact variant living inside the Cart Items card header — same look,
+     smaller footprint so the header stays a single row on all screens. */
+  .route-cart .cart-back-sm {
+    min-height: 36px;
+    padding: 0 0.8rem;
+    font-size: 12px;
+  }
+
+  /* Cards: ivory surfaces on the champagne ground. */
+  .route-cart .panel-editorial {
+    background: #FFF9EF;
+    border-color: #E4D0AE;
+  }
+
+  .route-cart .summary-card {
+    background: #F9F0DF;
+    border-color: #E4D0AE;
+  }
+
+  .route-cart .ship-card {
+    background: #FFF9EF;
+    border-color: #E4D0AE;
+  }
+
+  .route-cart .cart-table-scroll thead th {
+    background: #F9F0DF;
+    box-shadow: 0 1px 0 #E4D0AE;
+  }
+
+  /* Rows: subtle alternating tones + warm hover, dividers stay hairline. */
+  .route-cart .cart-table-scroll tbody tr:nth-child(even) {
+    background: rgba(201, 149, 61, 0.05);
+  }
+
+  .route-cart .cart-row:hover {
+    background: rgba(201, 149, 61, 0.10);
+  }
+
+  .route-cart .cart-mrows > li:nth-child(even) {
+    background: rgba(201, 149, 61, 0.05);
+  }
+
+  /* Quantity pill + buttons. */
+  .route-cart .qty-pill {
+    background: #FFF9EF;
+    border-color: #E4D0AE;
+  }
+
+  .route-cart .qty-btn:hover {
+    background: rgba(201, 149, 61, 0.14);
+  }
+
+  /* Minimum-order success: compact pale-green pill. */
+  .route-cart .min-ok {
+    background: rgba(44, 122, 83, 0.10);
+    border: 1px solid rgba(44, 122, 83, 0.28);
+    border-radius: 10px;
+    padding: 0.45rem 0.7rem;
+  }
+
+  /* Offer cards: pale champagne, thin gold border, burgundy code. */
+  .route-cart .offer-card {
+    background: #FFF9EF;
+    border: 1px solid rgba(201, 154, 61, 0.45);
+    border-radius: var(--r-md);
+    padding: 0.7rem 0.8rem;
+    box-shadow: 0 2px 8px rgba(91, 17, 21, 0.05);
+  }
+
+  .route-cart .offer-card.is-applied {
+    border-color: var(--leaf-600);
+  }
+
+  .route-cart .offer-code {
+    color: #74191D;
+    font-weight: 800;
+  }
+
+  .route-cart .offers-toggle {
+    color: #3B2522;
+    transition: color var(--dur-fast) var(--ease-out-soft);
+  }
+
+  .route-cart .offers-toggle:hover {
+    color: #74191D;
+  }
+
+  /* ---- Viewport-fit (desktop) ----
+     The cart is a true viewport workspace: the shell is exactly 100dvh
+     minus the live banner + navbar heights (published as vars; 72px is the
+     desktop navbar's own min-height, so the fallback is exact, not a
+     guess). html/body/#root are height-locked with overflow hidden on this
+     route only, so the document can never scroll — only the two inner
+     lists move. Mobile keeps natural page scroll (see below). */
+  @media (min-width: 1024px) {
+    html.route-cart,
+    html.route-cart body,
+    html.route-cart body #root {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .route-cart div.cart-fit {
+      height: calc(100dvh - var(--top-banner-h, 0px) - var(--nav-h, 72px));
+      padding-top: 12px;
+      padding-bottom: 12px;
+      overflow: hidden;
+    }
+
+    .route-cart .ship-card {
+      margin-bottom: 0;
+    }
+
+    /* Compact rows so a typical 6-item cart shows every row at once. */
+    .route-cart .cart-table-scroll td {
+      padding-top: 6px;
+      padding-bottom: 6px;
+    }
   }
 
   /* ---- Cart table scrollbar: invisible at rest, thin gold while the user
@@ -914,12 +1128,12 @@ img {
   }
 }
 
-/* Homepage: the header continues the dark hero field instead of reading
-   as a floating light card. All other routes keep the regular glass nav. */
+/* Homepage: the header continues the deep maroon brand field. All other
+   routes keep the same maroon glass nav. */
 .home-nav {
-  background: linear-gradient(180deg, #120908 0%, #0b0606 100%);
-  border-bottom-color: rgba(255, 248, 236, 0.06);
-  box-shadow: none;
+  background: linear-gradient(180deg, #3A0B0C 0%, #571010 100%);
+  border-bottom-color: rgba(210, 166, 79, 0.28);
+  box-shadow: var(--shadow-sm);
 }
 
 .home-nav::after {
@@ -928,7 +1142,7 @@ img {
   inset: auto 0 -18px;
   height: 18px;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(11, 6, 6, 0.7), transparent);
+  background: linear-gradient(180deg, rgba(58, 11, 12, 0.35), transparent);
 }
 
 /* Cinematic hero: substantial but never fullscreen (680–760px on desktop)
@@ -968,14 +1182,14 @@ img {
   .shadow-glow { box-shadow: 0 0 30px rgba(210, 166, 79, 0.28); }
 
   .glass {
-    background: var(--glass-fill-soft);
+    background: rgba(255, 255, 255, 0.75);
     -webkit-backdrop-filter: var(--glass-blur-soft);
     backdrop-filter: var(--glass-blur-soft);
     border: 1px solid var(--hairline);
   }
 
   .glass-strong-util {
-    background: var(--glass-fill-strong);
+    background: rgba(255, 255, 255, 0.95);
     -webkit-backdrop-filter: var(--glass-blur-strong);
     backdrop-filter: var(--glass-blur-strong);
     border: 1px solid var(--hairline);
@@ -983,7 +1197,7 @@ img {
   }
 
   .glass-card {
-    background: var(--glass-fill);
+    background: #FFFFFF;
     -webkit-backdrop-filter: var(--glass-blur);
     backdrop-filter: var(--glass-blur);
     border: 1px solid var(--hairline);
@@ -1134,18 +1348,18 @@ img {
 
   .gradient-mesh {
     background:
-      radial-gradient(at 24% 34%, rgba(195, 58, 20, 0.16) 0px, transparent 52%),
-      radial-gradient(at 92% 18%, rgba(210, 166, 79, 0.18) 0px, transparent 50%),
-      radial-gradient(at 54% 96%, rgba(118, 23, 19, 0.14) 0px, transparent 50%),
-      radial-gradient(at 12% 86%, rgba(247, 174, 44, 0.12) 0px, transparent 48%);
+      radial-gradient(at 24% 34%, rgba(210, 166, 79, 0.14) 0px, transparent 52%),
+      radial-gradient(at 92% 18%, rgba(210, 166, 79, 0.12) 0px, transparent 50%),
+      radial-gradient(at 54% 96%, rgba(249, 241, 227, 0.9) 0px, transparent 50%),
+      radial-gradient(at 12% 86%, rgba(247, 174, 44, 0.10) 0px, transparent 48%);
   }
 
   .dark .gradient-mesh {
     background:
-      radial-gradient(at 24% 34%, rgba(195, 58, 20, 0.18) 0px, transparent 52%),
-      radial-gradient(at 92% 18%, rgba(210, 166, 79, 0.10) 0px, transparent 50%),
-      radial-gradient(at 54% 96%, rgba(58, 11, 12, 0.42) 0px, transparent 52%),
-      radial-gradient(at 12% 86%, rgba(247, 174, 44, 0.08) 0px, transparent 48%);
+      radial-gradient(at 24% 34%, rgba(210, 166, 79, 0.14) 0px, transparent 52%),
+      radial-gradient(at 92% 18%, rgba(210, 166, 79, 0.12) 0px, transparent 50%),
+      radial-gradient(at 54% 96%, rgba(249, 241, 227, 0.9) 0px, transparent 50%),
+      radial-gradient(at 12% 86%, rgba(247, 174, 44, 0.10) 0px, transparent 48%);
   }
 }
 
@@ -1153,15 +1367,15 @@ img {
    ORNAMENT — restrained Indian motifs. Never more than one per section.
    ========================================================================= */
 
-/* Rangoli lattice. Sits behind content at low opacity. */
+/* Rangoli lattice — deep maroon promo field with gold motif. */
 .bg-festive {
-  background-color: var(--surface-raised);
+  background-color: #3A0B0C;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cg fill='none' stroke='%23BE8C36' stroke-opacity='0.16' stroke-width='1'%3E%3Ccircle cx='80' cy='80' r='26'/%3E%3Ccircle cx='80' cy='80' r='13'/%3E%3Cpath d='M80 34 L88 66 L120 74 L88 82 L80 114 L72 82 L40 74 L72 66 Z'/%3E%3Cpath d='M0 80 H26 M134 80 H160 M80 0 V26 M80 134 V160'/%3E%3Ccircle cx='0' cy='0' r='8'/%3E%3Ccircle cx='160' cy='0' r='8'/%3E%3Ccircle cx='0' cy='160' r='8'/%3E%3Ccircle cx='160' cy='160' r='8'/%3E%3C/g%3E%3C/svg%3E");
   background-size: 160px 160px;
 }
 
 .dark .bg-festive {
-  background-color: var(--surface-sunken);
+  background-color: #3A0B0C;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cg fill='none' stroke='%23D2A64F' stroke-opacity='0.09' stroke-width='1'%3E%3Ccircle cx='80' cy='80' r='26'/%3E%3Ccircle cx='80' cy='80' r='13'/%3E%3Cpath d='M80 34 L88 66 L120 74 L88 82 L80 114 L72 82 L40 74 L72 66 Z'/%3E%3Cpath d='M0 80 H26 M134 80 H160 M80 0 V26 M80 134 V160'/%3E%3Ccircle cx='0' cy='0' r='8'/%3E%3Ccircle cx='160' cy='0' r='8'/%3E%3Ccircle cx='160' cy='160' r='8'/%3E%3C/g%3E%3C/svg%3E");
 }
 
@@ -1291,11 +1505,11 @@ img {
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #F7AE2C;
-  border: 1px solid rgba(210, 166, 79, 0.5);
-  background: rgba(26, 23, 20, 0.4);
+  color: var(--gold-600);
+  border: 1px solid rgba(210, 166, 79, 0.55);
+  background: rgba(255, 253, 248, 0.85);
   backdrop-filter: blur(6px);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 2px 10px rgba(58, 11, 12, 0.10);
 }
 
 /* Small-card legibility scrim — text sits on the dark lower third. */
@@ -1402,9 +1616,78 @@ img {
 .nav-link.active { color: var(--maroon-700); }
 .nav-link.active::after { transform: scaleX(1); }
 
-.dark .nav-link { color: var(--text-muted); }
-.dark .nav-link:hover { color: var(--text-strong); }
-.dark .nav-link.active { color: var(--saffron-400); }
+/* Navbar sits on deep maroon — links are warm cream, active is gold. */
+nav.glass-nav .nav-link { color: #F4E7D3; }
+nav.glass-nav .nav-link:hover { color: #FFFDF8; }
+nav.glass-nav .nav-link.active { color: var(--gold-400); }
+
+/* Navbar search field: warm ivory surface, warm brown text, gold focus. */
+nav.glass-nav .input-premium,
+nav.glass-nav .input-premium.is-glass {
+  background: #FDF9F0;
+  border-color: rgba(210, 166, 79, 0.45);
+  color: #60453D;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+nav.glass-nav .input-premium::placeholder { color: #9A887A; }
+nav.glass-nav .input-premium:focus {
+  border-color: var(--maroon-700);
+  box-shadow: 0 0 0 4px rgba(118, 23, 19, 0.20);
+  background: #FFFDF8;
+}
+
+/* Maroon + antique-gold action treatment — the single source of truth for
+   the storefront Login buttons and EVERY "Add to Cart" button (product
+   cards grid/list/compact, search suggestions, product detail, sticky
+   cart bar). Those buttons carry `btn-primary nav-login-btn`: the gold
+   base still sizes them, this rule re-skins them to Login's exact
+   maroon ring. Nothing else uses this rule — View All / Shop Now /
+   checkout CTAs, steppers and rails keep their own styles.
+   :not(:disabled) preserves the grey out-of-stock state on card buttons
+   (Login links are never disabled, so they are unaffected). */
+.nav-login-btn:not(:disabled) {
+  background: var(--grad-maroon);
+  color: #FFFFFF;
+  border: 1px solid rgba(220, 170, 75, 0.75);
+  box-shadow: 0 0 0 1px rgba(220, 170, 75, 0.08), 0 8px 24px rgba(58, 11, 12, 0.3);
+  transition:
+    border-color 200ms var(--ease-out-soft),
+    box-shadow 200ms var(--ease-out-soft),
+    filter 200ms var(--ease-out-soft),
+    transform var(--dur-fast) var(--ease-out-soft);
+}
+.nav-login-btn:hover:not(:disabled) {
+  border-color: rgba(235, 190, 95, 0.95);
+  box-shadow: 0 0 12px rgba(220, 170, 75, 0.18), 0 8px 24px rgba(58, 11, 12, 0.3);
+  filter: brightness(1.07);
+}
+
+/* Add to Cart on a PRODUCT CARD (catalogue, Featured Products, Best Sellers,
+   compact rails): the same maroon button, but hovering is a quiet maroon
+   brightness step only. The base antique-gold hairline ring and warm shadow
+   hold steady — no gold glow, no yellow outer shadow, no bright bloom. */
+.product-card .nav-login-btn:hover:not(:disabled) {
+  border-color: rgba(220, 170, 75, 0.75);
+  box-shadow: 0 0 0 1px rgba(220, 170, 75, 0.08), 0 8px 24px rgba(58, 11, 12, 0.32);
+  filter: brightness(1.08);
+}
+
+/* Navbar icon buttons: ivory icons on translucent maroon, gold hover. */
+nav.glass-nav .arrow-btn {
+  background: rgba(253, 249, 240, 0.08);
+  border-color: rgba(210, 166, 79, 0.35);
+  color: #FDF9F0;
+}
+nav.glass-nav .arrow-btn:hover {
+  background: rgba(253, 249, 240, 0.16);
+  border-color: var(--gold-400);
+  color: var(--gold-400);
+}
+
+.dark .nav-link { color: #F4E7D3; }
+.dark .nav-link:hover { color: #FFFDF8; }
+.dark .nav-link.active { color: var(--gold-400); }
 
 /* =========================================================================
    PRODUCT + CATEGORY
@@ -1413,9 +1696,9 @@ img {
 .category-card {
   position: relative;
   border-radius: var(--r-xl);
-  background: var(--surface-card);
-  border: 1px solid var(--hairline);
-  box-shadow: var(--shadow-sm);
+  background: #FFF7E8;
+  border: 1px solid rgba(201, 151, 62, 0.25);
+  box-shadow: 0 8px 24px rgba(99, 53, 46, 0.08);
   transition:
     transform var(--dur-base) var(--ease-out-expo),
     box-shadow var(--dur-base) var(--ease-out-soft),
@@ -1423,34 +1706,21 @@ img {
     background var(--dur-base) var(--ease-out-soft);
 }
 
-/* Glassy category tile — translucent fill + blur so the page's warm glow
-   shows through the card instead of sitting behind an opaque panel. */
+/* Glassy category tile — translucent warm-ivory fill + blur so the section's
+   biscuit glow shows through the card instead of sitting behind a flat panel. */
 .category-card.is-glass {
-  background: var(--glass-fill);
+  background: linear-gradient(152deg, rgba(255, 247, 232, 0.94) 0%, rgba(255, 247, 232, 0.80) 100%);
   -webkit-backdrop-filter: var(--glass-blur-soft);
   backdrop-filter: var(--glass-blur-soft);
-  box-shadow: var(--glass-toplight-soft), var(--shadow-sm);
-}
-
-.category-card::before {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  background: linear-gradient(135deg, rgba(195, 58, 20, 0.5), rgba(210, 166, 79, 0.45), rgba(118, 23, 19, 0.4));
-  opacity: 0;
-  transition: opacity var(--dur-base) var(--ease-out-soft);
-  z-index: 0;
-  filter: blur(10px);
+  box-shadow: var(--glass-toplight-soft), 0 8px 24px rgba(99, 53, 46, 0.08);
 }
 
 .category-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 22px 48px rgba(118, 23, 19, 0.2);
-  border-color: rgba(195, 58, 20, 0.4);
+  transform: translateY(-2px);
+  background: #FFF3DF;
+  box-shadow: 0 10px 26px rgba(74, 47, 42, 0.12);
 }
 
-.category-card:hover::before { opacity: 0.7; }
 .category-card > * { position: relative; z-index: 1; }
 
 .product-img-panel {
@@ -1466,14 +1736,33 @@ img {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
+/* Category artwork sits directly on the section background — no vessel,
+   no ring, no halo. The wrap is layout-only (size + alignment); the
+   colorful mark itself is the focus. */
 .category-icon-wrap {
   display: block;
   will-change: transform;
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
   transition: transform 300ms var(--ease-out-expo);
 }
 
 .category-card:hover .category-icon-wrap {
   transform: scale(1.05);
+}
+
+/* Compact terracotta arrow pip on category cards. */
+.cat-arrow {
+  transition: background var(--dur-fast) var(--ease-out-soft),
+    box-shadow var(--dur-fast) var(--ease-out-soft),
+    transform var(--dur-fast) var(--ease-out-soft);
+}
+
+.category-card:hover .cat-arrow {
+  background: #6B2525;
+  box-shadow: 0 6px 16px rgba(107, 37, 37, 0.35);
 }
 
 /* Category grid: 2-col mobile, 3-col desktop, final row centered */
@@ -1527,8 +1816,8 @@ img {
 }
 
 .dark .product-img-panel.glass-img {
-  background: var(--glass-fill);
-  box-shadow: inset 0 1px 0 rgba(237, 231, 223, 0.08);
+  background: linear-gradient(165deg, #FFFDF8 0%, #F7EDD5 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 /* Discount ribbon. */
@@ -1617,7 +1906,7 @@ img {
 .skeleton {
   position: relative;
   overflow: hidden;
-  background: var(--surface-sunken);
+  background: #F2E8D5;
   border-radius: var(--r-md);
 }
 
@@ -1628,18 +1917,20 @@ img {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.55) 50%,
+    rgba(255, 255, 255, 0.7) 50%,
     transparent 100%
   );
   background-size: 200% 100%;
   animation: shimmer 1.6s var(--ease-out-soft) infinite;
 }
 
+.dark .skeleton { background: #F2E8D5; }
+
 .dark .skeleton::after {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(237, 231, 223, 0.08) 50%,
+    rgba(255, 255, 255, 0.7) 50%,
     transparent 100%
   );
   background-size: 200% 100%;
@@ -1661,11 +1952,11 @@ img {
   right: 0;
   z-index: 20;
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  background: var(--glass-fill-nav);
+  background: rgba(255, 255, 255, 0.94);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
   border-top: 1px solid var(--hairline-strong);
-  box-shadow: 0 -8px 28px rgba(58, 11, 12, 0.18);
+  box-shadow: 0 -8px 28px rgba(58, 11, 12, 0.14);
 }
 
 .dark .sticky-cart-bar {
@@ -1694,9 +1985,9 @@ img {
 }
 
 .search-expand input:focus {
-  border-color: var(--ember-600);
-  box-shadow: 0 0 0 4px rgba(195, 58, 20, 0.13), var(--shadow-md);
-  background: var(--surface-card);
+  border-color: var(--maroon-700);
+  box-shadow: 0 0 0 4px rgba(118, 23, 19, 0.14), var(--shadow-md);
+  background: #FFFDF8;
 }
 
 .hero-particle {
@@ -1723,7 +2014,7 @@ img {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface-card);
+  background: #FFFFFF;
   border: 1px solid var(--hairline-strong);
   color: var(--text-muted);
   box-shadow: var(--shadow-xs);
@@ -1735,9 +2026,9 @@ img {
 }
 
 .arrow-btn:hover {
-  color: var(--ember-600);
-  border-color: var(--ember-600);
-  background: #FFF4EF;
+  color: var(--maroon-700);
+  border-color: var(--gold-400);
+  background: #FDF9F0;
   transform: scale(1.06);
 }
 
@@ -1751,19 +2042,19 @@ img {
    GLASS COMPONENT EXTENSIONS
    ========================================================================= */
 
-/* Modal / dialog surface — strong glass so the underlying page stays faintly
+/* Modal / dialog surface — warm-white so the underlying page stays faintly
    visible through the scrim, with a crisp top-light edge. */
 .modal-glass {
-  background: var(--glass-fill-strong);
+  background: rgba(255, 255, 255, 0.97);
   -webkit-backdrop-filter: var(--glass-blur-strong);
   backdrop-filter: var(--glass-blur-strong);
   border: 1px solid var(--hairline);
   box-shadow: var(--glass-toplight), var(--shadow-xl);
 }
 
-/* Filter pill / chip — translucent so it sits on the page like frosted glass. */
+/* Filter pill / chip — warm-white so it sits on the page like frosted glass. */
 .glass-chip {
-  background: var(--glass-fill-soft);
+  background: rgba(255, 255, 255, 0.85);
   -webkit-backdrop-filter: var(--glass-blur-soft);
   backdrop-filter: var(--glass-blur-soft);
   border: 1px solid var(--hairline);
@@ -1777,34 +2068,34 @@ img {
 }
 
 .glass-chip:hover {
-  border-color: rgba(195, 58, 20, 0.4);
+  border-color: rgba(210, 166, 79, 0.6);
   color: var(--text-strong);
   transform: translateY(-1px);
 }
 
 .glass-chip.is-active {
-  background: var(--grad-ember);
+  background: var(--grad-maroon);
   border-color: transparent;
   color: #FFFFFF;
-  box-shadow: var(--shadow-ember);
+  box-shadow: 0 8px 24px rgba(58, 11, 12, 0.3);
 }
 
-/* Glass table — translucent header band + hairline rows for the price list. */
-.glass-table { background: var(--glass-fill-soft); }
-.glass-table thead th { background: var(--glass-fill); }
+/* Glass table — translucent warm-white header band + hairline rows. */
+.glass-table { background: rgba(255, 255, 255, 0.7); }
+.glass-table thead th { background: #F9F1E3; }
 
-/* Glass input — frosted field that still reads as an editable surface. */
+/* Glass input — frosted warm-white field that still reads as editable. */
 .input-premium.is-glass {
-  background: var(--glass-fill-soft);
+  background: rgba(255, 255, 255, 0.85);
   -webkit-backdrop-filter: var(--glass-blur-soft);
   backdrop-filter: var(--glass-blur-soft);
   border-color: var(--hairline-strong);
 }
 
-/* Docked action bar (sticky add-to-cart) — floating glass with a strong
-   top-light so it lifts off the page instead of sitting flat. */
+/* Docked action bar (sticky add-to-cart) — floating warm-white glass with a
+   strong top-light so it lifts off the page instead of sitting flat. */
 .sticky-cart-bar.is-glass {
-  background: var(--glass-fill-nav);
+  background: rgba(255, 255, 255, 0.94);
   -webkit-backdrop-filter: var(--glass-blur-strong);
   backdrop-filter: var(--glass-blur-strong);
   border-top: 1px solid var(--hairline);
@@ -1814,13 +2105,13 @@ img {
 .react-hot-toast { animation-duration: 0.15s !important; }
 
 .editor-tab-inactive {
-  background: var(--surface-card);
+  background: #FFFFFF;
   border: 1px solid var(--hairline);
   box-shadow: var(--shadow-xs);
   color: var(--text-muted);
 }
 
-.admin-btn-orange { color: var(--maroon); }
+.admin-btn-orange { color: var(--maroon-700); }
 
 /* =========================================================================
    DARK MODE COMPATIBILITY LAYER
@@ -1828,86 +2119,94 @@ img {
    New work should use the semantic tokens above instead.
    ========================================================================= */
 
-.dark body { color: var(--text-body); }
+/* Light-mode compatibility layer — legacy `.dark`-scoped rules resolve to
+   the warm-light storefront. The storefront no longer mounts `.dark`, but
+   any residual selector must still paint light, never dark. */
+.dark body { color: var(--text-body); background: #FDF9F0; }
 
-/* Glass surfaces keep their translucency in dark mode — the token fills are
-   already dark-tinted, so we only defend the hairline + shadow. */
+/* Glass surfaces keep their translucency — the token fills are
+   already light-tinted, so we only defend the hairline + shadow. */
 .dark .glass-panel,
 .dark .glass-strong,
 .dark .glass-surface,
-.dark .glass-nav,
 .dark .glass-card {
-  background: var(--glass-fill);
+  background: rgba(255, 255, 255, 0.92);
   border-color: var(--hairline);
-  box-shadow: var(--glass-toplight), 0 8px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--glass-toplight), var(--shadow-md);
 }
 
-.dark .glass-strong,
-.dark .glass-strong-util,
-.dark .glass-nav { background: var(--glass-fill-strong); }
-.dark .glass-surface { background: var(--glass-fill-soft); }
+/* Navbar intentionally stays deep maroon (brand anchor). */
 .dark .glass-nav { background: var(--glass-fill-nav); }
 
+.dark .glass-strong,
+.dark .glass-strong-util { background: rgba(255, 255, 255, 0.95); }
+.dark .glass-surface { background: rgba(255, 255, 255, 0.8); }
+
 .dark .card-premium,
-.dark .panel-editorial,
+.dark .panel-editorial {
+  background: #FFFFFF;
+  border-color: rgba(158, 112, 41, 0.20);
+  box-shadow: var(--shadow-sm);
+}
+
 .dark .category-card {
-  background: var(--surface-card);
-  border-color: var(--hairline);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  background: #FFF7E8;
+  border-color: rgba(201, 151, 62, 0.25);
+  box-shadow: 0 8px 24px rgba(99, 53, 46, 0.08);
 }
 
 .dark .card-premium:hover {
-  border-color: rgba(236, 112, 73, 0.45);
-  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.62);
+  box-shadow: 0 10px 26px rgba(74, 47, 42, 0.12);
+  transform: translateY(-2px);
 }
 
-/* When a card carries both `card-premium` and `glass-card`, the glass fill
-   wins so the frosted surface survives dark mode. */
+/* When a card carries both `card-premium` and `glass-card`, the white fill
+   wins so the premium surface survives. */
 .dark .card-premium.glass-card,
 .dark .panel-editorial.glass-card {
-  background: var(--glass-fill);
-  box-shadow: var(--glass-toplight), 0 8px 32px rgba(0, 0, 0, 0.5);
+  background: #FFFFFF;
+  box-shadow: var(--glass-toplight), var(--shadow-md);
 }
 
-.dark .category-card.is-glass { background: var(--glass-fill); box-shadow: var(--glass-toplight-soft), 0 8px 32px rgba(0, 0, 0, 0.5); }
+.dark .category-card.is-glass { background: rgba(255, 247, 232, 0.92); box-shadow: var(--glass-toplight-soft), 0 8px 24px rgba(99, 53, 46, 0.08); }
 
-.dark .glass { background: var(--glass-fill-soft); border-color: var(--hairline); }
-.dark .glass-strong-util { background: var(--glass-fill-strong); border-color: var(--hairline); }
+.dark .glass { background: rgba(255, 255, 255, 0.8); border-color: var(--hairline); }
+.dark .glass-strong-util { background: rgba(255, 255, 255, 0.95); border-color: var(--hairline); }
 
-.dark .modal-glass { background: var(--glass-fill-strong); border-color: var(--hairline); }
-.dark .glass-chip { background: var(--glass-fill-soft); border-color: var(--hairline); }
-.dark .glass-chip:hover { border-color: rgba(247, 174, 44, 0.5); }
-.dark .glass-table { background: var(--glass-fill-soft); }
-.dark .glass-table thead th { background: var(--glass-fill); }
-.dark .input-premium.is-glass { background: var(--glass-fill-soft); border-color: var(--hairline-strong); }
-.dark .sticky-cart-bar.is-glass { background: var(--glass-fill-nav); border-color: var(--hairline); }
+.dark .modal-glass { background: rgba(255, 255, 255, 0.97); border-color: var(--hairline); }
+.dark .glass-chip { background: rgba(255, 255, 255, 0.9); border-color: var(--hairline); }
+.dark .glass-chip:hover { border-color: rgba(210, 166, 79, 0.6); }
+.dark .glass-table { background: rgba(255, 255, 255, 0.85); }
+.dark .glass-table thead th { background: #F9F1E3; }
+.dark .input-premium.is-glass { background: #FFFFFF; border-color: var(--hairline-strong); }
+.dark .sticky-cart-bar.is-glass { background: rgba(255, 255, 255, 0.94); border-color: var(--hairline); }
 
 .dark .input-premium {
-  background: rgba(237, 231, 223, 0.05);
+  background: #FFFFFF;
   border-color: var(--hairline-strong);
   color: var(--text-strong);
 }
 
 .dark .input-premium:focus {
-  border-color: var(--saffron-400);
-  box-shadow: 0 0 0 4px rgba(247, 174, 44, 0.18);
+  border-color: var(--maroon-700);
+  box-shadow: 0 0 0 4px rgba(118, 23, 19, 0.14);
 }
 
-.dark .section-eyebrow { color: var(--gold-400); }
+.dark .section-eyebrow { color: var(--gold-600); }
 .dark .btn-outline {
-  background: var(--surface-raised);
-  color: var(--saffron-400);
-  border-color: rgba(247, 174, 44, 0.4);
+  background: #FFFFFF;
+  color: var(--maroon-700);
+  border-color: var(--hairline-strong);
 }
-.dark .btn-outline:hover { border-color: var(--saffron-400); background: #2E241C; }
+.dark .btn-outline:hover { border-color: var(--gold-400); background: #FDF9F0; }
 .dark .btn-gold { color: var(--maroon-900); }
-.dark .btn-quiet { background: rgba(237, 231, 223, 0.06); }
-.dark .btn-quiet:hover { background: rgba(236, 112, 73, 0.14); color: var(--saffron-400); }
-.dark .arrow-btn { background: var(--surface-raised); border-color: var(--hairline-strong); }
-.dark .arrow-btn:hover { background: #2E241C; color: var(--saffron-400); border-color: var(--saffron-400); }
-.dark .editor-tab-inactive { background: var(--surface-raised); border-color: var(--hairline); color: var(--text-muted); }
+.dark .btn-quiet { background: #F9F1E3; }
+.dark .btn-quiet:hover { background: #FFFDF8; color: var(--maroon-700); }
+.dark .arrow-btn { background: #FFFFFF; border-color: var(--hairline-strong); }
+.dark .arrow-btn:hover { background: #FDF9F0; color: var(--maroon-700); border-color: var(--gold-400); }
+.dark .editor-tab-inactive { background: #FFFFFF; border-color: var(--hairline); color: var(--text-muted); }
 .dark .admin-btn-orange { color: var(--maroon-900); }
-.dark .skeleton { background: rgba(237, 231, 223, 0.05); }
+.dark .skeleton { background: #F2E8D5; }
 
 .dark .text-gray-900,
 .dark .text-gray-800 { color: var(--text-strong); }
@@ -1921,16 +2220,16 @@ img {
 
 .dark .bg-white { background: var(--surface-card); }
 .dark .bg-gray-50 { background: var(--surface-sunken); }
-.dark .bg-gray-100 { background: rgba(237, 231, 223, 0.06); }
-.dark .bg-gray-200 { background: rgba(237, 231, 223, 0.1); }
-.dark .bg-gray-300 { background: rgba(237, 231, 223, 0.14); }
+.dark .bg-gray-100 { background: #F9F1E3; }
+.dark .bg-gray-200 { background: #F2E8D5; }
+.dark .bg-gray-300 { background: #E7D6BC; }
 
-.dark .border-gray-100 { border-color: rgba(237, 231, 223, 0.08); }
+.dark .border-gray-100 { border-color: #EFE3CE; }
 .dark .border-gray-200 { border-color: var(--hairline); }
 .dark .border-gray-300 { border-color: var(--hairline-strong); }
 
-.dark .hover\:bg-gray-50:hover { background: rgba(237, 231, 223, 0.06); }
-.dark .hover\:bg-gray-100:hover { background: rgba(237, 231, 223, 0.1); }
+.dark .hover\:bg-gray-50:hover { background: #F9F1E3; }
+.dark .hover\:bg-gray-100:hover { background: #F2E8D5; }
 .dark .hover\:bg-accent-50:hover { background: rgba(210, 166, 79, 0.12); }
 .dark .hover\:bg-purple-50:hover { background: rgba(195, 58, 20, 0.12); }
 .dark .hover\:bg-red-50:hover { background: rgba(203, 42, 42, 0.14); }
@@ -1941,7 +2240,7 @@ img {
 .dark .bg-purple-50 { background: rgba(195, 58, 20, 0.1); }
 .dark .bg-purple-100 { background: rgba(195, 58, 20, 0.16); }
 .dark .bg-red-50 { background: rgba(203, 42, 42, 0.12); }
-.dark .bg-orange-100 { background: rgba(236, 112, 73, 0.16); }
+.dark .bg-orange-100 { background: rgba(210, 166, 79, 0.18); }
 .dark .bg-blue-100 { background: rgba(96, 165, 250, 0.16); }
 .dark .bg-teal-100 { background: rgba(45, 212, 191, 0.16); }
 .dark .bg-amber-100 { background: rgba(210, 166, 79, 0.18); }
@@ -2028,45 +2327,52 @@ img {
   padding-inline: clamp(0.75rem, 1.5vw, 2rem);
 }
 
-/* ---- Category pills: shared-container row -----------------------------
+/* ---- Category pills: stable centered row, never scrolls -----------------
    The row is a plain flex child of .shell.products-page, so its left and
    right edges are the shell's content edges — the exact same boundaries
    used by the header, toolbar and product grid. No negative margins, no
-   full-bleed offsets. Below 85em the row scrolls internally (scrollbar
-   hidden, page never scrolls); at ≥85em the desktop rule turns scrolling
-   off entirely so all 12 pills sit on one line. */
+   full-bleed offsets. The wrapper never exceeds the viewport and never
+   creates horizontal scrolling: all 12 pills stay visible at once.
+   Desktop: single centered row. Mobile: wraps into centered rows. */
+.category-scroll-container {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
 .catalogue-pills {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-  justify-content: flex-start;
-  gap: var(--pill-row-gap, 0.25rem);
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
   padding: 0.25rem 0;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
 }
-.catalogue-pills::-webkit-scrollbar { display: none; }
 
 /* ---- Category pills: base sizing --------------------------------------
-   Comfortable, readable size. Phones and tablets scroll the row, so there
-   is nothing to be gained by shrinking the labels here — only the ≥85em
-   one-line band below needs fluid sizing, and it declares its own. */
+   Compact readable pills. Per-pill white-space stays nowrap so labels never
+   break mid-word; the ROW itself never uses nowrap-scrolling — desktop keeps
+   nowrap-centered fit, mobile wraps. Sizing is fluid so 12 pills fit. */
 .catalogue-pill {
   --pill-icon: 0.875rem;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   white-space: nowrap;
   font-size: 0.8125rem;
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
-  height: 38px;
+  font-weight: 500;
+  padding: 8px 14px;
   min-height: 38px;
-  max-height: 38px;
-  gap: 0.3125rem;
+  gap: 0.5rem;
   line-height: 1;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .catalogue-pill-icon {
@@ -2089,52 +2395,47 @@ img {
   object-position: center;
 }
 
-/* ---- Desktop: compact, centred, fully-contained pill navigation ----
-   Applies at >=64em (1024px) only — phones and tablets keep the base
-   left-aligned contained scroller untouched below.
-
-   The row stays a plain flex child of .shell.products-page (same content
-   boundaries as the toolbar and grid) and centres its pill group with
-   `safe center`, so there is balanced breathing room on both sides.
-   Sizing is compact and fluid (34–36px pills, ~10–12px labels) so all 12
-   categories fit on ONE row with every pill fully visible: no wrapping,
-   no desktop scrolling (overflow-x is clip purely as a backstop so the
-   row can never cause page-level horizontal overflow), no transforms,
-   no negative margins, no offsets. */
+/* ---- Desktop: single centered row, all 12 fit, never scrolls ---------
+   Applies at >=64em (1024px). Compact pills (8px 14px, 8px gap) with fluid
+   type so the full row fits the viewport. No scroll, no clipping. */
 @media (min-width: 64em) {
   .catalogue-pills {
-    width: 100%;
+    display: flex;
+    flex-wrap: nowrap;
     justify-content: center;
-    justify-content: safe center;
-    gap: clamp(0.25rem, 0.196rem + 0.18vw, 0.375rem);
-    overflow-x: clip;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
+    gap: 8px;
   }
   .catalogue-pill {
-    --pill-icon: clamp(0.6875rem, 0.505rem + 0.256vw, 0.8125rem);
+    --pill-icon: clamp(0.75rem, 0.55rem + 0.28vw, 0.875rem);
     flex: 0 1 auto;
-    font-size: clamp(0.625rem, 0.4425rem + 0.256vw, 0.75rem);
-    padding-left: clamp(0.25rem, -0.237rem + 0.718vw, 0.625rem);
-    padding-right: clamp(0.25rem, -0.237rem + 0.718vw, 0.625rem);
-    gap: 0.3125rem;
-    height: clamp(2.125rem, 1.9425rem + 0.256vw, 2.25rem);
-    min-height: clamp(2.125rem, 1.9425rem + 0.256vw, 2.25rem);
-    max-height: clamp(2.125rem, 1.9425rem + 0.256vw, 2.25rem);
+    min-width: 0;
+    font-size: clamp(0.75rem, 0.6rem + 0.25vw, 0.8125rem);
+    font-weight: 500;
+    padding: 8px 14px;
+    gap: 0.5rem;
+    min-height: 38px;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 }
 
-/* ---- Narrow desktop (1024–1139px): balanced two-row wrap -------------
-   Measured reality: 12 readable pills need ~1140px for one row, but only
-   ~940–1050px exist here — one row would force ~8px text or hidden pills.
-   So in this sliver only, pills wrap into centred rows instead: everything
-   stays fully visible, readable and centred, with no scrolling, no page
-   overflow and no clipping. At >=1140px the single-row rule above applies.
-   Phones/tablets (<1024px) keep their existing scroller, unchanged. */
-@media (min-width: 64em) and (max-width: 71.1875em) {
+/* ---- Narrow desktop / tablet (768px–1200px): tighter fit, still one row --
+   Reduces padding/gap only as much as needed so all categories stay visible
+   on one stable centered row. Text stays readable. */
+@media (min-width: 48em) and (max-width: 75em) {
   .catalogue-pills {
-    flex-wrap: wrap;
-    justify-content: center;
-    row-gap: 0.5rem;
-    overflow-x: visible;
+    gap: 5px;
+  }
+  .catalogue-pill {
+    --pill-icon: 0.8125rem;
+    font-size: 0.75rem;
+    padding: 7px 10px;
+    gap: 5px;
+    min-height: 36px;
   }
 }
 
@@ -2181,19 +2482,19 @@ img {
 
 .catalogue-search-field input:focus {
   outline: none;
-  border-color: var(--ember-500);
-  box-shadow: var(--shadow-xs), 0 0 0 3px rgba(223, 76, 33, 0.12);
+  border-color: var(--maroon-700);
+  box-shadow: var(--shadow-xs), 0 0 0 3px rgba(118, 23, 19, 0.14);
 }
 
 .dark .catalogue-search-field input {
-  background: rgba(237, 231, 223, 0.05);
+  background: #FFFFFF;
   border-color: var(--hairline-strong);
   color: var(--text-strong);
 }
 
 .dark .catalogue-search-field input:focus {
-  border-color: var(--saffron-400);
-  box-shadow: 0 0 0 4px rgba(247, 174, 44, 0.18);
+  border-color: var(--maroon-700);
+  box-shadow: 0 0 0 4px rgba(118, 23, 19, 0.14);
 }
 
 .catalogue-search-clear {
@@ -2237,6 +2538,45 @@ img {
   white-space: nowrap;
 }
 
+/* Search context inside the filter bar: gold small-caps label plus the
+   match line, divided from the count by a hairline. Wraps harmlessly on
+   narrow screens because the toolbar already stacks there. */
+.catalogue-search-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+  border-left: 1px solid var(--hairline-strong);
+  padding-left: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.catalogue-search-meta-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold-600);
+  white-space: nowrap;
+}
+
+.catalogue-search-meta-query {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Page-level spill guard: the catalogue subtree can never force document
+   horizontal scrolling (rails and pill rows keep their own internal
+   scrollers). Mobile keeps its explicit `overflow: visible` below, which
+   wins there via !important. */
+.route-products .shell.products-page {
+  overflow-x: clip;
+  max-width: 100%;
+}
+
 .catalogue-toolbar-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2257,13 +2597,13 @@ img {
    in its own top-layer popup, so it cannot be clipped by a scrolling parent and
    cannot overflow the viewport on a phone. `position/z-index` are here so the
    focus ring is never overlapped by a card, not to layer the list.
-   `color-scheme` keeps that native popup on the dark sheet. */
+   `color-scheme` keeps that native popup on the warm-light sheet. */
 .sort-select {
   appearance: none;
   -webkit-appearance: none;
   position: relative;
   z-index: 1;
-  background: var(--surface-card);
+  background: var(--surface-warm);
   border: 1px solid var(--hairline-strong);
   border-radius: var(--r-pill);
   padding: 0.4rem 2rem 0.4rem 0.85rem;
@@ -2272,8 +2612,8 @@ img {
   font-family: var(--font-body);
   color: var(--text-strong);
   cursor: pointer;
-  color-scheme: dark;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B6459' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  color-scheme: light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2375665C' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.6rem center;
   min-height: 40px;
@@ -2283,13 +2623,13 @@ img {
 }
 
 .sort-select:hover {
-  border-color: var(--ember-600);
+  border-color: var(--gold-500);
 }
 
 .sort-select:focus-visible {
   outline: none;
-  border-color: var(--ember-600);
-  box-shadow: 0 0 0 4px rgba(195, 58, 20, 0.16), var(--shadow-sm);
+  border-color: var(--maroon-700);
+  box-shadow: 0 0 0 4px rgba(118, 23, 19, 0.14), var(--shadow-sm);
 }
 
 /* Comfortable touch target, and it takes the full row on the narrowest phones
@@ -2309,8 +2649,8 @@ img {
 
 .sort-select:focus {
   outline: none;
-  border-color: var(--ember-600);
-  box-shadow: 0 0 0 3px rgba(195, 58, 20, 0.12);
+  border-color: var(--maroon-700);
+  box-shadow: 0 0 0 3px rgba(118, 23, 19, 0.14);
 }
 
 .view-toggle {
@@ -2327,7 +2667,7 @@ img {
   width: 34px;
   height: 34px;
   border: none;
-  background: var(--surface-card);
+  background: var(--surface-warm);
   color: var(--text-muted);
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
@@ -2362,7 +2702,7 @@ img {
   gap: 0.4rem;
   border-radius: var(--r-pill);
   border: 1px solid var(--hairline-strong);
-  background: var(--surface-card);
+  background: var(--surface-warm);
   padding: 0 0.75rem;
   font-size: 0.8125rem;
   font-weight: 600;
@@ -2380,9 +2720,9 @@ img {
 }
 
 .admin-reorder:not(.active):hover {
-  border-color: var(--ember-600);
+  border-color: var(--gold-500);
   color: var(--maroon-700);
-  background: #FFF4EF;
+  background: var(--surface-sunken);
 }
 
 .admin-reorder-hint {
@@ -2396,7 +2736,7 @@ img {
    Desktop minimum is 44px (requirement: 44–56px), subtitle 16px. The
    mobile block below overrides for phones. */
 .products-page-header .section-title {
-  font-size: clamp(2.75rem, 1.825rem + 1.083vw, 3.125rem);
+  font-size: clamp(2.75rem, 2.4rem + 1.2vw, 3.25rem);
 }
 
 /* =========================================================================
@@ -2562,21 +2902,20 @@ img {
       Desktop (≥640px) keeps its existing layout byte-for-byte unchanged.
       Mobile: pills scroll horizontally, toolbar stacks. */
   .products-page-header .section-eyebrow { margin-top: 0; }
-  .products-page-header .section-title { margin-top: 0.25rem; font-size: clamp(1.5rem, 1.25rem + 1.4vw, 1.85rem); }
+  .products-page-header .section-title { margin-top: 0.25rem; font-size: clamp(2.125rem, 1.9rem + 2vw, 2.5rem); }
 
-  /* Pills: the base rule already makes the row a contained scroller with
-     a hidden scrollbar. On phones, bump the label back to a readable size
-     — the row scrolls, so the fit math that constrains desktop doesn't
-     apply — and keep a $gutter-sized edge spacer at the end. */
+  /* Pills: wrapped centered rows — no scrolling. Compact but readable;
+     container never exceeds the viewport. */
   .catalogue-pill {
     font-size: 0.75rem;
-    padding-left: 0.4375rem;
-    padding-right: 0.4375rem;
-    height: 34px;
+    padding: 6px 9px;
     min-height: 34px;
-    max-height: 34px;
   }
-  .catalogue-pills { padding-right: var(--gutter); }
+  .catalogue-pills {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 8px;
+  }
 
   /* Toolbar: stack vertically on very small screens */
   .catalogue-toolbar { gap: 0.4rem; margin-top: 0.75rem; padding-top: 0.625rem; }
@@ -2651,8 +2990,8 @@ img {
     line-height: 1;
   }
   .products-page-header .section-title {
-    font-size: clamp(1.4rem, 1.2rem + 1.2vw, 1.75rem) !important;
-    line-height: 1.15 !important;
+    font-size: clamp(2.125rem, 1.9rem + 2vw, 2.5rem) !important;
+    line-height: 1.12 !important;
     margin-top: 0.25rem !important;
     margin-bottom: 0 !important;
   }
@@ -2662,78 +3001,77 @@ img {
     display: none !important;
   }
 
-  /* ---- 3. CATEGORY NAVIGATION — dedicated scroll container ------------
-     Page must NOT scroll horizontally; only this strip scrolls. */
-  /* Spec selectors — guarantee they exist for verification */
+  /* ---- 3. CATEGORY NAVIGATION — wrapped centered rows, no scrolling --
+     The wrapper never exceeds the viewport; all categories visible at once.
+     No carousel, no overflow-x auto/scroll, no nowrap scrolling. */
   .category-scroll-container {
-    overflow-x: auto;
-    overflow-y: hidden;
     width: 100%;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
+    overflow-y: visible;
   }
-  .category-scroll-container::-webkit-scrollbar { display: none; }
   .category-list {
     display: flex;
-    flex-wrap: nowrap;
-    width: max-content;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    gap: 5px;
   }
   .category-pill {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
+    min-width: 0;
     white-space: nowrap;
   }
 
-  /* Actual catalogue pills - map spec to existing class */
+  /* Actual catalogue pills — centered wrapping rows */
   /* Shell itself has no horizontal padding at mobile; each section
-     provides its own 20px so the scroll strip can own its edge spacing
-     without negative margins or viewport offsets. */
+     provides its own 20px so rows stay centered without negative margins. */
   .shell.products-page {
     overflow: visible !important;
   }
   .catalogue-pills {
     display: flex !important;
-    flex-wrap: nowrap !important;
+    flex-wrap: wrap !important;
     align-items: center !important;
-    justify-content: flex-start !important;
-    gap: 0.5rem !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
+    justify-content: center !important;
+    gap: 5px !important;
+    row-gap: 8px !important;
+    overflow-x: hidden !important;
+    overflow-y: visible !important;
     width: 100% !important;
     max-width: 100% !important;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    box-sizing: border-box !important;
     padding: 4px 20px !important;
     margin: 0 !important;
-    scroll-padding-left: 20px;
-    scroll-padding-right: 20px;
   }
-  .catalogue-pills::-webkit-scrollbar { display: none !important; }
 
-  /* ---- 4. MOBILE CATEGORY PILL SIZE — 32-36px ------------------------ */
+  /* ---- 4. MOBILE CATEGORY PILL SIZE — compact pill, readable label ------ */
   .catalogue-pill {
-    height: 34px !important;
     min-height: 34px !important;
-    max-height: 34px !important;
-    padding: 0 12px !important;
-    gap: 6px !important;
-    font-size: 11.5px !important;
+    padding: 6px 9px !important;
+    gap: 5px !important;
+    font-size: 12px !important;
     line-height: 1 !important;
     white-space: nowrap !important;
-    flex: 0 0 auto !important;
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
   }
   .catalogue-pill-icon {
-    width: 13px !important;
-    height: 13px !important;
-    flex: 0 0 13px !important;
+    width: 14px !important;
+    height: 14px !important;
+    flex: 0 0 14px !important;
   }
   /* Also target spec pill class if used elsewhere */
   .category-pill {
-    height: 34px;
-    padding: 0 12px;
-    gap: 6px;
-    font-size: 11.5px;
+    min-height: 34px;
+    padding: 6px 9px;
+    gap: 5px;
+    font-size: 12px;
     line-height: 1;
   }
 
@@ -2753,7 +3091,16 @@ img {
     margin-top: 16px !important;
     padding-top: 12px !important;
     padding-bottom: 0 !important;
-    border-top: 1px solid var(--hairline) !important;
+  }
+  .catalogue-search-meta {
+    order: 1;
+    width: 100%;
+    border-left: none;
+    padding-left: 0;
+    white-space: normal;
+  }
+  .catalogue-search-meta-query {
+    white-space: normal;
   }
   .catalogue-count {
     font-size: 0.8125rem !important;
@@ -2902,15 +3249,17 @@ img {
   .shell.products-page,
   .shell.products-page * {
     max-width: 100%;
+    box-sizing: border-box;
   }
-  /* But allow category scroller to overflow internally */
+  /* Category rows stay inside the viewport — no internal scroller exception. */
   .catalogue-pills,
   .category-scroll-container {
-    max-width: none !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
   }
   .catalogue-pills *,
   .category-scroll-container * {
-    max-width: none;
+    max-width: 100%;
   }
   img, video, iframe {
     max-width: 100%;
@@ -3215,8 +3564,8 @@ img {
 }
 
 /* =========================================================================
-   ADMIN AUTH LOADER — premium dark loading experience
-   Used only by ProtectedRoute while Firebase resolves identity/role.
+   AUTH LOADER — premium warm-light loading experience
+   Used by Login handoff + ProtectedRoute while Firebase resolves identity.
    All motion is transform/opacity; prefers-reduced-motion collapses to static.
    ========================================================================= */
 
@@ -3231,11 +3580,11 @@ img {
   padding: 2.5rem 1.5rem;
   overflow: hidden;
   isolation: isolate;
-  background: #0c0a09;
-  /* subtle warm base — near-black with barely-there brown */
+  background: #FDF9F0;
+  /* subtle warm base — ivory with a whisper of gold */
   background-image:
-    radial-gradient(62% 48% at 50% 46%, rgba(210, 166, 79, 0.075) 0%, transparent 62%),
-    radial-gradient(38% 28% at 50% 78%, rgba(118, 23, 19, 0.09) 0%, transparent 70%);
+    radial-gradient(62% 48% at 50% 46%, rgba(210, 166, 79, 0.14) 0%, transparent 62%),
+    radial-gradient(38% 28% at 50% 78%, rgba(210, 166, 79, 0.10) 0%, transparent 70%);
 }
 
 /* When used inside the app shell (not fullscreen) keep same premium feel
@@ -3318,12 +3667,12 @@ img {
   border-radius: 9999px;
   object-fit: cover;
   display: block;
-  background: #1a1714;
-  border: 1px solid rgba(210, 166, 79, 0.22);
+  background: #FFFFFF;
+  border: 1px solid rgba(210, 166, 79, 0.45);
   box-shadow:
-    0 2px 18px rgba(0, 0, 0, 0.45),
-    0 0 0 1px rgba(210, 166, 79, 0.08),
-    0 8px 32px rgba(0, 0, 0, 0.5);
+    0 2px 18px rgba(58, 11, 12, 0.12),
+    0 0 0 1px rgba(210, 166, 79, 0.12),
+    0 8px 32px rgba(58, 11, 12, 0.12);
   animation: auth-breathe 2.8s ease-in-out infinite;
   will-change: transform;
 }
@@ -3352,7 +3701,7 @@ img {
   font-weight: 600;
   letter-spacing: -0.018em;
   line-height: 1.25;
-  color: #fff8ec;
+  color: #4A2F2A;
   text-wrap: balance;
 }
 
@@ -3364,7 +3713,7 @@ img {
   font-size: 0.8125rem;
   font-weight: 500;
   letter-spacing: 0.01em;
-  color: rgba(237, 231, 223, 0.58);
+  color: #75665C;
   line-height: 1.5;
 }
 
@@ -3389,10 +3738,10 @@ img {
   width: 164px;
   height: 3px;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: #EFE3CE;
+  border: 1px solid #E2D2B7;
   overflow: hidden;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 .auth-loader__shimmer {
@@ -3497,7 +3846,8 @@ img {
 /* =========================================================================
    FLOATING WHATSAPP BUTTON (home page only)
    Fixed bottom-right, above page content and hero canvas, below modals and
-   full-screen overlays (the component uses z-overlay). Dark-native styling.
+   full-screen overlays (the component uses z-overlay). Recognizable
+   WhatsApp green is preserved by design — never recolored to fit the theme.
    ========================================================================= */
 .wa-float {
   right: 16px;
@@ -3545,17 +3895,463 @@ img {
 }
 
 /* =========================================================================
-   PRODUCT CATALOGUE WARMTH — scoped to product display only.
-   These rules add festive depth on the dark storefront plus a faint ambient
-   wash behind the catalogue shell. No global backgrounds or tokens are
-   altered here.
+   PRODUCTS / CATALOGUE — WARM CREAM ATMOSPHERE
+   -------------------------------------------------------------------------
+   The catalogue speaks the same warm premium language as the homepage's
+   Featured Products and Best Sellers sections: a soft cream ground with an
+   extremely subtle top-to-bottom progression, ambient firework line-art in
+   muted gold / dusty rose, and warm off-white cards that stay clearly
+   lighter than the page.
+
+   Everything is scoped to .route-products — the class Products.jsx toggles
+   on <html> while the catalogue is mounted — so no other route and no
+   global token changes. Pure CSS paint: gradients and baked SVG line-art.
+   No layout, no typography, no functionality; background layers cannot
+   cause horizontal overflow.
    ========================================================================= */
+
+/* ---- Page ground -------------------------------------------------------
+   #F6E7C8 base cream. The top is a touch lighter and the bottom settles to
+   a slightly deeper beige — three neighbouring tones, so the gradient is
+   felt rather than seen. Never pure white. The ground sits on the root
+   element so it covers the whole document (over-scroll included). */
+.route-products {
+  background-color: #F6E7C8;
+  background-image:
+    /* faint festive sparks — muted gold, saffron and dusty rose */
+    radial-gradient(2px 2px at 12% 8%, rgba(210, 166, 79, 0.10), transparent 70%),
+    radial-gradient(2px 2px at 88% 13%, rgba(247, 174, 44, 0.08), transparent 70%),
+    radial-gradient(2px 2px at 6% 44%, rgba(169, 87, 66, 0.07), transparent 70%),
+    radial-gradient(2px 2px at 94% 61%, rgba(210, 166, 79, 0.08), transparent 70%),
+    radial-gradient(2px 2px at 10% 84%, rgba(195, 58, 20, 0.06), transparent 70%),
+    /* firework line-art — the same mandala / floral-fan / starburst family
+       the homepage sections already use, cropped at the edges and held at
+       low opacity so the art reads as woven into the cream, never pasted on */
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='280' height='280' viewBox='0 0 280 280' fill='none' stroke='%23C9973E' opacity='0.09'><circle cx='140' cy='140' r='120' stroke-width='1'/><circle cx='140' cy='140' r='104' stroke-width='0.6'/><circle cx='140' cy='140' r='88' stroke-width='4' stroke-dasharray='0.1 23' stroke-linecap='round'/><circle cx='140' cy='140' r='40' stroke-width='0.75'/><circle cx='40' cy='40' r='2.5'/><circle cx='240' cy='40' r='2.5'/><circle cx='40' cy='240' r='2.5'/><circle cx='240' cy='240' r='2.5'/></svg>") right -84px top 118px / 300px 300px no-repeat,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160' fill='none' stroke='%23B58A32' opacity='0.10'><path d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1'/><path d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1' transform='rotate(-24 80 112)'/><path d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1' transform='rotate(24 80 112)'/><path d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1' transform='rotate(-48 80 112)'/><path d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1' transform='rotate(48 80 112)'/><path d='M30 112 Q80 142 130 112' stroke-width='1'/><circle cx='36' cy='90' r='2'/><circle cx='126' cy='90' r='2'/><circle cx='80' cy='128' r='2'/></svg>") left -50px top 168px / 200px 200px no-repeat,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120' fill='none' stroke='%23A95742' opacity='0.09'><path d='M60 10 L68 52 L110 60 L68 68 L60 110 L52 68 L10 60 L52 52 Z' stroke-width='1'/><circle cx='60' cy='60' r='4' fill='%23D2A64F' stroke='none'/></svg>") right -30px top 34% / 140px 140px no-repeat,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220' fill='none' stroke='%23C7A263' opacity='0.09'><circle cx='110' cy='110' r='70' stroke-width='1'/><circle cx='110' cy='110' r='54' stroke-width='0.75'/><circle cx='110' cy='110' r='36' stroke-width='4' stroke-dasharray='0.1 18.8' stroke-linecap='round'/><path d='M110 22 Q115 44 110 66 Q105 44 110 22 Z' stroke-width='1'/><path d='M110 22 Q115 44 110 66 Q105 44 110 22 Z' stroke-width='1' transform='rotate(30 110 110)'/><path d='M110 22 Q115 44 110 66 Q105 44 110 22 Z' stroke-width='1' transform='rotate(60 110 110)'/><path d='M110 22 Q115 44 110 66 Q105 44 110 22 Z' stroke-width='1' transform='rotate(90 110 110)'/><path d='M110 22 Q115 44 110 66 Q105 44 110 22 Z' stroke-width='1' transform='rotate(120 110 110)'/><path d='M110 22 Q115 44 110 66 Q105 44 110 22 Z' stroke-width='1' transform='rotate(150 110 110)'/><path d='M110 22 Q115 44 110 66 Q105 44 110 22 Z' stroke-width='1' transform='rotate(180 110 110)'/><path d='M110 22 Q115 44 110 66 Q105 44 110 22 Z' stroke-width='1' transform='rotate(210 110 110)'/><path d='M110 22 Q115 44 110 66 Q105 44 110 22 Z' stroke-width='1' transform='rotate(240 110 110)'/><path d='M110 22 Q115 44 110 66 Q105 44 110 22 Z' stroke-width='1' transform='rotate(270 110 110)'/><path d='M110 22 Q115 44 110 66 Q105 44 110 22 Z' stroke-width='1' transform='rotate(300 110 110)'/><path d='M110 22 Q115 44 110 66 Q105 44 110 22 Z' stroke-width='1' transform='rotate(330 110 110)'/><circle cx='110' cy='110' r='5' fill='%23F7AE2C' stroke='none'/></svg>") left -72px top 48% / 250px 250px no-repeat,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160' fill='none' stroke='%23B58A32' opacity='0.10'><path d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1'/><path d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1' transform='rotate(-24 80 112)'/><path d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1' transform='rotate(24 80 112)'/><path d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1' transform='rotate(-48 80 112)'/><path d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1' transform='rotate(48 80 112)'/><path d='M30 112 Q80 142 130 112' stroke-width='1'/><circle cx='36' cy='90' r='2'/><circle cx='126' cy='90' r='2'/><circle cx='80' cy='128' r='2'/></svg>") right -46px top 70% / 180px 180px no-repeat,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='280' height='280' viewBox='0 0 280 280' fill='none' stroke='%23B88A42' opacity='0.08'><circle cx='140' cy='140' r='120' stroke-width='1'/><circle cx='140' cy='140' r='104' stroke-width='0.6'/><circle cx='140' cy='140' r='88' stroke-width='4' stroke-dasharray='0.1 23' stroke-linecap='round'/><circle cx='140' cy='140' r='40' stroke-width='0.75'/><circle cx='40' cy='40' r='2.5'/><circle cx='240' cy='40' r='2.5'/><circle cx='40' cy='240' r='2.5'/><circle cx='240' cy='240' r='2.5'/></svg>") left -66px bottom 130px / 260px 260px no-repeat,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240' fill='none' stroke='%239A4A3C' opacity='0.08'><path d='M60 220 V130 Q60 84 104 70 Q112 44 120 44 Q128 44 136 70 Q180 84 180 130 V220' stroke-width='1'/><path d='M76 220 V132 Q76 96 112 84 Q118 64 120 64 Q122 64 128 84 Q164 96 164 132 V220' stroke-width='0.7'/><circle cx='120' cy='34' r='2.5'/><path d='M40 220 H200' stroke-width='1'/></svg>") left -70px top 30% / 220px 220px no-repeat,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='32' viewBox='0 0 96 32' fill='none' stroke='%23C9973E' opacity='0.10'><path d='M48 4 L51 13 L60 16 L51 19 L48 28 L45 19 L36 16 L45 13 Z' stroke-width='1'/><circle cx='48' cy='16' r='1.4' fill='%23C9973E' stroke='none'/><circle cx='16' cy='16' r='1.2' fill='%23C9973E' stroke='none'/><circle cx='80' cy='16' r='1.2' fill='%23C9973E' stroke='none'/><path d='M0 16 H10 M86 16 H96' stroke-width='1'/></svg>") center bottom 28px / 96px 32px no-repeat,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48' fill='none' stroke='%23C9973E' opacity='0.12'><path d='M24 4 L28 20 L44 24 L28 28 L24 44 L20 28 L4 24 L20 20 Z' stroke-width='1'/></svg>") left 20% top 58% / 44px 44px no-repeat,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48' fill='none' stroke='%23C9973E' opacity='0.12'><path d='M24 4 L28 20 L44 24 L28 28 L24 44 L20 28 L4 24 L20 20 Z' stroke-width='1'/></svg>") right 18% top 40% / 36px 36px no-repeat,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140' fill='none' stroke='%23B58A32' opacity='0.10'><path d='M30 92 Q70 104 110 92 Q106 72 70 70 Q34 72 30 92 Z' stroke-width='1'/><path d='M70 30 Q77 46 70 58 Q63 46 70 30 Z' stroke-width='1'/><circle cx='70' cy='44' r='2' fill='%23B58A32' stroke='none'/><path d='M22 108 H118' stroke-width='1'/><circle cx='30' cy='30' r='1.6'/><circle cx='110' cy='30' r='1.6'/></svg>") right -36px bottom 48px / 150px 150px no-repeat,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200' fill='none' stroke='%23C9973E' stroke-opacity='0.10' stroke-width='1'><circle cx='100' cy='100' r='34' opacity='0.7'/><circle cx='100' cy='100' r='17' opacity='0.7'/><path d='M100 44 L108 84 L148 92 L108 100 L100 140 L92 100 L52 92 L92 84 Z' opacity='0.8'/><path d='M0 100 H48 M152 100 H200 M100 0 V48 M100 152 V200' opacity='0.6'/><circle cx='0' cy='0' r='9' opacity='0.7'/><circle cx='200' cy='0' r='9' opacity='0.7'/><circle cx='0' cy='200' r='9' opacity='0.7'/><circle cx='200' cy='200' r='9' opacity='0.7'/></svg>") center / 220px 220px repeat,
+    /* warm progression (bottom-most layer) */
+    linear-gradient(180deg, #FAF3E2 0%, #F7EBD2 45%, #EFDDBE 100%);
+}
+
+/* The cream ground lives on the root element, so the body surface steps
+   aside. Its fixed glow/grain layers (body::before / body::after) stay. */
+.route-products body {
+  background: transparent;
+}
+
+/* The shared fixed atmosphere was tuned for the near-white storefront: its
+   lower-right ivory glow (0.9) is invisible on #FDF9F0 but would read as a
+   bright blob on cream. Same layers, re-tinted for this route only — the
+   gold glows soften and the ivory lift becomes a whisper. */
+.route-products body::before {
+  background:
+    radial-gradient(40% 44% at 10% 16%, rgba(210, 166, 79, 0.10) 0%, transparent 100%),
+    radial-gradient(34% 38% at 90% 8%, rgba(210, 166, 79, 0.08) 0%, transparent 100%),
+    radial-gradient(42% 46% at 82% 86%, rgba(253, 249, 240, 0.32) 0%, transparent 100%),
+    radial-gradient(30% 32% at 16% 90%, rgba(247, 174, 44, 0.06) 0%, transparent 100%);
+}
+
+/* A barely-there gold haze behind the catalogue header, so the top of the
+   list settles into the cream instead of starting flat. */
 .shell.products-page {
   background-image: radial-gradient(
     60% 22rem at 50% 0%,
-    rgba(195, 58, 20, 0.07),
+    rgba(210, 166, 79, 0.12),
     transparent 70%
   );
+}
+
+/* ---- Product cards -----------------------------------------------------
+   Warm off-white instead of stark white, with a muted-gold hairline and a
+   warm (never grey) shadow — the same surface family as the homepage's
+   Best Sellers cards, so catalogue and home read as one store. Structure,
+   radius and dimensions are untouched. */
+.route-products .card-premium {
+  background: var(--surface-warm);
+  border-color: rgba(201, 151, 62, 0.28);
+  box-shadow: 0 8px 24px rgba(99, 53, 46, 0.10);
+}
+
+.route-products .card-premium:hover {
+  background: #FFF6E9;
+  border-color: rgba(201, 151, 62, 0.42);
+  box-shadow: 0 10px 26px rgba(74, 47, 42, 0.13);
+}
+
+/* ---- Product image zone ------------------------------------------------
+   Soft warm white so product shots stay clear — never cold, never dark.
+   Pure background paint: no borders or spacing, so grid, list and compact
+   layouts keep their exact dimensions. */
+.route-products .product-card .product-img-panel {
+  background: linear-gradient(168deg, #FFFDF9 0%, #FBF3E2 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* ---- Empty / not-found panel -------------------------------------------
+   The shared editorial panel, re-toned for the cream ground. The gold top
+   rule stays as the ornament. */
+.route-products .panel-editorial {
+  background: var(--surface-warm);
+  border-color: var(--hairline-strong);
+}
+
+/* ---- Catalogue header ----------------------------------------------------
+   Deep maroon display title with secondary-brown supporting lines — the
+   same voice as the homepage rails, tuned for this ground. */
+.route-products .products-page-header .section-title {
+  color: #422825;
+}
+.route-products .products-page-header nav,
+.route-products .products-page-header nav a,
+.route-products .products-page-header > div > p,
+.route-products .products-page-header > p {
+  color: #725D50;
+}
+
+/* ---- Category pills ------------------------------------------------------
+   Biscuit idle, maroon active. Sizing stays in .catalogue-pill so the
+   one-line desktop fit is untouched; only surface, type and hover change.
+   The :not() guard keeps the active pill from flashing hover paint. */
+.route-products .catalogue-pill {
+  transition:
+    transform 200ms var(--ease-out-soft),
+    background 200ms var(--ease-out-soft),
+    border-color 200ms var(--ease-out-soft),
+    box-shadow 200ms var(--ease-out-soft);
+}
+.route-products .catalogue-pill[aria-pressed="false"]:hover {
+  background: #F1E0C3;
+  border-color: #C99A3D;
+  box-shadow: 0 6px 14px rgba(74, 47, 42, 0.10);
+}
+
+/* ---- Toolbar -------------------------------------------------------------
+   One coherent premium strip: translucent warm cream, biscuit border,
+   soft radius and a light warm shadow — never a giant white card. The
+   generic top border is replaced by an ornamental gold divider that sits
+   in the breathing room above the bar (pure paint, no layout node). */
+.route-products .catalogue-toolbar {
+  position: relative;
+  border-top: none;
+  margin-top: 16px;
+  padding: 0.45rem 0.8rem;
+  background: rgba(251, 245, 233, 0.6);
+  border: 1px solid rgba(170, 130, 70, 0.22);
+  border-radius: 16px;
+  box-shadow: 0 6px 16px rgba(74, 47, 42, 0.06);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.route-products .catalogue-toolbar::before {
+  content: '';
+  position: absolute;
+  top: -9px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  pointer-events: none;
+  background: rgba(170, 130, 70, 0.28);
+}
+
+/* Cards keep their shared hover language (soft neutral lift, no gold) —
+   only the resting surface is re-toned here, so catalogue and home read
+   as one store. */
+.route-products .card-premium:hover {
+  background: #FFF6E9;
+  box-shadow: 0 10px 26px rgba(74, 47, 42, 0.13);
+}
+
+/* ---- Mobile ------------------------------------------------------------
+   Same colour system, calmer field: two corner motifs and two sparks at
+   reduced size, so headings and cards stay the focus on small screens. */
+@media (max-width: 767px) {
+  .route-products {
+    background-image:
+      radial-gradient(2px 2px at 10% 6%, rgba(210, 166, 79, 0.10), transparent 70%),
+      radial-gradient(2px 2px at 92% 11%, rgba(247, 174, 44, 0.08), transparent 70%),
+      url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160' fill='none' stroke='%23B58A32' opacity='0.10'><path d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1'/><path d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1' transform='rotate(-24 80 112)'/><path d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1' transform='rotate(24 80 112)'/><path d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1' transform='rotate(-48 80 112)'/><path d='M80 30 Q92 66 80 102 Q68 66 80 30 Z' stroke-width='1' transform='rotate(48 80 112)'/><path d='M30 112 Q80 142 130 112' stroke-width='1'/><circle cx='36' cy='90' r='2'/><circle cx='126' cy='90' r='2'/><circle cx='80' cy='128' r='2'/></svg>") right -44px top 96px / 160px 160px no-repeat,
+      url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220' fill='none' stroke='%23C7A263' opacity='0.09'><circle cx='110' cy='110' r='70' stroke-width='1'/><circle cx='110' cy='110' r='54' stroke-width='0.75'/><circle cx='110' cy='110' r='36' stroke-width='4' stroke-dasharray='0.1 18.8' stroke-linecap='round'/><circle cx='110' cy='110' r='5' fill='%23F7AE2C' stroke='none'/></svg>") left -64px top 28% / 190px 190px no-repeat,
+      url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120' fill='none' stroke='%23A95742' opacity='0.09'><path d='M60 10 L68 52 L110 60 L68 68 L60 110 L52 68 L10 60 L52 52 Z' stroke-width='1'/><circle cx='60' cy='60' r='4' fill='%23D2A64F' stroke='none'/></svg>") right -30px bottom 150px / 120px 120px no-repeat,
+      url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140' fill='none' stroke='%23B58A32' opacity='0.09'><path d='M30 92 Q70 104 110 92 Q106 72 70 70 Q34 72 30 92 Z' stroke-width='1'/><path d='M70 30 Q77 46 70 58 Q63 46 70 30 Z' stroke-width='1'/><circle cx='70' cy='44' r='2' fill='%23B58A32' stroke='none'/><path d='M22 108 H118' stroke-width='1'/></svg>") left -28px bottom 44px / 110px 110px no-repeat,
+      url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240' fill='none' stroke='%239A4A3C' opacity='0.07'><path d='M60 220 V130 Q60 84 104 70 Q112 44 120 44 Q128 44 136 70 Q180 84 180 130 V220' stroke-width='1'/><path d='M40 220 H200' stroke-width='1'/><circle cx='120' cy='34' r='2.5'/></svg>") left -56px top 36% / 150px 150px no-repeat,
+      linear-gradient(180deg, #FAF3E2 0%, #F7EBD2 45%, #EFDDBE 100%);
+  }
+}
+/* =========================================================================
+   FAVORITES / WISHLIST PAGE (.route-wishlist toggled by Wishlist.jsx)
+   -------------------------------------------------------------------------
+   Same cream/maroon/gold store language as Products. Pure CSS paint +
+   layout scoping: no logic, no palette inventions. Background layers are
+   paint-only and can never cause horizontal overflow; every grid/row uses
+   minmax(0,1fr) + max-width 100% so the SOURCE of overflow is fixed.
+   ========================================================================= */
+
+/* ---- Page ground: warm cream + subtle gold line-art --------------------
+   Top-right + bottom-left + one center-side motif, 0.08–0.15 opacity.
+   Never behind cards in a readable way — art stays at the edges. */
+.route-wishlist {
+  background-color: #F6E7C8;
+  background-image:
+    radial-gradient(2px 2px at 12% 8%, rgba(210, 166, 79, 0.10), transparent 70%),
+    radial-gradient(2px 2px at 88% 13%, rgba(247, 174, 44, 0.08), transparent 70%),
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='280' height='280' viewBox='0 0 280 280' fill='none' stroke='%23C9973E' opacity='0.10'><circle cx='140' cy='140' r='120' stroke-width='1'/><circle cx='140' cy='140' r='104' stroke-width='0.6'/><circle cx='140' cy='140' r='88' stroke-width='4' stroke-dasharray='0.1 23' stroke-linecap='round'/><circle cx='140' cy='140' r='40' stroke-width='0.75'/><circle cx='40' cy='40' r='2.5'/><circle cx='240' cy='40' r='2.5'/><circle cx='40' cy='240' r='2.5'/><circle cx='240' cy='240' r='2.5'/></svg>") right -84px top 96px / 300px 300px no-repeat,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='280' height='280' viewBox='0 0 280 280' fill='none' stroke='%23B88A42' opacity='0.09'><circle cx='140' cy='140' r='120' stroke-width='1'/><circle cx='140' cy='140' r='104' stroke-width='0.6'/><circle cx='140' cy='140' r='88' stroke-width='4' stroke-dasharray='0.1 23' stroke-linecap='round'/><circle cx='140' cy='140' r='40' stroke-width='0.75'/></svg>") left -66px bottom 110px / 260px 260px no-repeat,
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120' fill='none' stroke='%23A95742' opacity='0.08'><path d='M60 10 L68 52 L110 60 L68 68 L60 110 L52 68 L10 60 L52 52 Z' stroke-width='1'/><circle cx='60' cy='60' r='4' fill='%23D2A64F' stroke='none'/></svg>") right -30px top 44% / 140px 140px no-repeat,
+    linear-gradient(180deg, #FAF3E2 0%, #F7EBD2 45%, #EFDDBE 100%);
+}
+.route-wishlist body { background: transparent; }
+
+/* ---- Container: centered, capped, never wider than viewport ------------- */
+.fav-page {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: clip;
+}
+.fav-shell {
+  width: min(100% - 48px, 1400px);
+  margin-inline: auto;
+  box-sizing: border-box;
+  max-width: 100%;
+  padding-top: clamp(1.25rem, 2vw, 2rem);
+  padding-bottom: clamp(2rem, 3vw, 3rem);
+}
+
+/* ---- Premium header ------------------------------------------------------
+   Eyebrow + display title + subtitle left; saved-items pill right. */
+.fav-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  text-align: left;
+}
+.fav-header-main { min-width: 0; }
+.fav-title {
+  margin-top: 0.5rem;
+  color: #422825;
+}
+.fav-subtitle {
+  margin-top: 0.4rem;
+  font-size: 0.9375rem;
+  color: #725D50;
+}
+.fav-count-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #5A4037;
+  background: rgba(255, 250, 240, 0.8);
+  border: 1px solid rgba(201, 151, 62, 0.4);
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(74, 47, 42, 0.08);
+  white-space: nowrap;
+}
+.fav-count-icon {
+  width: 15px;
+  height: 15px;
+  color: #6B2525;
+  fill: currentColor;
+}
+.fav-count-pill strong { color: #422825; }
+
+/* ---- Compact toolbar: cream surface, gold hairline, soft shadow --------- */
+.fav-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  margin-top: 1rem;
+  padding: 0.45rem 0.8rem;
+  background: rgba(251, 245, 233, 0.72);
+  border: 1px solid rgba(170, 130, 70, 0.25);
+  border-radius: 16px;
+  box-shadow: 0 6px 16px rgba(74, 47, 42, 0.06);
+}
+.fav-toolbar-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8125rem;
+  color: #5A4037;
+  margin: 0;
+}
+.fav-toolbar-count strong { color: #422825; }
+.fav-toolbar-heart {
+  width: 14px;
+  height: 14px;
+  color: #6B2525;
+  fill: currentColor;
+}
+.fav-toolbar-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.fav-sort-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.fav-sort-icon {
+  position: absolute;
+  left: 0.65rem;
+  width: 13px;
+  height: 13px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.fav-sort-select { padding-left: 2rem; }
+
+/* ---- Product grid: centered 4-up, even rows ------------------------------
+   Cards stretch to equal height; grid itself is centered and capped. */
+.fav-body { margin-top: 1.1rem; }
+.fav-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  align-items: stretch;
+}
+.fav-grid > * { min-width: 0; }
+.fav-grid .product-card { height: 100%; }
+
+/* ---- Premium card tuning (wishlist-scoped; Products untouched) ------------
+   Warm ivory, gold hairline, 16–20px radius, soft shadow. Hover: 2–4px lift,
+   deeper shadow, image 1.02. No rotation, no bounce. */
+.route-wishlist .card-premium {
+  background: #FFFDF8;
+  border: 1px solid rgba(201, 151, 62, 0.32);
+  border-radius: 18px;
+  box-shadow: 0 8px 22px rgba(99, 53, 46, 0.10);
+}
+.route-wishlist .card-premium:hover {
+  background: #FFF9EE;
+  border-color: rgba(201, 151, 62, 0.5);
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px rgba(74, 47, 42, 0.14);
+}
+.route-wishlist .product-card .product-img-panel {
+  background: linear-gradient(168deg, #FFFDF9 0%, #F8EFDC 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.route-wishlist .product-card .product-img-panel img { max-width: 100%; }
+.route-wishlist .product-card.group:hover .product-img-panel img { transform: scale(1.02); }
+
+/* Heart: clean cream circle, gold hairline, maroon heart, 1.05 hover. */
+.route-wishlist .wishlist-btn {
+  left: 0.75rem;
+  top: 0.75rem;
+  background: #FFFDF8 !important;
+  border: 1px solid rgba(158, 112, 41, 0.45) !important;
+  box-shadow: 0 4px 12px rgba(74, 47, 42, 0.12);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.route-wishlist .wishlist-btn:hover { transform: scale(1.05); }
+.route-wishlist .wishlist-btn svg { color: #6B2525 !important; }
+.route-wishlist .wishlist-btn[aria-pressed="true"] svg {
+  color: #6B2525 !important;
+  fill: currentColor;
+}
+
+/* Discount ribbon: smaller deep-maroon diagonal, cream text. */
+.route-wishlist .ribbon {
+  background: linear-gradient(135deg, #5A0F12 0%, #7A1A1A 100%);
+  color: #F8EBD3;
+  font-size: 10px;
+  padding: 4px 34px;
+  box-shadow: 0 4px 12px rgba(58, 11, 12, 0.35);
+}
+
+/* Brand pill: quiet, integrated, never competes with the name. */
+.route-wishlist .product-img-panel .rounded-\[var\(--r-pill\)\].border {
+  background: rgba(255, 253, 248, 0.92);
+}
+
+/* Name / stock / price hierarchy. */
+.route-wishlist .product-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #4A2F2A;
+}
+.route-wishlist .badge-leaf {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+.route-wishlist .price.text-xl { color: #6B2525; }
+
+/* Add to Cart: deep maroon, cream text, full width, gentle lift. */
+.route-wishlist .product-card .btn-primary {
+  background: linear-gradient(135deg, #651817 0%, #481112 100%);
+  color: #F8EBD3;
+  border: 1px solid rgba(201, 154, 61, 0.55);
+  border-radius: 11px;
+  box-shadow: 0 6px 18px rgba(101, 24, 23, 0.28);
+  width: 100%;
+}
+.route-wishlist .product-card .btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: brightness(1.08);
+  box-shadow: 0 10px 24px rgba(101, 24, 23, 0.34);
+}
+
+/* Empty state sits on the same cream with breathing room, not a void. */
+.fav-empty .panel-editorial {
+  background: rgba(255, 253, 248, 0.85);
+  border: 1px solid rgba(201, 151, 62, 0.3);
+}
+
+/* Page-level overflow backstop (sources fixed above). */
+.route-wishlist .fav-page,
+.route-wishlist .fav-shell,
+.route-wishlist .fav-grid {
+  max-width: 100%;
+}
+.route-wishlist img { max-width: 100%; }
+
+/* ---- Responsive ---------------------------------------------------------- */
+@media (max-width: 1100px) {
+  .fav-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 820px) {
+  .fav-header { align-items: flex-start; flex-direction: column; }
+  .fav-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+}
+@media (max-width: 480px) {
+  .fav-shell { width: min(100% - 32px, 1400px); }
+  .fav-grid { gap: 10px; }
+  .fav-toolbar { align-items: stretch; flex-direction: column; }
+  .fav-toolbar-actions { width: 100%; justify-content: space-between; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .route-wishlist .card-premium,
+  .route-wishlist .card-premium:hover,
+  .route-wishlist .wishlist-btn,
+  .route-wishlist .product-card .btn-primary {
+    transform: none !important;
+    transition: none !important;
+  }
 }
 /* =========================================================================
    PRODUCT DETAIL PAGE
@@ -3856,7 +4652,7 @@ img {
 }
 
 .dark .pd-brandname {
-  color: var(--gold-400);
+  color: var(--gold-600);
 }
 
 .pd-licensed {
@@ -3876,9 +4672,9 @@ img {
 }
 
 .dark .pd-licensed {
-  color: #4FB483;
-  border-color: rgba(79, 180, 131, 0.34);
-  background: rgba(79, 180, 131, 0.12);
+  color: var(--leaf-600);
+  border-color: rgba(44, 122, 83, 0.3);
+  background: rgba(44, 122, 83, 0.1);
 }
 
 /* Wishlist and share stay available but sit quiet at the end of the row. */
@@ -3957,11 +4753,11 @@ img {
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: -0.01em;
-  color: var(--ember-600);
+  color: var(--maroon-700);
 }
 
 .dark .pd-price-now {
-  color: var(--ember-400);
+  color: var(--maroon-700);
 }
 
 .pd-price-was {
@@ -3978,9 +4774,9 @@ img {
   gap: 0.25rem;
   padding: 0.26rem 0.55rem;
   border-radius: var(--r-pill);
-  border: 1px solid rgba(195, 58, 20, 0.28);
-  background: rgba(195, 58, 20, 0.1);
-  color: var(--ember-600);
+  border: 1px solid rgba(169, 74, 53, 0.30);
+  background: rgba(169, 74, 53, 0.10);
+  color: var(--text-ember);
   font-size: var(--font-micro);
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -3988,9 +4784,9 @@ img {
 }
 
 .dark .pd-off {
-  color: var(--ember-400);
-  border-color: rgba(236, 112, 73, 0.32);
-  background: rgba(236, 112, 73, 0.12);
+  color: var(--text-ember);
+  border-color: rgba(169, 74, 53, 0.30);
+  background: rgba(169, 74, 53, 0.10);
 }
 
 .pd-stock {
@@ -4005,9 +4801,9 @@ img {
 }
 
 .dark .pd-stock .badge-leaf {
-  background: rgba(79, 180, 131, 0.12);
-  color: #4FB483;
-  border-color: rgba(79, 180, 131, 0.3);
+  background: rgba(44, 122, 83, 0.12);
+  color: var(--leaf-600);
+  border-color: rgba(44, 122, 83, 0.3);
 }
 
 .pd-buy {
@@ -4059,13 +4855,13 @@ img {
 .pd-atc {
   flex: 1 1 auto;
   min-height: 3rem;
-  /* The shared button carries a wide ember halo; across a full-width hero CTA
+  /* The shared gold button carries a warm halo; across a full-width hero CTA
      that reads as a glow rather than depth, so it is pulled back here only. */
-  box-shadow: 0 6px 18px rgba(195, 58, 20, 0.22);
+  box-shadow: 0 6px 18px rgba(190, 140, 54, 0.28);
 }
 
 .pd-atc:hover:not(:disabled) {
-  box-shadow: 0 12px 28px rgba(195, 58, 20, 0.28);
+  box-shadow: 0 12px 28px rgba(190, 140, 54, 0.36);
 }
 
 /* Buy-column rhythm. The title leads, so it carries no top margin:
@@ -4221,8 +5017,8 @@ img {
 }
 
 .dark .pd-hl {
-  border-color: rgba(210, 166, 79, 0.16);
-  background: linear-gradient(165deg, rgba(37, 30, 26, 0.5) 0%, rgba(30, 24, 21, 0.3) 100%);
+  border-color: var(--hairline-strong);
+  background: #FFFFFF;
 }
 
 .pd-hl-icon {
@@ -4238,9 +5034,9 @@ img {
 }
 
 .dark .pd-hl-icon {
-  color: var(--ember-400);
-  border-color: rgba(236, 112, 73, 0.22);
-  background: rgba(236, 112, 73, 0.12);
+  color: var(--ember-600);
+  border-color: rgba(195, 58, 20, 0.18);
+  background: rgba(195, 58, 20, 0.1);
 }
 
 /* The real brand mark replaces the generic icon in the Brand card. */
@@ -4319,8 +5115,8 @@ img {
 }
 
 .dark .pd-safety-card {
-  border-color: rgba(210, 166, 79, 0.2);
-  background: linear-gradient(120deg, rgba(37, 30, 26, 0.6) 0%, rgba(30, 24, 21, 0.35) 100%);
+  border-color: var(--hairline-strong);
+  background: #FFFFFF;
 }
 
 @media (min-width: 900px) {
@@ -4349,7 +5145,7 @@ img {
 }
 
 .dark .pd-safety-ico {
-  color: var(--gold-400);
+  color: var(--gold-600);
 }
 
 .pd-safety-title {
@@ -4427,8 +5223,8 @@ img {
 }
 
 .dark .pd-detail {
-  border-color: rgba(210, 166, 79, 0.16);
-  background: linear-gradient(165deg, rgba(37, 30, 26, 0.5) 0%, rgba(30, 24, 21, 0.3) 100%);
+  border-color: var(--hairline-strong);
+  background: #FFFFFF;
 }
 
 .pd-detail-label {
@@ -4644,19 +5440,863 @@ img {
 }
 
 .dark .product-card.card-premium {
-  background:
-    linear-gradient(165deg, #211914 0%, #1E1815 70%),
-    var(--glass-fill);
-  border-color: rgba(210, 166, 79, 0.22);
+  background: #FFFFFF;
+  border-color: var(--hairline);
 }
 
 .dark .product-card.card-premium:hover {
-  border-color: rgba(210, 166, 79, 0.45);
-  box-shadow:
-    0 18px 48px rgba(0, 0, 0, 0.6),
-    0 8px 32px rgba(195, 58, 20, 0.12);
+  box-shadow: 0 10px 26px rgba(74, 47, 42, 0.12);
+  transform: translateY(-2px);
 }
 
 .dark .product-img-panel {
-  background: linear-gradient(165deg, #2A2018 0%, #211914 60%, #1E1815 100%);
+  background: linear-gradient(165deg, #FFFDF8 0%, #F7EDD5 100%);
 }
+/* =========================================================================
+   ABOUT US PAGE — premium festive editorial (client only).
+   Scoped `.about-*`: nothing here touches the navbar, hero, cards or any
+   other route. Warm biscuit storytelling with maroon + antique-gold brand
+   moments. Decorative rings are background paint (clipped, low opacity),
+   alternating edges down the page so sections feel connected.
+   ========================================================================= */
+
+.about-page {
+  background:
+    radial-gradient(48% 30% at 88% 4%, rgba(200, 149, 50, 0.10) 0%, transparent 70%),
+    repeating-linear-gradient(45deg, rgba(190, 145, 70, 0.045) 0 1px, transparent 1px 24px),
+    #F3E2C2;
+}
+
+.about-shell {
+  width: min(92vw, 1200px);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.about-hero {
+  position: relative;
+  overflow: clip;
+  text-align: center;
+  background:
+    radial-gradient(46% 40% at 50% 0%, rgba(200, 149, 50, 0.12) 0%, transparent 70%),
+    #F7E9D0;
+}
+
+.about-title {
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 1.6rem + 3vw, 3.4rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  color: #4A2925;
+  text-wrap: balance;
+}
+
+.about-sub {
+  margin-top: 0.9rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.05rem, 1rem + 0.6vw, 1.35rem);
+  font-weight: 600;
+  color: #725B50;
+}
+
+.about-lead {
+  max-width: 60ch;
+  margin-inline: auto;
+  color: #725B50;
+  line-height: 1.75;
+}
+
+.about-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.about-sec {
+  position: relative;
+  overflow: clip;
+  padding-top: clamp(3rem, 2.4rem + 2.4vw, 4.5rem);
+  padding-bottom: clamp(3rem, 2.4rem + 2.4vw, 4.5rem);
+}
+
+.about-story {
+  background: #F0DDBB;
+}
+
+.about-story-grid {
+  display: grid;
+  gap: clamp(1.5rem, 1rem + 2vw, 3rem);
+  align-items: center;
+  grid-template-columns: 1fr 1fr;
+}
+
+.about-visual {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  min-height: 380px;
+  border-radius: 24px;
+  border: 1px solid rgba(190, 145, 70, 0.30);
+  background:
+    radial-gradient(60% 50% at 50% 42%, rgba(215, 170, 74, 0.20) 0%, transparent 70%),
+    linear-gradient(160deg, #F1E0BE 0%, #E3C491 100%);
+  box-shadow: 0 18px 44px rgba(74, 41, 37, 0.12);
+}
+
+.about-visual-copy {
+  position: relative;
+  text-align: center;
+  padding: 2rem;
+}
+
+.about-visual-kicker {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  color: #9E7029;
+}
+
+.about-visual-title {
+  margin-top: 0.6rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 1.2rem + 1.4vw, 2.1rem);
+  font-weight: 700;
+  line-height: 1.2;
+  color: #4A2925;
+}
+
+.about-values {
+  background: #F6E7CC;
+}
+
+.about-section-head {
+  text-align: center;
+  max-width: 640px;
+  margin-inline: auto;
+}
+
+.about-h2 {
+  font-family: var(--font-display);
+  font-size: clamp(1.7rem, 1.4rem + 1.6vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  color: #4A2925;
+  text-wrap: balance;
+}
+
+.about-section-sub {
+  margin-top: 0.7rem;
+  color: #725B50;
+  line-height: 1.7;
+}
+
+.about-values-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.about-value-card {
+  background: rgba(232, 204, 160, 0.55);
+  border: 1px solid rgba(190, 145, 70, 0.25);
+  border-radius: 20px;
+  padding: 1.25rem;
+  box-shadow: 0 8px 22px rgba(74, 41, 37, 0.08);
+  transition: transform 200ms var(--ease-out-soft), border-color 200ms var(--ease-out-soft), box-shadow 200ms var(--ease-out-soft);
+}
+
+.about-value-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(190, 145, 70, 0.45);
+  box-shadow: 0 12px 26px rgba(74, 41, 37, 0.10);
+}
+
+.about-value-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--grad-maroon);
+  color: #E8C877;
+}
+
+.about-value-ico svg {
+  width: 19px;
+  height: 19px;
+}
+
+.about-value-num {
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: #C89532;
+}
+
+.about-value-title {
+  margin-top: 0.7rem;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 700;
+  color: #4A2925;
+}
+
+.about-value-text {
+  margin-top: 0.4rem;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  color: #725B50;
+}
+
+.about-banner {
+  position: relative;
+  overflow: clip;
+  text-align: center;
+  background:
+    radial-gradient(50% 90% at 50% 110%, rgba(214, 166, 75, 0.16) 0%, transparent 70%),
+    linear-gradient(150deg, #5A0F12 0%, #651216 52%, #43090C 100%);
+}
+
+.about-banner-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 1.5rem + 1.8vw, 2.7rem);
+  font-weight: 700;
+  color: #FFF7E8;
+  text-wrap: balance;
+}
+
+.about-banner-sub {
+  max-width: 60ch;
+  margin-inline: auto;
+  margin-top: 0.8rem;
+  color: #E9DCC8;
+  line-height: 1.7;
+}
+
+.about-cats {
+  background: #F2DFC0;
+}
+
+.about-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.about-pill {
+  border-radius: 999px;
+  border: 1px solid rgba(190, 145, 70, 0.40);
+  background: #F8EBD3;
+  color: #5A0F12;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.55rem 1.1rem;
+  transition: background 180ms var(--ease-out-soft), border-color 180ms var(--ease-out-soft), transform 180ms var(--ease-out-soft);
+}
+
+.about-pill:hover {
+  background: #FFF7E8;
+  border-color: #C89532;
+  transform: translateY(-1px);
+}
+
+/* Seam rings: one shared motif alternating edges so sections read as one
+   continuous canvas. All background paint — clipped, low-contrast, behind
+   content, never a layout or overflow risk. */
+.about-hero::before,
+.about-story::before,
+.about-values::before,
+.about-banner::before,
+.about-cats::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.about-hero::before {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='480' viewBox='0 0 480 480' fill='none' stroke='%23C89532' stroke-opacity='0.14'%3E%3Ccircle cx='240' cy='240' r='210' stroke-width='1'/%3E%3Ccircle cx='240' cy='240' r='178' stroke-width='0.7'/%3E%3Ccircle cx='240' cy='240' r='146' stroke-width='4' stroke-dasharray='0.1 19' stroke-linecap='round'/%3E%3Ccircle cx='240' cy='240' r='70' stroke-width='0.75'/%3E%3C/svg%3E") right -150px top -150px / 440px 440px no-repeat;
+}
+
+.about-story::before {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='480' viewBox='0 0 480 480' fill='none' stroke='%23C89532' stroke-opacity='0.12'%3E%3Ccircle cx='240' cy='240' r='210' stroke-width='1'/%3E%3Ccircle cx='240' cy='240' r='178' stroke-width='0.7'/%3E%3Ccircle cx='240' cy='240' r='146' stroke-width='4' stroke-dasharray='0.1 19' stroke-linecap='round'/%3E%3C/svg%3E") right -150px bottom -160px / 460px 460px no-repeat;
+}
+
+.about-values::before {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='480' viewBox='0 0 480 480' fill='none' stroke='%23C89532' stroke-opacity='0.10'%3E%3Ccircle cx='240' cy='240' r='210' stroke-width='1'/%3E%3Ccircle cx='240' cy='240' r='178' stroke-width='0.7'/%3E%3Ccircle cx='240' cy='240' r='146' stroke-width='4' stroke-dasharray='0.1 19' stroke-linecap='round'/%3E%3C/svg%3E") left -160px top -130px / 440px 440px no-repeat;
+}
+
+.about-banner::before {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='560' height='560' viewBox='0 0 560 560' fill='none' stroke='%23D6A64B' stroke-opacity='0.14'%3E%3Ccircle cx='280' cy='280' r='240' stroke-width='1'/%3E%3Ccircle cx='280' cy='280' r='200' stroke-width='0.7'/%3E%3Ccircle cx='280' cy='280' r='160' stroke-width='4' stroke-dasharray='0.1 21' stroke-linecap='round'/%3E%3C/svg%3E") right -190px center / 560px 560px no-repeat;
+}
+
+.about-cats::before {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='480' viewBox='0 0 480 480' fill='none' stroke='%23C89532' stroke-opacity='0.10'%3E%3Ccircle cx='240' cy='240' r='210' stroke-width='1'/%3E%3Ccircle cx='240' cy='240' r='178' stroke-width='0.7'/%3E%3Ccircle cx='240' cy='240' r='146' stroke-width='4' stroke-dasharray='0.1 19' stroke-linecap='round'/%3E%3C/svg%3E") left -160px bottom -150px / 440px 440px no-repeat;
+}
+
+@media (max-width: 1024px) {
+  .about-values-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .about-story-grid {
+    grid-template-columns: 1fr;
+  }
+  .about-visual {
+    min-height: 300px;
+  }
+}
+
+@media (max-width: 640px) {
+  .about-values-grid {
+    grid-template-columns: 1fr;
+  }
+  .about-visual {
+    min-height: 260px;
+  }
+  .about-hero::before,
+  .about-story::before,
+  .about-values::before,
+  .about-banner::before,
+  .about-cats::before {
+    background-size: 300px 300px;
+  }
+  .about-cta-row .btn-maroon,
+  .about-cta-row .btn-outline,
+  .about-cta-row .btn-gold {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* =========================================================================
+   CONTACT US PAGE — premium festive editorial (client only).
+   Scoped `.contact-*`: nothing here touches other routes. Warm
+   cream/biscuit storytelling (cream → biscuit → cream → maroon CTA)
+   with alternating-edge seam rings so sections feel connected.
+   ========================================================================= */
+
+.contact-page {
+  background:
+    radial-gradient(48% 30% at 88% 4%, rgba(200, 149, 50, 0.10) 0%, transparent 70%),
+    repeating-linear-gradient(45deg, rgba(190, 145, 70, 0.045) 0 1px, transparent 1px 24px),
+    #F3E2C2;
+}
+
+.contact-shell {
+  width: min(92vw, 1200px);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.contact-hero {
+  position: relative;
+  overflow: clip;
+  text-align: center;
+  padding-top: clamp(1.75rem, 1.4rem + 1.4vw, 2.5rem);
+  padding-bottom: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+  background:
+    radial-gradient(46% 40% at 50% 0%, rgba(200, 149, 50, 0.12) 0%, transparent 70%),
+    #F7E9D0;
+}
+
+.contact-title {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 1.5rem + 2.6vw, 3.1rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  color: #4A2925;
+  text-wrap: balance;
+}
+
+.contact-sub {
+  margin-top: 0.8rem;
+  font-size: clamp(0.95rem, 0.9rem + 0.4vw, 1.1rem);
+  color: #725B50;
+}
+
+.contact-main {
+  position: relative;
+  overflow: clip;
+  padding-top: clamp(1.75rem, 1.4rem + 1.4vw, 2.5rem);
+  padding-bottom: clamp(1.75rem, 1.4rem + 1.4vw, 2.5rem);
+  background: #F0DDBB;
+}
+
+.contact-grid {
+  display: grid;
+  gap: clamp(1.5rem, 1rem + 2vw, 2.5rem);
+  align-items: start;
+  grid-template-columns: 1fr 1.1fr;
+}
+
+.contact-h2 {
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 1.2rem + 0.8vw, 1.8rem);
+  font-weight: 700;
+  color: #4A2925;
+}
+
+.contact-body {
+  color: #725B50;
+  line-height: 1.7;
+}
+
+.contact-info-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  background: rgba(232, 204, 160, 0.55);
+  border: 1px solid rgba(190, 145, 70, 0.25);
+  border-radius: 18px;
+  padding: 0.9rem 1.1rem;
+  box-shadow: 0 8px 22px rgba(74, 41, 37, 0.08);
+  transition: transform 200ms var(--ease-out-soft), border-color 200ms var(--ease-out-soft), box-shadow 200ms var(--ease-out-soft);
+  min-width: 0;
+}
+
+a.contact-info-row:hover {
+  transform: translateY(-2px);
+  border-color: rgba(190, 145, 70, 0.45);
+  box-shadow: 0 12px 26px rgba(74, 41, 37, 0.10);
+}
+
+.contact-info-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--grad-maroon);
+  color: #E8C877;
+}
+
+.contact-info-label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #9E7029;
+}
+
+.contact-info-value {
+  display: block;
+  margin-top: 0.15rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #4A2925;
+  overflow-wrap: anywhere;
+}
+
+a.contact-info-row .contact-info-value {
+  color: #4A2925;
+}
+
+.contact-card {
+  background: #FDF6E9;
+  border: 1px solid rgba(190, 145, 70, 0.30);
+  border-radius: 22px;
+  padding: clamp(1.25rem, 1rem + 1.5vw, 2rem);
+  box-shadow: 0 18px 44px rgba(74, 41, 37, 0.10);
+}
+
+.contact-card .input-premium {
+  background: #FDF8EC;
+}
+
+.contact-label {
+  display: block;
+  margin-bottom: 0.45rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #60453D;
+}
+
+.contact-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border-radius: var(--r-md);
+  padding: 0.8rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.contact-notice-success {
+  background: rgba(44, 122, 83, 0.10);
+  border: 1px solid rgba(44, 122, 83, 0.30);
+  color: #245F42;
+}
+
+.contact-notice-error {
+  background: rgba(203, 42, 42, 0.08);
+  border: 1px solid rgba(203, 42, 42, 0.30);
+  color: #94251F;
+}
+
+.contact-wa {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-top: 1rem;
+  border-radius: 18px;
+  padding: 0.9rem 1.1rem;
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+  box-shadow: 0 10px 26px rgba(18, 140, 126, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: transform 200ms var(--ease-out-soft), box-shadow 200ms var(--ease-out-soft), filter 200ms var(--ease-out-soft);
+}
+
+.contact-wa:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.05);
+  box-shadow: 0 14px 30px rgba(18, 140, 126, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.contact-wa-title {
+  display: block;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.contact-wa-sub {
+  display: block;
+  font-size: 0.78rem;
+  opacity: 0.9;
+}
+
+.contact-quick {
+  position: relative;
+  overflow: clip;
+  padding-top: clamp(1.75rem, 1.4rem + 1.4vw, 2.5rem);
+  padding-bottom: clamp(1.75rem, 1.4rem + 1.4vw, 2.5rem);
+  background: #F6E7CC;
+}
+
+.contact-quick-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.contact-mini {
+  background: rgba(232, 204, 160, 0.55);
+  border: 1px solid rgba(190, 145, 70, 0.25);
+  border-radius: 20px;
+  padding: 1rem 1.1rem;
+  box-shadow: 0 8px 22px rgba(74, 41, 37, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  transition: transform 200ms var(--ease-out-soft), border-color 200ms var(--ease-out-soft), box-shadow 200ms var(--ease-out-soft);
+}
+
+.contact-mini:hover {
+  transform: translateY(-2px);
+  border-color: rgba(190, 145, 70, 0.45);
+  box-shadow: 0 12px 26px rgba(74, 41, 37, 0.10);
+}
+
+.contact-mini-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--grad-maroon);
+  color: #E8C877;
+}
+
+.contact-mini-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.contact-mini-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--grad-maroon);
+  color: #E8C877;
+}
+
+.contact-mini-body {
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+
+.contact-mini .btn-outline {
+  flex-shrink: 0;
+}
+
+.contact-mini-title {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #4A2925;
+}
+
+.contact-mini-text {
+  font-size: 0.85rem;
+  color: #725B50;
+  margin-bottom: 0.5rem;
+}
+
+.contact-mini .btn-outline {
+  margin-top: auto;
+}
+
+.contact-banner {
+  position: relative;
+  overflow: clip;
+  text-align: center;
+  padding-top: clamp(1.75rem, 1.5rem + 1.2vw, 2.25rem);
+  padding-bottom: clamp(1.75rem, 1.5rem + 1.2vw, 2.25rem);
+  background:
+    radial-gradient(50% 90% at 50% 110%, rgba(214, 166, 75, 0.16) 0%, transparent 70%),
+    linear-gradient(150deg, #5A0F12 0%, #651216 52%, #43090C 100%);
+}
+
+.contact-banner-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 1.3rem + 1.4vw, 2.3rem);
+  font-weight: 700;
+  color: #FFF7E8;
+  text-wrap: balance;
+}
+
+.contact-banner-sub {
+  margin-top: 0.7rem;
+  color: #E9DCC8;
+}
+
+.contact-cta-row {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.contact-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  border-radius: var(--r-md);
+  border: 1.5px solid rgba(214, 166, 75, 0.55);
+  background: transparent;
+  color: #F8EBD3;
+  font-weight: 600;
+  transition: border-color 200ms var(--ease-out-soft), background 200ms var(--ease-out-soft), transform 200ms var(--ease-out-soft);
+}
+
+.contact-ghost:hover {
+  border-color: #D7AA4A;
+  background: rgba(214, 166, 75, 0.12);
+  transform: translateY(-1px);
+}
+
+.contact-banner-note {
+  margin-top: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #D9BFA3;
+}
+
+/* Seam rings: one shared motif alternating edges so sections read as one
+   continuous canvas. All background paint — clipped, low-contrast, behind
+   content, never a layout or overflow risk. */
+.contact-hero::before,
+.contact-hero::after,
+.contact-main::before,
+.contact-quick::before,
+.contact-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.contact-hero,
+.contact-main,
+.contact-quick,
+.contact-banner {
+  position: relative;
+}
+
+.contact-hero::before {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='480' viewBox='0 0 480 480' fill='none' stroke='%23C89532' stroke-opacity='0.13'%3E%3Ccircle cx='240' cy='240' r='210' stroke-width='1'/%3E%3Ccircle cx='240' cy='240' r='178' stroke-width='0.7'/%3E%3Ccircle cx='240' cy='240' r='146' stroke-width='4' stroke-dasharray='0.1 19' stroke-linecap='round'/%3E%3C/svg%3E") right -150px top -150px / 440px 440px no-repeat;
+}
+
+.contact-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='360' viewBox='0 0 360 360' fill='none' stroke='%23C89532' stroke-opacity='0.10'%3E%3Ccircle cx='180' cy='180' r='150' stroke-width='1'/%3E%3Ccircle cx='180' cy='180' r='120' stroke-width='0.7'/%3E%3Ccircle cx='180' cy='180' r='92' stroke-width='3.5' stroke-dasharray='0.1 15.3' stroke-linecap='round'/%3E%3C/svg%3E") left -120px bottom -140px / 320px 320px no-repeat;
+}
+
+.contact-main::before {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='480' viewBox='0 0 480 480' fill='none' stroke='%23C89532' stroke-opacity='0.11'%3E%3Ccircle cx='240' cy='240' r='210' stroke-width='1'/%3E%3Ccircle cx='240' cy='240' r='178' stroke-width='0.7'/%3E%3Ccircle cx='240' cy='240' r='146' stroke-width='4' stroke-dasharray='0.1 19' stroke-linecap='round'/%3E%3C/svg%3E") left -160px bottom -140px / 460px 460px no-repeat;
+}
+
+.contact-quick::before {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='480' viewBox='0 0 480 480' fill='none' stroke='%23C89532' stroke-opacity='0.10'%3E%3Ccircle cx='240' cy='240' r='210' stroke-width='1'/%3E%3Ccircle cx='240' cy='240' r='178' stroke-width='0.7'/%3E%3Ccircle cx='240' cy='240' r='146' stroke-width='4' stroke-dasharray='0.1 19' stroke-linecap='round'/%3E%3C/svg%3E") right -150px top -120px / 420px 420px no-repeat;
+}
+
+.contact-banner::before {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='560' height='560' viewBox='0 0 560 560' fill='none' stroke='%23D6A64B' stroke-opacity='0.13'%3E%3Ccircle cx='280' cy='280' r='240' stroke-width='1'/%3E%3Ccircle cx='280' cy='280' r='200' stroke-width='0.7'/%3E%3Ccircle cx='280' cy='280' r='160' stroke-width='4' stroke-dasharray='0.1 21' stroke-linecap='round'/%3E%3C/svg%3E") left -190px center / 560px 560px no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='360' viewBox='0 0 360 360' fill='none' stroke='%23D6A64B' stroke-opacity='0.10'%3E%3Ccircle cx='180' cy='180' r='150' stroke-width='1'/%3E%3Ccircle cx='180' cy='180' r='120' stroke-width='0.7'/%3E%3Ccircle cx='180' cy='180' r='92' stroke-width='3.5' stroke-dasharray='0.1 15.3' stroke-linecap='round'/%3E%3C/svg%3E") right -120px center / 360px 360px no-repeat;
+}
+
+@media (max-width: 900px) {
+  .contact-grid {
+    grid-template-columns: 1fr;
+  }
+  .contact-quick-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .contact-quick-grid {
+    grid-template-columns: 1fr;
+  }
+  .contact-mini {
+    flex-wrap: wrap;
+  }
+  .contact-mini .btn-outline {
+    flex-basis: 100%;
+  }
+  .contact-hero::before,
+  .contact-hero::after,
+  .contact-main::before,
+  .contact-quick::before {
+    background-size: 300px 300px;
+  }
+  .contact-banner::before {
+    background-size: 300px 300px, 220px 220px;
+  }
+  .contact-cta-row .btn-gold,
+  .contact-cta-row .contact-ghost {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* =========================================================================
+   LOGIN PAGE — luxury ivory festive wall + catalogue rail (client only).
+   Scoped `.login-*`: auth logic, fields and buttons are untouched — this
+   is pure presentation around the existing form. Decorative layers are
+   background paint or pointer-transparent; the rail is aria-hidden so
+   keyboard users move straight through the form.
+   ========================================================================= */
+
+/* Viewport containment: both grid columns (and the form column inside the
+   right one) may never force the grid wider/taller than the viewport.
+   Grid items default to min-width:auto, which lets intrinsic content
+   (inputs, long words) blow the 50/50 split out and create page-level
+   scrollbars — this is the actual overflow fix, not a blanket clip. */
+.login-page {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.login-page > *,
+.login-side .login-formwrap,
+.login-side form > div {
+  min-width: 0;
+}
+.login-side {
+  max-width: 100%;
+  overflow-x: clip;
+  scrollbar-width: none;
+}
+.login-side::-webkit-scrollbar {
+  display: none;
+}
+
+.login-side {
+  background:
+    radial-gradient(52% 36% at 82% 10%, rgba(210, 166, 79, 0.14) 0%, transparent 70%),
+    radial-gradient(40% 32% at 8% 88%, rgba(210, 166, 79, 0.10) 0%, transparent 70%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420' viewBox='0 0 420 420' fill='none' stroke='%23B88A42' stroke-opacity='0.18'%3E%3Ccircle cx='210' cy='210' r='182' stroke-width='1'/%3E%3Ccircle cx='210' cy='210' r='152' stroke-width='0.7'/%3E%3Ccircle cx='210' cy='210' r='122' stroke-width='3.5' stroke-dasharray='0.1 16' stroke-linecap='round'/%3E%3C/svg%3E") right -140px top -110px / 380px 380px no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300' viewBox='0 0 300 300' fill='none' stroke='%23B88A42' stroke-opacity='0.15'%3E%3Ccircle cx='150' cy='150' r='128' stroke-width='1'/%3E%3Ccircle cx='150' cy='150' r='104' stroke-width='0.7'/%3E%3Ccircle cx='150' cy='150' r='80' stroke-width='3.5' stroke-dasharray='0.1 14' stroke-linecap='round'/%3E%3C/svg%3E") left -110px bottom -90px / 300px 300px no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200' fill='none' stroke='%23C7A263' stroke-opacity='0.16'%3E%3Ccircle cx='100' cy='100' r='64' stroke-width='1'/%3E%3Ccircle cx='100' cy='100' r='50' stroke-width='0.75'/%3E%3Ccircle cx='100' cy='100' r='34' stroke-width='3.5' stroke-dasharray='0.1 11.1' stroke-linecap='round'/%3E%3Cpath d='M100 22 Q104 40 100 58 Q96 40 100 22 Z' stroke-width='1'/%3E%3Cpath d='M100 22 Q104 40 100 58 Q96 40 100 22 Z' stroke-width='1' transform='rotate(45 100 100)'/%3E%3Cpath d='M100 22 Q104 40 100 58 Q96 40 100 22 Z' stroke-width='1' transform='rotate(90 100 100)'/%3E%3Cpath d='M100 22 Q104 40 100 58 Q96 40 100 22 Z' stroke-width='1' transform='rotate(135 100 100)'/%3E%3Cpath d='M100 22 Q104 40 100 58 Q96 40 100 22 Z' stroke-width='1' transform='rotate(180 100 100)'/%3E%3Cpath d='M100 22 Q104 40 100 58 Q96 40 100 22 Z' stroke-width='1' transform='rotate(225 100 100)'/%3E%3Cpath d='M100 22 Q104 40 100 58 Q96 40 100 22 Z' stroke-width='1' transform='rotate(270 100 100)'/%3E%3Cpath d='M100 22 Q104 40 100 58 Q96 40 100 22 Z' stroke-width='1' transform='rotate(315 100 100)'/%3E%3C/svg%3E") left -60px top 120px / 200px 200px no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140' fill='none' stroke='%23B58A32' stroke-opacity='0.15'%3E%3Cpath d='M30 92 Q70 104 110 92 Q106 72 70 70 Q34 72 30 92 Z' stroke-width='1'/%3E%3Cpath d='M70 30 Q77 46 70 58 Q63 46 70 30 Z' stroke-width='1'/%3E%3Ccircle cx='70' cy='44' r='2' fill='%23B58A32' stroke='none'/%3E%3Cpath d='M22 108 H118' stroke-width='1'/%3E%3C/svg%3E") right -40px bottom 30px / 170px 170px no-repeat,
+    radial-gradient(2px 2px at 12% 22%, rgba(158, 112, 41, 0.28), transparent 70%),
+    radial-gradient(2px 2px at 88% 30%, rgba(158, 112, 41, 0.24), transparent 70%),
+    radial-gradient(2px 2px at 18% 78%, rgba(158, 112, 41, 0.22), transparent 70%),
+    radial-gradient(2px 2px at 85% 82%, rgba(158, 112, 41, 0.24), transparent 70%),
+    #F8F1E3;
+}
+
+/* One mandala turns almost imperceptibly (50s per revolution) at the right
+   edge — stationery come alive, never flashy. Pure paint, behind content. */
+.login-side::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -190px;
+  width: 480px;
+  height: 480px;
+  margin-top: -240px;
+  z-index: 0;
+  pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='480' viewBox='0 0 480 480' fill='none' stroke='%23B88A42' stroke-opacity='0.18'%3E%3Ccircle cx='240' cy='240' r='210' stroke-width='1'/%3E%3Ccircle cx='240' cy='240' r='178' stroke-width='0.7'/%3E%3Ccircle cx='240' cy='240' r='146' stroke-width='4' stroke-dasharray='0.1 19' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  animation: login-spin 50s linear infinite;
+}
+
+@keyframes login-spin {
+  to { transform: rotate(360deg); }
+}
+
+.login-side .login-formwrap {
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 639px) {
+  .login-side {
+    background-size: auto, auto, 280px 280px, 220px 220px, 170px 170px, 150px 150px, auto, auto, auto, auto, auto;
+  }
+  .login-side::after {
+    width: 300px;
+    height: 300px;
+    margin-top: -150px;
+    right: -110px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-side::after {
+    animation: none;
+  }
+}
+

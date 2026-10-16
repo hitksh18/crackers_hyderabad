@@ -747,14 +747,14 @@ const ProductDetail = () => {
                   aria-pressed={wished}
                   className="wishlist-btn pd-iconbtn"
                   style={{
-                    background: wished ? 'var(--crimson-600)' : 'var(--surface-card)',
-                    border: `1px solid ${wished ? 'var(--crimson-600)' : 'var(--hairline-strong)'}`,
+                    background: wished ? 'var(--grad-gold)' : 'var(--surface-card)',
+                    border: `1px solid ${wished ? 'rgba(158,112,41,0.6)' : 'var(--hairline-strong)'}`,
                   }}
                 >
                   <Heart
                     key={wished ? 'w' : 'u'}
-                    className={`h-[18px] w-[18px] ${wished ? 'heart-pop fill-current text-white' : ''}`}
-                    style={wished ? undefined : { color: 'var(--text-muted)' }}
+                    className={`h-[18px] w-[18px] ${wished ? 'heart-pop fill-current' : ''}`}
+                    style={wished ? { color: 'var(--maroon-900)' } : { color: 'var(--text-muted)' }}
                     strokeWidth={2.2}
                     aria-hidden="true"
                   />
@@ -826,7 +826,7 @@ const ProductDetail = () => {
                 type="button"
                 onClick={handleAddToCart}
                 disabled={outOfStock}
-                className="btn-primary btn-shine pd-atc"
+                className="btn-primary nav-login-btn btn-shine pd-atc"
               >
                 <ShoppingCart className="h-5 w-5 shrink-0" strokeWidth={2.4} aria-hidden="true" />
                 {outOfStock ? 'Out of Stock' : 'Add to Cart'}

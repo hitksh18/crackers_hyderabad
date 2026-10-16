@@ -23,11 +23,33 @@ const CheckoutNavbar = ({ title = 'Checkout' }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [logoUrl, setLogoUrl] = useState(DEFAULT_LOGO);
   const profileMenuRef = useRef(null);
+  const navRef = useRef(null);
 
   useEffect(() => {
     readSiteSettings().then((s) => {
       if (s.branding?.logoUrl) setLogoUrl(s.branding.logoUrl);
     });
+  }, []);
+
+  /* Publish the measured navbar height (mirrors the main Navbar) so the
+     cart's viewport calc subtracts the real value instead of a fallback. */
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+
+    const root = document.documentElement;
+    const publishHeight = () => {
+      root.style.setProperty('--nav-h', `${Math.round(el.getBoundingClientRect().height)}px`);
+    };
+
+    publishHeight();
+    const observer = new ResizeObserver(publishHeight);
+    observer.observe(el);
+
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty('--nav-h');
+    };
   }, []);
 
   useEffect(() => {
@@ -49,7 +71,15 @@ const CheckoutNavbar = ({ title = 'Checkout' }) => {
     'flex min-h-[44px] items-center gap-3 px-4 text-sm font-medium transition-colors hover:bg-primary-50 dark:hover:bg-white/10';
 
   return (
-    <nav className="glass-nav sticky top-0 z-nav" aria-label="Checkout">
+    <>
+      {/* In-flow spacer for the FIXED announcement bar (same contract as the
+          main Navbar's spacer): the sticky bar below carries
+          top: var(--top-banner-h), which shifts it visually without moving
+          following content — without this spacer the first content row
+          would slide underneath the bar. Zero-height when the banner is
+          absent or disabled, so those pages are unaffected. */}
+      <div aria-hidden="true" style={{ height: 'var(--top-banner-h, 0px)' }} />
+      <nav ref={navRef} className="glass-nav sticky top-0 z-nav" aria-label="Checkout">
       <span
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 bottom-0 h-px"
@@ -77,9 +107,9 @@ const CheckoutNavbar = ({ title = 'Checkout' }) => {
               redundancy or crowding. */}
           <span
             className="hidden truncate text-base font-bold tracking-tight sm:block sm:text-lg"
-            style={{ fontFamily: 'var(--font-display)', color: 'var(--text-strong)' }}
+            style={{ fontFamily: 'var(--font-display)', color: '#FDF9F0' }}
           >
-            Crackers <span style={{ color: 'var(--ember-600)' }}>Hyderabad</span>
+            Crackers <span style={{ color: 'var(--gold-400)' }}>Hyderabad</span>
           </span>
         </Link>
 
@@ -87,7 +117,7 @@ const CheckoutNavbar = ({ title = 'Checkout' }) => {
             Desktop (sm+): centered absolute title, unchanged from before. */}
         <h1
           className="min-w-0 flex-1 truncate whitespace-nowrap text-left text-[13px] font-bold uppercase tracking-[0.12em] min-[375px]:text-[15px] min-[375px]:tracking-[0.14em] sm:pointer-events-none sm:absolute sm:left-1/2 sm:flex-none sm:-translate-x-1/2 sm:text-center sm:text-xl sm:tracking-[0.18em]"
-          style={{ fontFamily: 'var(--font-display)', color: 'var(--text-strong)' }}
+          style={{ fontFamily: 'var(--font-display)', color: '#FDF9F0' }}
         >
           {title}
         </h1>
@@ -173,7 +203,7 @@ const CheckoutNavbar = ({ title = 'Checkout' }) => {
               </AnimatePresence>
             </div>
           ) : (
-            <Link to="/login" className="btn-primary shrink-0 px-4 py-2 text-sm" aria-label="Login">
+            <Link to="/login" className="btn-maroon nav-login-btn shrink-0 px-4 py-2 text-sm" aria-label="Login">
               <LogIn className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
               <span className="hidden sm:inline">Login</span>
             </Link>
@@ -181,6 +211,7 @@ const CheckoutNavbar = ({ title = 'Checkout' }) => {
         </div>
       </div>
     </nav>
+    </>
   );
 };
 

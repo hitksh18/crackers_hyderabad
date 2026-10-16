@@ -105,39 +105,17 @@ const Cart = () => {
     return undefined;
   }, [hydrated, cart]);
 
-  /* Viewport lock is MEASURED, not guessed: the announcement banner, navbar
-     and paddings above this component vary (the banner loads async), so the
-     remaining height is computed from this element's real offsetTop and
-     re-fitted on resize + banner changes. */
-  const lockRef = useRef(null);
+  /* Cart-only festive workspace theme: toggled on <html> while the cart is
+     mounted (mirrors the .route-products pattern), removed on unmount, so no
+     other route is affected. */
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 1024px)');
-    const el = lockRef.current;
-    if (!el) return undefined;
-    const fit = () => {
-      if (!mq.matches) {
-        el.style.height = '';
-        return;
-      }
-      const top = Math.round(el.getBoundingClientRect().top + window.scrollY);
-      el.style.height = `calc(100dvh - ${top}px)`;
-    };
-    fit();
-    window.addEventListener('resize', fit);
-    if (typeof mq.addEventListener === 'function') mq.addEventListener('change', fit);
-    /* The announcement banner publishes --top-banner-h on <html> when its
-       async content lands; re-fit so a late banner never pushes overflow. */
-    const observer = typeof MutationObserver !== 'undefined'
-      ? new MutationObserver(fit)
-      : null;
-    observer?.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
-    return () => {
-      window.removeEventListener('resize', fit);
-      if (typeof mq.removeEventListener === 'function') mq.removeEventListener('change', fit);
-      observer?.disconnect();
-      if (el) el.style.height = '';
-    };
-  }, [hydrated, cart.length]);
+    document.documentElement.classList.add('route-cart');
+    return () => document.documentElement.classList.remove('route-cart');
+  }, []);
+
+  /* Viewport fit is pure CSS (see .route-cart rules): the shell is exactly
+     100dvh minus the live banner + navbar heights, so no JS measuring or
+     resize listeners are needed — and none can fight the stylesheet. */
 
   /* Table scrollbar visibility: hidden at rest, thin gold while the user is
      actively scrolling the rows, then fades out after a short idle beat. */
@@ -203,7 +181,7 @@ const Cart = () => {
      control — one definition, one behaviour). */
   const qtyControl = (item) => (
     <div
-      className="inline-flex items-center"
+      className="qty-pill inline-flex items-center"
       style={{
         border: '1px solid var(--hairline-strong)',
         borderRadius: 'var(--r-pill)',
@@ -215,7 +193,7 @@ const Cart = () => {
         whileTap={reduced ? undefined : { scale: 0.9 }}
         onClick={() => updateQuantity(item.id, item.quantity - 1)}
         aria-label={`Decrease quantity of ${item.name}`}
-        className="inline-flex h-10 w-9 items-center justify-center rounded-full transition-colors duration-150 hover:bg-black/5 dark:hover:bg-white/10"
+        className="qty-btn inline-flex h-10 w-9 items-center justify-center rounded-full transition-colors duration-150"
       >
         <Minus className="h-4 w-4" strokeWidth={2.6} style={{ color: 'var(--maroon-700)' }} />
       </motion.button>
@@ -233,7 +211,7 @@ const Cart = () => {
         whileTap={reduced ? undefined : { scale: 0.9 }}
         onClick={() => updateQuantity(item.id, item.quantity + 1)}
         aria-label={`Increase quantity of ${item.name}`}
-        className="inline-flex h-10 w-9 items-center justify-center rounded-full transition-colors duration-150 hover:bg-black/5 dark:hover:bg-white/10"
+        className="qty-btn inline-flex h-10 w-9 items-center justify-center rounded-full transition-colors duration-150"
       >
         <Plus className="h-4 w-4" strokeWidth={2.6} style={{ color: 'var(--maroon-700)' }} />
       </motion.button>
@@ -245,31 +223,11 @@ const Cart = () => {
      internally. Mobile keeps natural page scroll with bounded internal
      lists. min-h-0 at every level so nested flex scrollers can shrink. */
   return (
-    <div ref={lockRef} className="section-pad-sm cart-fit flex flex-col overflow-hidden pb-24 lg:pb-6">
+    <div className="section-pad-sm cart-fit flex flex-col overflow-hidden pb-24 lg:pb-6">
       <Seo title="Your Cart | Crackers Hyderabad" noindex />
       <div className="shell shell-checkout flex min-h-0 flex-1 flex-col">
-        {/* Compact back navigation — explicit full-width, left-aligned row
-            above the shipping banner so no parent flex rule can centre it. */}
-        <div className="mb-2 flex w-full shrink-0 justify-start">
-          <button
-            type="button"
-            onClick={goBack}
-            aria-label="Go back to the previous page"
-            className="inline-flex min-h-[42px] items-center gap-1.5 rounded-[10px] border px-3.5 text-[13px] font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgba(210,166,79,0.65)] hover:bg-[rgba(210,166,79,0.08)] hover:text-[color:var(--gold-400)]"
-            style={{
-              background: 'transparent',
-              borderColor: 'rgba(210, 166, 79, 0.32)',
-              color: 'var(--text-body)',
-              fontFamily: 'var(--font-body)',
-            }}
-          >
-            <ArrowLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
-            Back
-          </button>
-        </div>
-
         {/* Compact shipping status — the single banner, same logic. */}
-        <div className="panel-editorial glass-card mb-2 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2 sm:px-4">
+        <div className="ship-card panel-editorial glass-card mb-2 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2 sm:px-4">
           <span
             aria-hidden="true"
             className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
@@ -299,7 +257,7 @@ const Cart = () => {
 
         {/* Workspace: left items column + right summary column. Fixed to the
             remaining viewport — both columns fit without page scroll. */}
-        <div className="flex min-h-0 flex-1 flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_350px]">
           <div className="flex min-h-0 flex-[1.5] flex-col lg:flex-none">
           {/* ---- Single cart table card ---- */}
           <section className="panel-editorial glass-card flex min-h-0 flex-1 flex-col" aria-label="Cart items">
@@ -307,9 +265,20 @@ const Cart = () => {
               className="flex shrink-0 items-center justify-between gap-3 px-3.5 py-2 sm:px-4"
               style={{ borderBottom: '1px solid var(--hairline)' }}
             >
-              <span className="label-caps">Cart Items</span>
-              <span className="badge badge-gold tabular" aria-label={`${cart.length} items`}>
-                {cart.length}
+              <button
+                type="button"
+                onClick={goBack}
+                aria-label="Continue shopping"
+                className="cart-back cart-back-sm"
+              >
+                <ArrowLeft className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
+                Continue Shopping
+              </button>
+              <span className="flex items-center gap-2">
+                <span className="label-caps">Cart Items</span>
+                <span className="badge badge-gold tabular" aria-label={`${cart.length} items`}>
+                  {cart.length}
+                </span>
               </span>
             </div>
 
@@ -353,7 +322,7 @@ const Cart = () => {
                         layout={!reduced}
                         variants={rowVariants(reduced)}
                         exit="exit"
-                        className="transition-colors duration-150 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+                        className="cart-row transition-colors duration-150"
                         style={{ borderTop: index === 0 ? 'none' : '1px solid var(--hairline)' }}
                       >
                         <td className="tabular whitespace-nowrap px-4 py-2 align-middle text-sm font-semibold" style={{ color: 'var(--text-subtle)' }}>
@@ -417,7 +386,7 @@ const Cart = () => {
               initial="hidden"
               animate="visible"
               variants={staggerParent(reduced, 0.05)}
-              className="min-h-0 flex-1 list-none overflow-y-auto md:hidden"
+              className="cart-mrows min-h-0 flex-1 list-none overflow-y-auto md:hidden"
             >
               <AnimatePresence>
                 {cart.map((item, index) => {
@@ -501,7 +470,7 @@ const Cart = () => {
               Fills the column; only the coupon list scrolls, checkout stays
               pinned at the bottom. Sticky is unnecessary — the page itself
               never scrolls. ---- */}
-          <aside className="panel-editorial glass-card flex max-h-[48dvh] min-h-0 flex-col overflow-hidden lg:max-h-none" aria-label="Order summary">
+          <aside className="summary-card panel-editorial glass-card flex max-h-[48dvh] min-h-0 flex-col overflow-hidden lg:max-h-none" aria-label="Order summary">
             <div className="flex min-h-0 flex-1 flex-col px-3.5 py-3 sm:px-4">
               <p className="label-caps shrink-0">Order Summary</p>
               <div className="mt-2 min-w-0 shrink-0">
@@ -524,9 +493,18 @@ const Cart = () => {
                     {coupon ? `−${inr(coupon.discountAmount)}` : inr(0)}
                   </span>
                 </div>
+                <div className="mt-1 flex items-baseline justify-between gap-6 text-sm">
+                  <span style={{ color: 'var(--text-muted)' }}>Delivery</span>
+                  <span
+                    className="price tabular font-semibold"
+                    style={{ color: 'var(--leaf-600)' }}
+                  >
+                    FREE
+                  </span>
+                </div>
                 <div className="mt-1.5 flex items-baseline justify-between gap-6 border-t pt-2" style={{ borderColor: 'var(--hairline)' }}>
                   <span className="label-caps">Total</span>
-                  <span className="price tabular text-2xl font-bold" style={{ color: 'var(--text-strong)' }}>
+                  <span className="price tabular text-2xl font-bold" style={{ color: 'var(--maroon-900)' }}>
                     {inr(total)}
                   </span>
                 </div>
@@ -541,12 +519,12 @@ const Cart = () => {
                   Minimum order {inr(adminSettings.minimumOrderValue)} — add {inr(adminSettings.minimumOrderValue - getCartTotal())} more to proceed to checkout.
                 </p>
               ) : (
-                <p className="mt-3 flex shrink-0 items-center gap-1.5 text-xs font-semibold" style={{ color: 'var(--leaf-600)' }} role="status">
+                <p className="min-ok mt-3 flex shrink-0 items-center gap-1.5 text-xs font-semibold" style={{ color: 'var(--leaf-600)' }} role="status">
                   <span aria-hidden="true">✓</span> Minimum order reached
                 </p>
               )}
               {minimumMet ? (
-                <Link to="/checkout" className="btn-primary btn-shine mt-3 w-full shrink-0 text-base" style={{ minHeight: 50 }}>
+                <Link to="/checkout" className="btn-maroon btn-shine mt-3 w-full shrink-0 text-base" style={{ minHeight: 50 }}>
                   Proceed to Checkout
                   <ArrowRight className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
                 </Link>
@@ -556,7 +534,7 @@ const Cart = () => {
                   aria-disabled="true"
                   aria-label="Proceed to checkout (disabled — minimum order not reached)"
                   title={`Add ${inr(adminSettings.minimumOrderValue - getCartTotal())} more to checkout`}
-                  className="btn-primary btn-shine mt-3 inline-flex w-full shrink-0 cursor-not-allowed items-center justify-center gap-2 text-base opacity-50"
+                  className="btn-maroon btn-shine mt-3 inline-flex w-full shrink-0 cursor-not-allowed items-center justify-center gap-2 text-base opacity-50"
                   style={{ minHeight: 50 }}
                 >
                   Proceed to Checkout
@@ -595,7 +573,7 @@ const Cart = () => {
                 </p>
               </div>
               {minimumMet ? (
-                <Link to="/checkout" className="btn-primary btn-shine ml-auto shrink-0 px-5">
+                <Link to="/checkout" className="btn-maroon btn-shine ml-auto shrink-0 px-5">
                   Proceed to Checkout
                   <ArrowRight className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
                 </Link>
@@ -604,7 +582,7 @@ const Cart = () => {
                   role="link"
                   aria-disabled="true"
                   aria-label="Proceed to checkout (disabled — minimum order not reached)"
-                  className="btn-primary btn-shine ml-auto inline-flex shrink-0 cursor-not-allowed items-center gap-2 px-5 opacity-50"
+                  className="btn-maroon btn-shine ml-auto inline-flex shrink-0 cursor-not-allowed items-center gap-2 px-5 opacity-50"
                 >
                   Proceed to Checkout
                   <ArrowRight className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
